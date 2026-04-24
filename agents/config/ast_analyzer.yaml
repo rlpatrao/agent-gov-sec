@@ -1,0 +1,20 @@
+version: "1.0"
+name: ast-analyzer-agent-config
+description: >
+  ASTAnalyzer (Tier 1 deep-analysis pair of Scanner). Receives file lists
+  via A2A, runs a deterministic tree-sitter extraction, and asks an LLM
+  for an architecture + risk summary grounded in the extracted facts.
+  Leaf agent — does not dispatch outbound A2A.
+
+agent:
+  type: ASTAnalyzer
+  description: AST analysis and architecture discovery agent
+  max_file_scan_bytes: 256000
+
+a2a:
+  allowed_recipients: []            # leaf: never dispatches
+  max_files_per_dispatch: 0         # moot when allowed_recipients is empty
+  timeout_seconds: 60               # inbound dispatcher still applies a deadline
+
+governance:
+  enable_rogue_detection: true

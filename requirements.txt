@@ -20,6 +20,11 @@ agentmesh-platform>=3.2.2
 azure-identity>=1.19.0
 azure-keyvault-secrets>=4.8.0
 
+# ── Config management (YAML -> validated Pydantic models in agents/config.py)
+# Already pulled transitively by agent-framework-core, but pinning explicitly
+# so MAF version bumps can't silently drag us across major Pydantic lines.
+pydantic>=2.0.0,<3
+
 # ── OTel — spans propagated via APIM to Application Insights ────────────────
 opentelemetry-sdk>=1.27.0
 opentelemetry-api>=1.27.0
@@ -30,6 +35,12 @@ azure-monitor-opentelemetry-exporter>=1.0.0b50
 
 # ── Postgres trace ledger (compliance archive) ──────────────────────────────
 asyncpg>=0.29.0
+
+# ── Tree-sitter (AST agent deterministic parse) ─────────────────────────────
+# Verified 2026-04-24: wheels available for Python 3.14 on macOS/Linux.
+tree-sitter>=0.23
+tree-sitter-python>=0.23
+tree-sitter-java>=0.23
 
 # ── Config ──────────────────────────────────────────────────────────────────
 python-dotenv>=1.0.0

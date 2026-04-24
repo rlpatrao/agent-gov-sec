@@ -37,14 +37,15 @@ except ImportError:
 # In AKS: loaded from env vars set by Bicep/Terraform during provisioning
 # In local dev: placeholder values are fine — no real auth happens
 _NHI_CLIENT_IDS: dict[str, str] = {
-    "Scanner":   os.environ.get("NHI_CLIENT_ID_SCANNER",   "local-scanner-nhi"),
-    "Architect": os.environ.get("NHI_CLIENT_ID_ARCHITECT", "local-architect-nhi"),
-    "Coder":     os.environ.get("NHI_CLIENT_ID_CODER",     "local-coder-nhi"),
-    "Reviewer":  os.environ.get("NHI_CLIENT_ID_REVIEWER",  "local-reviewer-nhi"),
-    "Security":  os.environ.get("NHI_CLIENT_ID_SECURITY",  "local-security-nhi"),
-    "Tester":    os.environ.get("NHI_CLIENT_ID_TESTER",    "local-tester-nhi"),
-    "IaCGen":    os.environ.get("NHI_CLIENT_ID_IACGEN",    "local-iacgen-nhi"),
-    "SLOWatcher":os.environ.get("NHI_CLIENT_ID_SLOWATCHER","local-slowatcher-nhi"),
+    "Scanner":     os.environ.get("NHI_CLIENT_ID_SCANNER",     "local-scanner-nhi"),
+    "ASTAnalyzer": os.environ.get("NHI_CLIENT_ID_ASTANALYZER", "local-astanalyzer-nhi"),
+    "Architect":   os.environ.get("NHI_CLIENT_ID_ARCHITECT",   "local-architect-nhi"),
+    "Coder":       os.environ.get("NHI_CLIENT_ID_CODER",       "local-coder-nhi"),
+    "Reviewer":    os.environ.get("NHI_CLIENT_ID_REVIEWER",    "local-reviewer-nhi"),
+    "Security":    os.environ.get("NHI_CLIENT_ID_SECURITY",    "local-security-nhi"),
+    "Tester":      os.environ.get("NHI_CLIENT_ID_TESTER",      "local-tester-nhi"),
+    "IaCGen":      os.environ.get("NHI_CLIENT_ID_IACGEN",      "local-iacgen-nhi"),
+    "SLOWatcher":  os.environ.get("NHI_CLIENT_ID_SLOWATCHER",  "local-slowatcher-nhi"),
 }
 
 

@@ -1,0 +1,34 @@
+version: "1.0"
+name: galaxy-ast
+description: >
+  Per-agent runtime policy for the ASTAnalyzer agent. The analyzer
+  reads the filesystem via tree-sitter (deterministic, no network) and
+  calls the LLM with extracted structured facts only — never raw file
+  contents — so the policy surface is narrow.
+
+  Default is ALLOW to stay composable with the other Galaxy policy
+  documents (policies from all agents load together; first match wins
+  across all of them). Explicit deny rules keep the AST agent off the
+  network and off the shell.
+
+defaults:
+  action: allow
+
+rules:
+  - name: deny-network-egress-tools
+    priority: 95
+    message: "Network egress tools are forbidden for ASTAnalyzer."
+    condition:
+      field: tool_name
+      operator: matches
+      value: "http_(get|post|put|delete)|network_request|fetch_url"
+    action: deny
+
+  - name: deny-shell-and-subprocess-tools
+    priority: 90
+    message: "Shell / subprocess tools are forbidden for ASTAnalyzer."
+    condition:
+      field: tool_name
+      operator: matches
+      value: "shell_exec|subprocess_run|os_system|exec_"
+    action: deny

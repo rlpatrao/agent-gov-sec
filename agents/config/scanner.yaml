@@ -1,0 +1,19 @@
+version: "1.0"
+name: scanner-agent-config
+description: >
+  Scanner agent (Tier 1 discovery). Walks a repo, classifies language,
+  flags entry-point candidates, and dispatches AST work to ASTAnalyzer.
+
+agent:
+  type: Scanner
+  description: Repository scanner and discovery agent
+  max_file_scan_bytes: 50000
+
+a2a:
+  allowed_recipients:
+    - ASTAnalyzer
+  max_files_per_dispatch: 40
+  timeout_seconds: 30
+
+governance:
+  enable_rogue_detection: true

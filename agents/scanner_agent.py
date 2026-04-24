@@ -25,15 +25,26 @@ from typing import Optional
 
 from agent_framework import Agent
 from agent_framework_openai import OpenAIChatClient
+from agent_os.audit_logger import GovernanceAuditLogger
 
+from a2a import A2ARequest, A2AResponse, a2a_call
+from a2a.dispatcher import A2AHandler
+from agents.config import load_agent_config_cached
 from governance.middleware import build_governance_stack
 from nhi_identity import NHIRegistry
 from token_provider import TokenProvider
 
 logger = logging.getLogger(__name__)
 
-AGENT_TYPE = "Scanner"
-MAX_FILE_SCAN_BYTES = 50_000
+# All Scanner tunables live in agents/config/scanner.yaml. Pydantic validates
+# on load; anything missing or out-of-range raises ConfigError before the
+# agent is constructed. Module-level constants are derived here so hot-paths
+# can keep using plain identifiers.
+_config = load_agent_config_cached("scanner")
+AGENT_TYPE = _config.agent_type
+MAX_FILE_SCAN_BYTES = _config.max_file_scan_bytes
+ALLOWED_A2A_RECIPIENTS = _config.a2a.allowed_recipients
+MAX_AST_FILES_PER_DISPATCH = _config.a2a.max_files_per_dispatch
 
 
 # ── File traversal config ─────────────────────────────────────────────────────
@@ -79,6 +90,8 @@ class ScannerOutput:
     external_dependencies: list
     dead_files: list
     raw_summary: str
+    ast_report: Optional[dict] = None            # populated via A2A call
+    ast_conversation_id: Optional[str] = None    # link to A2A conversation in ledger
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)
@@ -268,3 +281,95 @@ async def build_scanner_agent(
         },
     )
     return agent, pg_backend, audit
+
+
+# ── A2A dispatch: Scanner → ASTAnalyzer ───────────────────────────────────────
+
+def _pick_files_for_ast(file_map: dict, scanner_output: ScannerOutput) -> list[str]:
+    """Choose which files to hand to the AST agent.
+
+    Priority:
+      1. entry points flagged by the LLM (most valuable — they root the graph)
+      2. remaining live files from the Scanner's `file_inventory`
+    Capped to MAX_AST_FILES_PER_DISPATCH so the envelope stays small.
+    """
+    seen: set[str] = set()
+    picks: list[str] = []
+
+    def _add(name: str) -> None:
+        if name and name not in seen:
+            seen.add(name)
+            picks.append(name)
+
+    for ep in scanner_output.entry_points:
+        _add(ep)
+    for f in scanner_output.file_inventory:
+        _add(f)
+        if len(picks) >= MAX_AST_FILES_PER_DISPATCH:
+            break
+    # Fall back to the raw traversal if the LLM returned nothing useful.
+    if not picks:
+        for f in file_map.get("files", []):
+            _add(f)
+            if len(picks) >= MAX_AST_FILES_PER_DISPATCH:
+                break
+    return picks[:MAX_AST_FILES_PER_DISPATCH]
+
+
+async def dispatch_ast_analysis(
+    *,
+    sender_agent_id: str,
+    recipient_agent_id: str,
+    run_id: str,
+    module_id: str,
+    repo_path: str,
+    file_map: dict,
+    scanner_output: ScannerOutput,
+    audit: GovernanceAuditLogger,
+    handler: A2AHandler,
+) -> A2AResponse:
+    """Scanner's A2A call into the AST agent.
+
+    The Scanner is the sender (its NHI is on the dispatch audit entry).
+    The handler is supplied by the runner — typically
+    `ast_agent.ASTAgentHandler(...).handle`.
+    """
+    files = _pick_files_for_ast(file_map, scanner_output)
+
+    request = A2ARequest.new(
+        sender=sender_agent_id,
+        recipient=recipient_agent_id,
+        run_id=run_id,
+        module_id=module_id,
+        intent="analyze_ast",
+        payload_schema="ASTRequest/v1",
+        payload={
+            "repo_root": repo_path,
+            "files": files,
+            "detected_language": scanner_output.language,
+        },
+    )
+
+    response = await a2a_call(
+        request=request,
+        handler=handler,
+        sender_audit=audit,
+        allowed_recipients=ALLOWED_A2A_RECIPIENTS,
+    )
+
+    # Merge into ScannerOutput when the reply is ok. Errors stay visible in
+    # the ledger via the a2a_reply audit entry — we don't silently drop them.
+    if response.is_ok:
+        scanner_output.ast_report = response.payload
+        scanner_output.ast_conversation_id = response.conversation_id
+    else:
+        logger.warning(
+            "scanner.ast_dispatch_not_ok",
+            extra={
+                "status": response.status.value,
+                "conversation_id": response.conversation_id,
+                "reason": (response.payload or {}).get("message", "")[:200],
+            },
+        )
+
+    return response
