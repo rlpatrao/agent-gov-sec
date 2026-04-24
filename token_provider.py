@@ -9,7 +9,7 @@ In AKS:
   - Key Vault issues a short-lived secret fetch — cached and refreshed every 5 minutes
 
 Locally (dev):
-  - Falls back to ANTHROPIC_API_KEY env var if Key Vault is unreachable
+  - Falls back to the env-var named by `env_var_fallback` if Key Vault is unreachable
   - Never use this fallback in staging or prod
 """
 
@@ -44,8 +44,8 @@ class TokenProvider:
     def __init__(
         self,
         vault_url: Optional[str] = None,
-        secret_name: str = "anthropic-api-key",
-        env_var_fallback: str = "ANTHROPIC_API_KEY",
+        secret_name: str = "azure-openai-key",
+        env_var_fallback: str = "AZURE_OPENAI_KEY",
     ):
         self._vault_url = vault_url or os.environ.get("AZURE_KEY_VAULT_URL")
         self._secret_name = secret_name
@@ -68,7 +68,7 @@ class TokenProvider:
                     extra={"error": str(e)},
                 )
         else:
-            logger.info("token_provider.local_mode — using ANTHROPIC_API_KEY env var")
+            logger.info("token_provider.local_mode", extra={"env_var": self._env_var})
 
     def get_api_key(self) -> str:
         """

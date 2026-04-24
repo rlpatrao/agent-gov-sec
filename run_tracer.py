@@ -152,45 +152,28 @@ class RunTracer:
             yield _NoOpSpan()
             return
 
+        # Galaxy-level agent span — intentionally carries NO gen_ai.* attributes.
+        # The authoritative LLM span is emitted by MAF's ChatTelemetryLayer
+        # (inside OpenAIChatClient); duplicating gen_ai.system here would
+        # mislabel the transaction in App Insights (it previously read "anthropic"
+        # from a stale hardcoded string even though the call was to Azure OpenAI).
         with self._tracer.start_as_current_span(
             name=f"{agent_type}.run",
             attributes={
-                # Galaxy semantic attributes
                 "galaxy.run_id":      self.run_id,
                 "galaxy.module_id":   self.module_id,
                 "galaxy.agent_type":  agent_type,
                 "galaxy.attempt":     attempt,
                 "galaxy.nhi_id":      nhi_id,
-                # gen_ai.* semantic conventions (OpenTelemetry standard)
-                "gen_ai.system":      "anthropic",
-                "gen_ai.operation.name": "chat",
             },
         ) as span:
             yield span
 
-    def llm_span(
-        self,
-        agent_type: str,
-        model: str,
-        attempt: int,
-        prompt_tokens: int = 0,
-        completion_tokens: int = 0,
-        outcome: str = "success",
-    ) -> None:
-        """
-        Records LLM call attributes on the current span.
-        Call this after a successful foundry_client dispatch.
-        """
-        if not _OTEL_AVAILABLE:
-            return
-
-        current = trace.get_current_span()
-        current.set_attribute("gen_ai.request.model", model)
-        current.set_attribute("gen_ai.usage.prompt_tokens", prompt_tokens)
-        current.set_attribute("gen_ai.usage.completion_tokens", completion_tokens)
-        current.set_attribute("gen_ai.usage.total_tokens", prompt_tokens + completion_tokens)
-        current.set_attribute("galaxy.attempt", attempt)
-        current.set_attribute("galaxy.outcome", outcome)
+    # Historical note: a `llm_span()` helper previously stamped gen_ai.*
+    # attributes onto the current span from inside foundry_client.FoundryClient.
+    # That custom dispatch path was deleted in Phase D — MAF's
+    # ChatTelemetryLayer now emits the authoritative LLM span with correct
+    # gen_ai.request.model + usage counts. No replacement needed here.
 
     def inject_headers(self) -> dict:
         """
