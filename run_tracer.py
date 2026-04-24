@@ -46,57 +46,74 @@ except ImportError:
 
 def configure_tracing(service_name: str = None) -> None:
     """
-    Call once at process startup. Three routing options, decided by env:
+    Call once at process startup. Routing:
 
       1. APPLICATIONINSIGHTS_CONNECTION_STRING set → direct-export to App
          Insights via azure-monitor-opentelemetry-exporter (preferred; no
          collector needed, works from laptop or ACA).
       2. OTEL_EXPORTER_OTLP_ENDPOINT set → generic OTLP gRPC export (for
          a locally-running otel-collector, or AKS with a collector sidecar).
-      3. Neither set → tracing configured with no exporter (spans visible
-         in-process but not shipped anywhere; safe default for unit tests).
+      3. Neither set → no-exporter tracing (safe default for unit tests).
+
+    When Microsoft Agent Framework is importable we route through MAF's
+    `configure_otel_providers` so the ChatTelemetryLayer / AgentTelemetryLayer
+    fire and emit the standard `gen_ai.*` semantic-convention spans that the
+    Azure portal "Agents (preview)" dashboard queries for. Falls back to a
+    minimal TracerProvider if MAF isn't installed.
     """
     if not _OTEL_AVAILABLE:
         return
 
     name = service_name or os.environ.get("OTEL_SERVICE_NAME", "galaxy-platform")
+    os.environ.setdefault("OTEL_SERVICE_NAME", name)
     ai_conn = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING")
     otlp_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
 
-    resource = Resource.create({
-        "service.name": name,
-        "service.namespace": "galaxy",
-    })
-    provider = TracerProvider(resource=resource)
-
+    # Build the exporter list we'll hand to whichever setup path we use.
+    exporters = []
     exporter_kind = "none"
     if ai_conn:
         try:
             from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
-            provider.add_span_processor(
-                BatchSpanProcessor(AzureMonitorTraceExporter(connection_string=ai_conn))
-            )
+            exporters.append(AzureMonitorTraceExporter(connection_string=ai_conn))
             exporter_kind = "azure_monitor"
         except ImportError:
-            logger.warning(
-                "tracing.azure_monitor_exporter_missing — install `azure-monitor-opentelemetry-exporter` "
-                "or unset APPLICATIONINSIGHTS_CONNECTION_STRING"
-            )
+            logger.warning("tracing.azure_monitor_exporter_missing")
     elif otlp_endpoint:
         try:
             from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-            provider.add_span_processor(
-                BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True))
-            )
+            exporters.append(OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True))
             exporter_kind = "otlp_grpc"
         except ImportError:
             logger.warning("tracing.otlp_exporter_missing")
 
-    trace.set_tracer_provider(provider)
+    # Preferred path: let MAF own the providers + instrumentation layers so
+    # gen_ai.* semantic conventions land correctly.
+    try:
+        from agent_framework.observability import configure_otel_providers
+        configure_otel_providers(
+            exporters=exporters or None,
+            # Leave sensitive_data off by default — prompts/responses stay out
+            # of telemetry. Can be overridden via ENABLE_OTEL_DIAGNOSTICS env.
+            enable_sensitive_data=False,
+        )
+        logger.info(
+            "tracing.configured",
+            extra={"service": name, "exporter": exporter_kind, "via": "agent_framework"},
+        )
+        return
+    except ImportError:
+        pass
 
+    # Fallback when MAF isn't installed — manual provider, no gen_ai layer.
+    resource = Resource.create({"service.name": name, "service.namespace": "galaxy"})
+    provider = TracerProvider(resource=resource)
+    for exp in exporters:
+        provider.add_span_processor(BatchSpanProcessor(exp))
+    trace.set_tracer_provider(provider)
     logger.info(
         "tracing.configured",
-        extra={"service": name, "exporter": exporter_kind},
+        extra={"service": name, "exporter": exporter_kind, "via": "fallback"},
     )
 
 
