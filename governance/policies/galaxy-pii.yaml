@@ -1,0 +1,12 @@
+version: "1.0"
+name: galaxy-pii
+description: >
+  PII placeholder. Scanner operates on code repositories, so direct PII
+  exposure is low — but once Content Safety / Presidio is wired in
+  (Phase H), real detectors go in the condition fields below. Until then
+  this document ships with defaults.action=allow so it's a no-op.
+
+defaults:
+  action: allow
+
+rules: []

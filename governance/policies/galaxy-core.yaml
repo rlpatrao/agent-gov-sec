@@ -1,0 +1,37 @@
+version: "1.0"
+name: galaxy-core
+description: >
+  Core runtime governance for every Galaxy agent. Covers OWASP ASI-01
+  (prompt injection), ASI-04 (resource exhaustion / cost ceiling), and
+  ASI-06 (empty / malformed response). Rules are evaluated highest
+  priority first; first match wins.
+
+defaults:
+  action: allow
+
+rules:
+  - name: deny-prompt-injection-known-patterns
+    priority: 100
+    message: >
+      Prompt injection attempt detected — the user message contains
+      text matching a known jailbreak pattern. Blocked by galaxy-core.
+    condition:
+      # maf_adapter.GovernancePolicyMiddleware populates `message` with the
+      # last user message verbatim. Case-insensitive regex via (?i).
+      field: message
+      operator: matches
+      value: "(?i)ignore previous instructions|disregard your system prompt|you are now|act as if|forget all previous|override your instructions|new persona"
+    action: deny
+
+  - name: deny-oversized-prompt
+    priority: 90
+    message: >
+      User message exceeds the per-call character ceiling (~24000 chars
+      ≈ 6000 tokens). Blocked before dispatch to prevent runaway cost.
+    condition:
+      field: message
+      operator: matches
+      # Negative look-behind via length — PolicyOperator has no `len_gt`, so we use a
+      # long-match regex as a character-count gate. 24000 any-chars ≈ 6000 tokens.
+      value: "^.{24000,}$"
+    action: deny

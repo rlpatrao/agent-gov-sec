@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../Downloads/galaxy-scanner/agents"
+		},
+		{
+			"path": "../../Downloads/galaxy-scanner/infra"
+		},
+		{
+			"path": "../../Downloads/galaxy-scanner/tests"
+		}
+	],
+	"settings": {
+		"workbench.colorTheme": "Tokyo Night"
+	}
+}

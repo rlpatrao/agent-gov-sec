@@ -1,0 +1,50 @@
+# ── Microsoft Agent Framework (MAF) ─────────────────────────────────────────
+# Depending on agent-framework-core directly (not the `agent-framework` meta
+# that pulls core[all]) because [all] pulls agent-framework-azure-ai-search,
+# which ships an empty agent_framework/__init__.py that clobbers the real one.
+# See docs/toolkit-verification.md "Known packaging conflicts".
+agent-framework-core>=1.2.0,<2
+agent-framework-foundry
+
+# ── Microsoft Agent Governance Toolkit ──────────────────────────────────────
+# Pinning agent-sre to 3.2.2 exactly — the toolkit's maf_adapter imports
+# agent_sre.anomaly.RogueAgentDetector which was renamed/removed in 1.1.2.
+agent-os-kernel>=3.2.2
+agent-sre==3.2.2
+# agent_os.integrations.maf_adapter imports from agentmesh.governance.
+# Normally pulled by agent-governance-toolkit[full]; we pin it explicitly
+# because we don't use the [full] extra (it drags the broken azure-ai-search).
+agentmesh-platform>=3.2.2
+
+# ── Azure identity + secrets (Workload Identity + Key Vault) ───────────────
+azure-identity>=1.19.0
+azure-keyvault-secrets>=4.8.0
+
+# ── OTel — spans propagated via APIM to Application Insights ────────────────
+opentelemetry-sdk>=1.27.0
+opentelemetry-api>=1.27.0
+opentelemetry-exporter-otlp-proto-grpc>=1.27.0
+opentelemetry-instrumentation-fastapi>=0.48b0
+# Direct Azure Monitor exporter — used when APPLICATIONINSIGHTS_CONNECTION_STRING is set.
+azure-monitor-opentelemetry-exporter>=1.0.0b50
+
+# ── Postgres trace ledger (compliance archive) ──────────────────────────────
+asyncpg>=0.29.0
+
+# ── Config ──────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+PyYAML>=6.0.1
+
+# ── Web (future human-gate endpoint) ────────────────────────────────────────
+fastapi>=0.115.0
+uvicorn>=0.32.0
+
+# ── Dev / test ──────────────────────────────────────────────────────────────
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+
+# ── Removed from prior version (2026-04-24) ─────────────────────────────────
+# anthropic             → MAF owns the LLM client; no Anthropic escape hatch
+# openai                → MAF owns the LLM client (agent_framework_foundry)
+# claude-agent-sdk      → replaced by MAF Agent; autonomous traversal dropped
+# tenacity              → replaced by agent_os.circuit_breaker

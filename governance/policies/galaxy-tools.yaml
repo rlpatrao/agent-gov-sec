@@ -1,0 +1,30 @@
+version: "1.0"
+name: galaxy-tools
+description: >
+  Per-agent-type tool allow/deny list. Enforced by
+  CapabilityGuardMiddleware. Scanner does deterministic filesystem
+  traversal (os.walk) and needs no tools; listed here as defense-in-depth
+  — if a future agent somehow picks up MCP tools, the deny-by-default
+  rule below blocks them until explicitly allowed.
+
+defaults:
+  action: deny
+
+rules:
+  - name: allow-scanner-read-only-tools
+    priority: 100
+    message: "Scanner may read files and list directories only."
+    condition:
+      field: tool_name
+      operator: in
+      value: ["read_file", "list_directory", "stat_file"]
+    action: allow
+
+  - name: deny-network-egress-tools
+    priority: 90
+    message: "Network egress tools are forbidden for Scanner."
+    condition:
+      field: tool_name
+      operator: matches
+      value: "http_(get|post|put|delete)|network_request|fetch_url"
+    action: deny
