@@ -182,12 +182,23 @@ async def build_ast_agent(
 
     Caller owns the pg_backend lifecycle (flush + close at end of run).
     """
-    tp = token_provider or TokenProvider(
-        secret_name="azure-openai-key",
-        env_var_fallback="AZURE_OPENAI_KEY",
-    )
+    # Egress decision: APIM if APIM_ENDPOINT is set, else direct Azure OpenAI.
+    apim_endpoint = os.environ.get("APIM_ENDPOINT")
+    if apim_endpoint:
+        tp = token_provider or TokenProvider(
+            secret_name="apim-subscription-key",
+            env_var_fallback="APIM_SUBSCRIPTION_KEY",
+        )
+        endpoint = apim_endpoint
+        egress = "apim"
+    else:
+        tp = token_provider or TokenProvider(
+            secret_name="azure-openai-key",
+            env_var_fallback="AZURE_OPENAI_KEY",
+        )
+        endpoint = os.environ["AZURE_OPENAI_ENDPOINT"]
+        egress = "aoai-direct"
 
-    endpoint = os.environ["AZURE_OPENAI_ENDPOINT"]
     deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-5-3-codex")
     api_version = os.environ.get("AZURE_OPENAI_API_VERSION") or "preview"
 
@@ -199,6 +210,10 @@ async def build_ast_agent(
         api_key=tp.get_api_key(),
         azure_endpoint=endpoint,
         api_version=api_version,
+        default_headers={
+            "x-agent-type": AGENT_TYPE,
+            "x-nhi-id":     identity.client_id,
+        },
     )
 
     middleware, pg_backend, audit = await build_governance_stack(
@@ -221,6 +236,8 @@ async def build_ast_agent(
             "agent_id": agent_id,
             "nhi_id": identity.client_id,
             "deployment": deployment,
+            "egress": egress,
+            "endpoint": endpoint,
         },
     )
     return agent, pg_backend, audit
@@ -295,7 +312,18 @@ class ASTAgentHandler:
                 span.set_attribute("galaxy.routes_found", len(findings.routes))
 
             user_prompt = _build_user_prompt(findings)
-            llm_response = await self._agent.run(user_prompt)
+            # Per-call governance headers — sourced from the inbound A2A
+            # envelope so APIM-side correlation matches the conversation_id
+            # and run_id of the originating Scanner dispatch. Passed via
+            # `options.extra_headers` (not client_kwargs) so MAF's option
+            # pass-through layer hands them to openai-python's responses.create.
+            llm_response = await self._agent.run(
+                user_prompt,
+                options={"extra_headers": {
+                    "x-galaxy-run-id": request.run_id,
+                    "x-module-id":     request.module_id,
+                }},
+            )
             raw = _extract_text(llm_response)
 
         parsed = _extract_json_object(raw) or {}

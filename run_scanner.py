@@ -94,7 +94,19 @@ async def main(repo_path: str, run_id: str, module_id: str, attempt: int) -> Non
             nhi_id=scanner_agent.id or "",
         ):
             user_prompt = build_user_prompt(repo_path, file_map)
-            response = await scanner_agent.run(user_prompt)
+            # Per-call governance/correlation headers passed via the options
+            # dict — `extra_headers` is not in OpenAIChatClient's exclude set,
+            # so it passes through to `client.responses.create(**run_options)`
+            # which forwards them as HTTP headers. APIM uses these for rate
+            # limit attribution and App Insights correlation. (Static headers
+            # x-agent-type / x-nhi-id come from the client's default_headers.)
+            response = await scanner_agent.run(
+                user_prompt,
+                options={"extra_headers": {
+                    "x-galaxy-run-id": run_id,
+                    "x-module-id":     module_id,
+                }},
+            )
 
         raw = _extract_text(response)
         output = parse_scanner_output(raw, module_id, file_map)

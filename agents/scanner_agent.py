@@ -235,16 +235,26 @@ async def build_scanner_agent(
     lifecycle of ``pg_backend`` — call ``await pg_backend.flush_async()``
     and ``await pg_backend.close()`` at the end of the run.
     """
-    tp = token_provider or TokenProvider(
-        secret_name="azure-openai-key",
-        env_var_fallback="AZURE_OPENAI_KEY",
-    )
+    # Egress decision: APIM if APIM_ENDPOINT is set, else direct Azure OpenAI.
+    # APIM mode rewrites: the sub-key replaces the AOAI key (APIM injects the
+    # real AOAI key from a KV-backed named value via inbound policy).
+    apim_endpoint = os.environ.get("APIM_ENDPOINT")
+    if apim_endpoint:
+        tp = token_provider or TokenProvider(
+            secret_name="apim-subscription-key",
+            env_var_fallback="APIM_SUBSCRIPTION_KEY",
+        )
+        endpoint = apim_endpoint
+        egress = "apim"
+    else:
+        tp = token_provider or TokenProvider(
+            secret_name="azure-openai-key",
+            env_var_fallback="AZURE_OPENAI_KEY",
+        )
+        endpoint = os.environ["AZURE_OPENAI_ENDPOINT"]
+        egress = "aoai-direct"
 
-    endpoint = os.environ["AZURE_OPENAI_ENDPOINT"]
     deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-5-3-codex")
-    # MAF's Azure Responses API uses the literal string "preview", not a dated
-    # `YYYY-MM-DD-preview`. Leaving this optional — if AZURE_OPENAI_API_VERSION
-    # is set to "preview" or unset, we let the client's default kick in.
     api_version = os.environ.get("AZURE_OPENAI_API_VERSION") or "preview"
 
     identity = NHIRegistry.get(AGENT_TYPE)
@@ -255,6 +265,13 @@ async def build_scanner_agent(
         api_key=tp.get_api_key(),
         azure_endpoint=endpoint,
         api_version=api_version,
+        default_headers={
+            # APIM uses these for governance attribution + rate limiting.
+            # x-galaxy-run-id and x-module-id vary per call, stamped via
+            # `extra_headers` on agent.run(...) by run_scanner.py.
+            "x-agent-type": AGENT_TYPE,
+            "x-nhi-id":     identity.client_id,
+        },
     )
 
     middleware, pg_backend, audit = await build_governance_stack(
@@ -278,6 +295,8 @@ async def build_scanner_agent(
             "agent_id": agent_id,
             "nhi_id": identity.client_id,
             "deployment": deployment,
+            "egress": egress,
+            "endpoint": endpoint,
         },
     )
     return agent, pg_backend, audit

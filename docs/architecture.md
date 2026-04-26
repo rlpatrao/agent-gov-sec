@@ -1,14 +1,13 @@
 # Galaxy Scanner — Architecture & Design
 
 **Last updated:** 2026-04-26
-**Branch / commit:** `main` @ `0e8a68e`
 **Runtime status:**
 - ✅ Local end-to-end run works (`run_scanner.py`)
 - ✅ Telemetry → Azure Application Insights (`galaxyscanner-ai`)
 - ✅ Container image `galaxy-scanner:0.2.1` built + pushed to `galaxyscannercrd63cdd.azurecr.io`
+- ✅ **APIM Consumption (`galaxyscanner-apim`) live and in the LLM-egress path** — bad-key → 401, missing Galaxy headers → 400, rate-limit at 100 RPM → 429, valid path → 200
 - 🔶 Postgres ledger: stdout mode (Postgres Flex Server deferred)
 - 🔶 Container Apps Job: blocked on Azure private-registry-creds API hiccup
-- 🔶 APIM Consumption tier in front of Foundry: deferred
 
 ---
 
@@ -24,16 +23,18 @@ A multi-agent **code-discovery pipeline** for the Galaxy migration platform: a `
 flowchart LR
   CLI["run_scanner.py CLI"] --> Walk["traverse_repo<br/>(os.walk + heuristics)"]
   Walk --> Scanner["Scanner Agent<br/>(MAF + governance)"]
-  Scanner -->|gpt-5-3-codex| AOAI[("Azure OpenAI<br/>galaxyscanner-openai")]
+  Scanner -->|"x-agent-type<br/>x-galaxy-run-id<br/>x-module-id<br/>x-nhi-id<br/>api-key (sub-key)"| APIM["APIM Consumption<br/>galaxyscanner-apim"]
+  APIM -->|"api-key from<br/>KV named-value"| AOAI[("Azure OpenAI<br/>galaxyscanner-openai")]
   Scanner -->|"A2A envelope<br/>ASTRequest/v1"| AST["ASTAnalyzer Agent<br/>(MAF + governance)"]
   AST --> Parser["tree-sitter<br/>(extract_ast)"]
-  AST -->|gpt-5-3-codex| AOAI
+  AST -->|"same APIM headers"| APIM
   AST -->|"A2A reply<br/>ASTReport/v1"| Scanner
 
   Scanner -. audit .-> SAud[("Audit log<br/>Scanner chain")]
   AST -. audit .-> AAud[("Audit log<br/>AST chain")]
   Scanner & AST -. OTel spans .-> AI[("App Insights<br/>galaxyscanner-ai")]
   Scanner & AST -. secret refs .-> KV[("Key Vault<br/>galaxyscanner-kv-*")]
+  APIM -. KV named-value<br/>aoai-api-key .-> KV
 
   classDef sink fill:#0a3,color:#fff;
   classDef azure fill:#06f,color:#fff;
@@ -368,7 +369,7 @@ flowchart LR
       ACAEnv["Container Apps Env<br/>galaxyscanner-aca-env<br/>(Succeeded)"]
       Job{{"Container App Job<br/>galaxyscanner-job<br/>BLOCKED"}}
       Pg{{"Postgres Flex Server<br/>(deferred)"}}
-      APIM{{"APIM Consumption<br/>(deferred)"}}
+      APIM["APIM Consumption<br/>galaxyscanner-apim<br/>(LLM egress live)"]
     end
   end
 
@@ -385,9 +386,9 @@ flowchart LR
   classDef done fill:#0a3,color:#fff
   classDef blocked fill:#a30,color:#fff
   classDef deferred fill:#666,color:#fff
-  class KV,ACR,MI,LAW,AI,AOAI,ACAEnv done
+  class KV,ACR,MI,LAW,AI,AOAI,ACAEnv,APIM done
   class Job blocked
-  class Pg,APIM deferred
+  class Pg deferred
 ```
 
 Identifiers and connection strings live in [azure-resources.md](../azure-resources.md).
@@ -456,7 +457,7 @@ flowchart TD
 | Container image (`galaxy-scanner:0.2.1`) | ✅ Built + pushed | `galaxyscannercrd63cdd.azurecr.io` |
 | Postgres Flex Server provision + DSN | 🔶 Deferred | unblocks the persistent ledger |
 | ACA Job create with private-registry creds | 🔴 Blocked | Azure API returns InternalServerError; needs MS support / ACR Standard upgrade / portal create |
-| APIM Consumption tier in front of Foundry | 🔶 Deferred | header-injection policies + per-`x-agent-type` rate limits |
+| APIM Consumption tier in front of AOAI | ✅ Live | sub-key auth + galaxy-header guards + 100 RPM rate-limit + KV-backed AOAI key forwarding; per-`x-agent-type` rate limits require Developer-tier upgrade (Consumption doesn't allow `rate-limit-by-key`) |
 | Cross-process A2A with workload-identity tokens | ⏸ Future | only matters once A2A is networked |
 | Compliance Auditor agent (joins Scanner+AST chains by `run_id`) | ⏸ Future | tamper-evident cross-agent verify |
 
