@@ -118,6 +118,12 @@ async def a2a_call(
     )
 
     with span_cm as span:
+        # Stamp the full request envelope on the span before handler runs so
+        # it's still captured even if the handler crashes before producing a
+        # reply. Compliance trade-off accepted: the envelope (including
+        # `payload`) is now visible in App Insights for the retention window.
+        _stamp_envelope(span, "a2a.request_envelope", request.to_json())
+
         try:
             response = await handler(request)
         except Exception as e:
@@ -140,6 +146,7 @@ async def a2a_call(
         if span is not None and hasattr(span, "set_attribute"):
             span.set_attribute("a2a.status", response.status.value)
             span.set_attribute("a2a.latency_ms", response.latency_ms)
+        _stamp_envelope(span, "a2a.response_envelope", response.to_json())
 
     outcome = "allow" if response.is_ok else "block" if response.status == A2AStatus.ERROR else "deny"
     _log_reply(sender_audit, response, latency_ms=response.latency_ms, outcome=outcome)
@@ -219,3 +226,20 @@ class _null_cm:
         return None
     def __exit__(self, exc_type, exc, tb):
         return False
+
+
+# Azure Monitor truncates string attributes around 8KB; OTel's general guidance
+# is well under 32KB. Cap each envelope and mark it explicitly when truncated.
+_ENVELOPE_ATTR_LIMIT = 8000
+
+
+def _stamp_envelope(span: object | None, attr_name: str, envelope_json: str) -> None:
+    """Write a full A2A envelope as a span attribute, truncating to fit the
+    backend's per-attribute limit. Adds a sibling `<attr>_truncated` boolean."""
+    if span is None or not hasattr(span, "set_attribute"):
+        return
+    truncated = len(envelope_json) > _ENVELOPE_ATTR_LIMIT
+    if truncated:
+        envelope_json = envelope_json[: _ENVELOPE_ATTR_LIMIT - 32] + '..."[truncated]"}'
+    span.set_attribute(attr_name, envelope_json)
+    span.set_attribute(f"{attr_name}_truncated", truncated)
