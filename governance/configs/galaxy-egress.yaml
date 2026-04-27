@@ -1,0 +1,44 @@
+# Egress allow-list — loaded by governance.guards.egress.load_egress_policy()
+# and passed into agent_os.egress_policy.EgressPolicy.
+#
+# Today our agents (Scanner, ASTAnalyzer) are LLM-only and don't make outbound
+# tool calls beyond APIM, so this acts as a *reference* declaration. When a
+# tool-using agent (Coder, Reviewer) lands, the same policy gets bound to a
+# FunctionMiddleware that intercepts every HTTP-shaped tool call.
+#
+# Loader format is `agent_os.egress_policy.EgressPolicy.load_from_yaml`'s
+# minimal stdlib parser:
+#   - protocol must be `tcp` or `udp` (port 443 = HTTPS)
+#   - one rule per `- domain:` block
+#   - other top-level keys (version/name/description) are ignored
+
+rules:
+  # APIM gateway — primary LLM egress
+  - domain: galaxyscanner-apim.azure-api.net
+    ports: [443]
+    protocol: tcp
+    action: allow
+
+  # Direct Azure OpenAI fallback (only used when APIM_ENDPOINT is unset)
+  - domain: galaxyscanner-openai.openai.azure.com
+    ports: [443]
+    protocol: tcp
+    action: allow
+
+  # Application Insights ingestion endpoint (regional)
+  - domain: eastus-8.in.applicationinsights.azure.com
+    ports: [443]
+    protocol: tcp
+    action: allow
+
+  # Live diagnostics for App Insights "Live Metrics" pane
+  - domain: eastus.livediagnostics.monitor.azure.com
+    ports: [443]
+    protocol: tcp
+    action: allow
+
+  # Key Vault data plane
+  - domain: galaxyscanner-kv-d63cdd.vault.azure.net
+    ports: [443]
+    protocol: tcp
+    action: allow

@@ -562,27 +562,44 @@ async def test_credit_card_blocked():
 
 ## 7. Guardrails available
 
-Stack in order of fire:
+The Microsoft Agent Governance Toolkit ships ~40 governance modules; we wire a subset and have plumbing-ready wrappers for several more. **Full inventory in [guardrails-inventory.md](guardrails-inventory.md).** Quick view of what's actually in the live stack today, in fail-fast order:
 
-| # | Guardrail | What it stops | Implementation | Where it lives |
+| # | Guardrail | What it stops | Source | Lives at |
 |---|---|---|---|---|
-| 1 | **APIM sub-key validation** | Unauthorised callers (no key, wrong key) | APIM policy; returns 401 | API-level policy |
-| 2 | **Required-headers guard** | Calls without governance attribution (missing `x-agent-type`, `x-galaxy-run-id`) | APIM `<choose>` + `<return-response>`; returns 400 | API-level policy |
-| 3 | **Per-subscription rate-limit** | Runaway loops, abuse | APIM `<rate-limit calls="100" renewal-period="60" />`; returns 429 | API-level policy. Per-agent rate-limit needs Developer SKU. |
-| 4 | **Prompt-injection regex** | Known jailbreak patterns | YAML rule [galaxy-core.yaml:14-23](../governance/policies/galaxy-core.yaml#L14-L23); also `agent_os.prompt_injection.PromptInjectionDetector` ships a richer taxonomy if you want it | Pre-dispatch policy middleware |
-| 5 | **Cost / oversize gate** | Prompts > 24 KB (~6 K tokens) | YAML rule [galaxy-core.yaml:25-32](../governance/policies/galaxy-core.yaml#L25-L32) with regex character-count gate (PolicyOperator has no `len_gt`) | Pre-dispatch policy middleware |
-| 6 | **Tool capability allow-list** | Calls to tools the agent shouldn't have | YAML rule [galaxy-tools.yaml](../governance/policies/galaxy-tools.yaml) + `CapabilityGuardMiddleware` (function-level) | Function-invocation middleware |
-| 7 | **A2A allow-list** | Cross-agent calls to unintended recipients | Two-layer: `allowed_recipients` arg to `a2a_call` + per-agent YAML | Dispatcher + config |
-| 8 | **Anomaly / rogue detection** | Statistical anomalies in tool-use patterns | `RogueDetectionMiddleware` from `agent_os.integrations.maf_adapter` (function-level) | Function-invocation middleware |
-| 9 | **Hash-chained audit** | Silent tampering with the audit trail | `PostgresHashChainBackend.verify_chain()` re-computes SHA-256 chain | Audit log post-fact |
-| 10 | **OTel span error status** | Missed alerts in App Insights | `OtelAuditBackend` sets span status = ERROR on `decision in {deny, block}` | Per-call observability |
+| 1 | **APIM sub-key validation** | Unauthorised callers (no key, wrong key) | APIM policy → 401 | API-level policy XML |
+| 2 | **APIM required-headers guard** | Calls without `x-agent-type` or `x-galaxy-run-id` | APIM policy → 400 with origin marker | API-level policy XML |
+| 3 | **APIM rate-limit** | Runaway loops, abuse | `<rate-limit calls="100" renewal-period="60" />` → 429 | API-level policy XML |
+| 4 | **PromptInjectionGuardMiddleware** | 7-vector taxonomy (direct override, delimiter, encoding, role-play, context manipulation, canary leak, multi-turn) with NONE/LOW/MEDIUM/HIGH/CRITICAL threat levels — blocks at ≥ MEDIUM by default | wraps `agent_os.prompt_injection.PromptInjectionDetector` | [governance/guards/prompt_injection.py](../governance/guards/prompt_injection.py); config at [governance/configs/prompt-injection.yaml](../governance/configs/prompt-injection.yaml) |
+| 5 | **CredentialRedactorGuardMiddleware** | API keys, AWS access keys, GitHub tokens, generic secret patterns. Two modes: `redact` (strip + proceed) or `deny` (block) | wraps `agent_os.credential_redactor.CredentialRedactor` | [governance/guards/credential_redactor.py](../governance/guards/credential_redactor.py) |
+| 6 | **ContextBudgetGuardMiddleware** | Token-budget allocation pre-call + actual-usage record post-call | wraps `agent_os.context_budget.ContextScheduler` | [governance/guards/context_budget.py](../governance/guards/context_budget.py) |
+| 7 | **GovernancePolicyMiddleware** (YAML rules) | Anything declared in [governance/policies/*.yaml](../governance/policies/) (defense-in-depth net for prompt injection; future per-agent rules) | from `agent_os.integrations.maf_adapter` | bundled |
+| 8 | **CapabilityGuardMiddleware** | Tool allow/deny list (function-level) — dormant today (no tools) | from `agent_os.integrations.maf_adapter` | bundled |
+| 9 | **RogueDetectionMiddleware** | Statistical anomalies in tool-use patterns | from `agent_os.integrations.maf_adapter` | bundled |
+| 10 | **AuditTrailMiddleware** | Hash-chain start/end pair per invocation | from `agent_os.integrations.maf_adapter` | bundled |
+| 11 | **A2A allow-list (dispatcher)** | Cross-agent calls to unintended recipients | two-layer: `allowed_recipients` arg + YAML | [a2a/dispatcher.py:77-93](../a2a/dispatcher.py#L77-L93) |
+| 12 | **PostgresHashChainBackend.verify_chain** | Silent tampering with the audit trail | re-computes SHA-256 chain row by row | [governance/adapters/postgres_audit_backend.py:155-179](../governance/adapters/postgres_audit_backend.py#L155-L179) |
+| 13 | **OtelAuditBackend span-status** | Missed alerts in App Insights | sets span status = ERROR on `decision in {deny, block}` | [governance/adapters/otel_audit_backend.py](../governance/adapters/otel_audit_backend.py) |
 
-### What's NOT in the stack today
+### Guards available but not yet wired
 
-- **PII detection** — [galaxy-pii.yaml](../governance/policies/galaxy-pii.yaml) is a stub (`defaults.action=allow`, no rules). Wire `agent_os.prompt_injection.PromptInjectionConfig` or Azure AI Content Safety to populate it.
-- **Output content safety** — `agent_os.audit_logger` doesn't currently inspect the model's response. Adding an `OutputSafetyMiddleware` that checks the response against a rule pack would close this.
+These ship in the toolkit and have wrappers/skeletons in [governance/guards/](../governance/guards/), waiting for a use case:
+
+| Guard | Status | Activates when |
+|---|---|---|
+| **EgressPolicy** ([guards/egress.py](../governance/guards/egress.py), config [galaxy-egress.yaml](../governance/configs/galaxy-egress.yaml)) | 🟠 Reference-loaded; needs binding to a `FunctionMiddleware` | A tool-using agent (Coder, Reviewer) lands and starts making outbound HTTP calls |
+| **EscalationManager** ([guards/escalation.py](../governance/guards/escalation.py)) | 🟠 Wrapper exists; not bound to deny path | You wire an `approval_handler` (Slack webhook, Service Bus, Azure Queue) |
+| **TransparencyInterceptor** | 🟠 Available in `agent_os` | You want users to approve tool calls before they execute |
+| **GovernanceEventBus** | 🟠 Available | You need fan-out: one denial → multiple sinks (Slack + SIEM + queue) |
+| **CircuitBreaker** (`agent_sre.cascade.circuit_breaker`) | 🔴 Mentioned in plan, deferred | Foundry experiences outages; you want fail-fast instead of httpx retries |
+
+### Gaps the toolkit does NOT close
+
+- **Output content safety** — no module inspects model responses. An `OutputSafetyMiddleware` is the natural addition; both `agent_compliance.PromptDefenseEvaluator` (CI-time) and Azure AI Content Safety (runtime) are options.
+- **PII redaction** — [galaxy-pii.yaml](../governance/policies/galaxy-pii.yaml) is a stub. Wire Azure AI Content Safety or extend `CredentialRedactor` patterns.
 - **JWT validation** — APIM policy has the `set-variable` stub but `validate-jwt` isn't enforced. See [§4.4](#44-jwt-validation-stub-today-ready-when-you-flip-it).
-- **Per-agent rate-limit** — Consumption tier doesn't allow `rate-limit-by-key`. Upgrade to Developer ($50/mo) and switch the policy to key on `x-agent-type`.
+- **Per-agent rate-limit** — Consumption tier limit. Upgrade to Developer ($50/mo) for `rate-limit-by-key` keyed on `x-agent-type`.
+
+For the comprehensive view (every toolkit module, every adapter, every SRE primitive, plus the documented packaging quirks we've worked around), see [guardrails-inventory.md](guardrails-inventory.md).
 
 ---
 

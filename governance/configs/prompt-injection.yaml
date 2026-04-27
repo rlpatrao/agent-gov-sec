@@ -1,0 +1,75 @@
+# Prompt-injection detector configuration
+#
+# Schema: agent_os.prompt_injection.load_prompt_injection_config(path)
+# Loaded by PromptInjectionGuardMiddleware. Replaces the YAML regex rule
+# that used to live in galaxy-core.yaml.
+#
+# Vector taxonomy (from agent_os):
+#   direct_override         "ignore previous instructions", "system: …"
+#   delimiter               "<system>…</system>" style fake delimiters
+#   role_play               "you are now", "act as if", "new persona"
+#   context_manipulation    out-of-band steering
+#   multi_turn              gradual ramp across turns
+#   encoding                base64 / unicode tricks
+#
+# Threat levels: none | low | medium | high | critical
+# Block threshold defaults to MEDIUM in PromptInjectionGuardMiddleware.
+
+detection_patterns:
+  direct_override:
+    - "(?i)ignore (?:all )?previous instructions"
+    - "(?i)disregard (?:your |the )?system prompt"
+    - "(?i)forget (?:all |everything )?(?:previous|above)"
+    - "(?i)override your instructions"
+    - "(?i)bypass (?:all )?(?:safety|security|guard)"
+
+  delimiter:
+    - "<\\s*/?\\s*(?:system|sys|admin|developer)[^>]*>"
+    - "\\[(?:SYSTEM|ADMIN|DEV)\\]"
+    - "###\\s*(?:SYSTEM|END USER|NEW)"
+
+  role_play:
+    - "(?i)you are now (?:a |an )?\\w+"
+    - "(?i)act as (?:if you were |a )?\\w+"
+    - "(?i)pretend (?:to be |you are )"
+    - "(?i)take on (?:the |a )?(?:role|persona|character)"
+    - "(?i)new persona"
+
+  context_manipulation:
+    - "(?i)out of band"
+    - "(?i)off the record"
+    - "(?i)don't tell (?:the |my |your )?(?:user|admin|operator)"
+
+  multi_turn:
+    - "(?i)from now on"
+    - "(?i)going forward (?:always|never)"
+    - "(?i)remember (?:that |this )?(?:rule|instruction)"
+
+  encoding:
+    - "(?i)decode (?:this |the following )?(?:base64|hex|rot13)"
+    - "(?i)what does (?:this |that )?(?:base64|hex) (?:say|mean)"
+
+  base64_pattern: "(?:[A-Za-z0-9+/]{4}){10,}={0,2}"
+
+suspicious_decoded_keywords:
+  - "ignore"
+  - "system prompt"
+  - "api key"
+  - "password"
+  - "secret"
+  - "credentials"
+  - "exfiltrate"
+  - "leak"
+
+# Sensitivity gating: when the source matches a key, escalate findings to
+# at least the threat level on the right.
+sensitivity_min_threat:
+  Scanner: low
+  ASTAnalyzer: low
+  Coder: medium       # future agent — code-mod risk
+  Reviewer: medium
+
+disclaimer: >
+  Galaxy-tuned prompt-injection patterns. Kept narrow on purpose — false
+  positives bounce real scans. Operators who want stricter posture can
+  raise sensitivity_min_threat.<agent_type> to medium / high.

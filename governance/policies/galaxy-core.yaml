@@ -1,37 +1,33 @@
 version: "1.0"
 name: galaxy-core
 description: >
-  Core runtime governance for every Galaxy agent. Covers OWASP ASI-01
-  (prompt injection), ASI-04 (resource exhaustion / cost ceiling), and
-  ASI-06 (empty / malformed response). Rules are evaluated highest
-  priority first; first match wins.
+  Core runtime governance YAML for every Galaxy agent. Most of what this
+  pack used to enforce by regex now runs through proper toolkit guards
+  (see governance/guards/):
+
+    Prompt injection (OWASP ASI-01)  -> PromptInjectionGuardMiddleware
+                                         (governance/guards/prompt_injection.py)
+                                         driven by prompt-injection.yaml
+    Cost ceiling (ASI-04)            -> ContextBudgetGuardMiddleware
+                                         (governance/guards/context_budget.py)
+
+  This file stays in the loader for forward-compat: any rule a future
+  agent type wants to express declaratively (e.g. "deny if metadata.repo
+  is on the embargo list") still goes here. Today it ships a single
+  defense-in-depth net for the prompt-injection guard.
 
 defaults:
   action: allow
 
 rules:
-  - name: deny-prompt-injection-known-patterns
-    priority: 100
+  - name: deny-injection-net-of-last-resort
+    priority: 50
     message: >
-      Prompt injection attempt detected — the user message contains
-      text matching a known jailbreak pattern. Blocked by galaxy-core.
-    condition:
-      # maf_adapter.GovernancePolicyMiddleware populates `message` with the
-      # last user message verbatim. Case-insensitive regex via (?i).
-      field: message
-      operator: matches
-      value: "(?i)ignore previous instructions|disregard your system prompt|you are now|act as if|forget all previous|override your instructions|new persona"
-    action: deny
-
-  - name: deny-oversized-prompt
-    priority: 90
-    message: >
-      User message exceeds the per-call character ceiling (~24000 chars
-      ≈ 6000 tokens). Blocked before dispatch to prevent runaway cost.
+      Hard literal-string fallback for prompt injection — if
+      PromptInjectionGuardMiddleware ever gets disabled or misconfigured,
+      this catches the most obvious payload.
     condition:
       field: message
       operator: matches
-      # Negative look-behind via length — PolicyOperator has no `len_gt`, so we use a
-      # long-match regex as a character-count gate. 24000 any-chars ≈ 6000 tokens.
-      value: "^.{24000,}$"
+      value: "(?i)ignore previous instructions|forget all previous instructions|override your instructions"
     action: deny

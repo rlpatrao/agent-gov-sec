@@ -15,14 +15,20 @@ from pathlib import Path
 from typing import Any, Optional
 
 from agent_os.audit_logger import AuditEntry, GovernanceAuditLogger, LoggingBackend
+from agent_os.context_budget import ContextScheduler
 from agent_os.integrations.maf_adapter import create_governance_middleware
 
 from governance.adapters.otel_audit_backend import OtelAuditBackend
 from governance.adapters.postgres_audit_backend import PostgresHashChainBackend
+from governance.guards.context_budget import ContextBudgetGuardMiddleware
+from governance.guards.credential_redactor import CredentialRedactorGuardMiddleware
+from governance.guards.prompt_injection import PromptInjectionGuardMiddleware
 
 logger = logging.getLogger(__name__)
 
 _POLICY_DIR = Path(__file__).parent / "policies"
+_CONFIG_DIR = Path(__file__).parent / "configs"
+_PROMPT_INJECTION_CONFIG = _CONFIG_DIR / "prompt-injection.yaml"
 
 
 class _CompatAuditLogger(GovernanceAuditLogger):
@@ -69,6 +75,11 @@ async def build_governance_stack(
     denied_tools: Optional[list[str]] = None,
     run_id: Optional[str] = None,
     enable_rogue_detection: bool = True,
+    enable_prompt_injection_guard: bool = True,
+    enable_credential_redactor: bool = True,
+    credential_mode: str = "redact",                # "redact" | "deny"
+    enable_context_budget: bool = True,
+    context_budget_total_tokens: int = 8000,
 ) -> tuple[list, PostgresHashChainBackend, GovernanceAuditLogger]:
     """Return (middleware_list, pg_backend, audit_logger).
 
@@ -76,6 +87,15 @@ async def build_governance_stack(
     Call `await pg_backend.flush_async()` and `await pg_backend.close()` at end of run.
     `audit_logger` is returned so domain events (e.g. repo_traversal_complete)
     can be logged explicitly from the agent where useful.
+
+    The middleware list is ordered to fail fast on cheap checks first:
+      1. PromptInjectionGuardMiddleware    (literal-string + heuristics, no LLM)
+      2. CredentialRedactorGuardMiddleware (regex scan)
+      3. ContextBudgetGuardMiddleware      (token allocate, no LLM)
+      4. AuditTrailMiddleware              (from create_governance_middleware)
+      5. GovernancePolicyMiddleware        (from create_governance_middleware — YAML rules)
+      6. CapabilityGuardMiddleware         (from create_governance_middleware, if tools)
+      7. RogueDetectionMiddleware          (from create_governance_middleware)
     """
     audit = _CompatAuditLogger()
     audit.add_backend(LoggingBackend())                            # stdout fallback
@@ -85,7 +105,28 @@ async def build_governance_stack(
     )
     audit.add_backend(pg_backend)                                  # compliance archive
 
-    middleware = create_governance_middleware(
+    pre_middleware: list = []
+    if enable_prompt_injection_guard:
+        pre_middleware.append(PromptInjectionGuardMiddleware(
+            agent_id=agent_id,
+            audit_log=audit,
+            config_path=_PROMPT_INJECTION_CONFIG if _PROMPT_INJECTION_CONFIG.exists() else None,
+        ))
+    if enable_credential_redactor:
+        pre_middleware.append(CredentialRedactorGuardMiddleware(
+            agent_id=agent_id,
+            audit_log=audit,
+            mode=credential_mode,
+        ))
+    if enable_context_budget:
+        scheduler = ContextScheduler(total_budget=context_budget_total_tokens)
+        pre_middleware.append(ContextBudgetGuardMiddleware(
+            agent_id=agent_id,
+            scheduler=scheduler,
+            audit_log=audit,
+        ))
+
+    toolkit_middleware = create_governance_middleware(
         policy_directory=_POLICY_DIR,
         allowed_tools=allowed_tools,
         denied_tools=denied_tools,
@@ -94,6 +135,8 @@ async def build_governance_stack(
         audit_log=audit,
     )
 
+    middleware = pre_middleware + list(toolkit_middleware)
+
     logger.info(
         "governance.stack_built",
         extra={
@@ -101,6 +144,12 @@ async def build_governance_stack(
             "policy_dir": str(_POLICY_DIR),
             "middleware_count": len(middleware),
             "postgres_connected": pg_backend._pool is not None,
+            "guards": {
+                "prompt_injection":   enable_prompt_injection_guard,
+                "credential_guard":   enable_credential_redactor,
+                "context_budget":     enable_context_budget,
+                "rogue_detection":    enable_rogue_detection,
+            },
         },
     )
     return middleware, pg_backend, audit
