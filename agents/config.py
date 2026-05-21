@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -50,13 +50,38 @@ class A2AConfig(BaseModel):
 
 
 class GovernanceConfig(BaseModel):
-    """Toggles for the per-agent governance middleware stack."""
+    """Toggles for the per-agent governance middleware stack.
+
+    All fields default to safe values so existing YAMLs that only set
+    `enable_rogue_detection` keep validating. New agents being ported
+    declare what they actually need explicitly.
+    """
     model_config = ConfigDict(extra="forbid")
 
     enable_rogue_detection: bool = Field(
         default=True,
         description="Turn on agent_os RogueDetectionMiddleware.",
     )
+    enable_prompt_injection_guard: bool = Field(default=True)
+    enable_credential_redactor: bool = Field(default=True)
+    credential_mode: Literal["redact", "deny"] = Field(default="redact")
+    enable_context_budget: bool = Field(default=True)
+    context_budget_tokens: int = Field(
+        default=8000, gt=0, le=200_000,
+        description="Total token budget the ContextScheduler hands out per agent.",
+    )
+    prompt_injection_block_threshold: Literal["medium", "high", "critical"] = Field(
+        default="medium",
+        description="Minimum threat level at which the PromptInjectionGuard blocks. "
+                    "Pipeline agents that receive trusted LLM-generated markdown should "
+                    "use 'high' to avoid false positives on --- separators and code fences.",
+    )
+    allowed_tools: list[str] = Field(
+        default_factory=list,
+        description="Tool function names the CapabilityGuard will permit. "
+                    "Must include the __name__ of every callable passed as `tools=` to build_agent().",
+    )
+    denied_tools: list[str] = Field(default_factory=list)
 
 
 class AgentConfigModel(BaseModel):
@@ -73,6 +98,34 @@ class AgentConfigModel(BaseModel):
     max_file_scan_bytes: int = Field(
         gt=0, le=1_000_000,
         description="Per-file cap for content peeks (entry-point detection, etc).",
+    )
+    prompt_file: str = Field(
+        description="Path to the system-prompt markdown file, relative to the "
+                    "`agents/` package root (e.g. 'prompts/scanner.md'). "
+                    "Required — agents/_base.py reads this at build time so the "
+                    "prompt is the sole source of truth and version-controlled.",
+    )
+    shared_prompt_files: list[str] = Field(
+        default_factory=list,
+        description="Optional shared prompt fragments concatenated BEFORE "
+                    "prompt_file (in declared order). Use to inject a "
+                    "platform-wide preamble (e.g. 'prompts/_shared/quality-principles.md') "
+                    "without duplicating it in every agent prompt. Pattern from "
+                    "agentrepo/ms-agent-harness/prompts/quality-principles.md.",
+    )
+    model: Optional[str] = Field(
+        default=None,
+        description="Optional per-agent model override. Falls back to "
+                    "AZURE_OPENAI_DEPLOYMENT env when unset. Lets the porting "
+                    "plan ship per-role models (gpt-5-3-codex for Coder, "
+                    "gpt-5.4-mini for Reviewer) without code changes.",
+    )
+    max_output_tokens: Optional[int] = Field(
+        default=None, gt=0, le=128_000,
+        description="Per-agent cap on completion tokens. Forwarded to the "
+                    "Responses API as default_options.max_output_tokens. "
+                    "Stops a runaway model from blowing the budget; tune per role "
+                    "(Reviewer: 4000, Coder: 12000, etc).",
     )
     a2a: A2AConfig
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)

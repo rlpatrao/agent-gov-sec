@@ -20,6 +20,15 @@ agentmesh-platform>=3.2.2
 azure-identity>=1.19.0
 azure-keyvault-secrets>=4.8.0
 
+# ── Azure SDK targets for migrated Python serverless modules ─────────────────
+# Required in the test environment so Coder-generated modules can be imported
+# during pytest collection. run_tests uses sys.executable (this venv).
+azure-functions>=1.20.0
+azure-cosmos>=4.7.0
+azure-servicebus>=7.12.2
+azure-storage-blob>=12.20.0
+azure-eventgrid>=4.20.0
+
 # ── Config management (YAML -> validated Pydantic models in agents/config.py)
 # Already pulled transitively by agent-framework-core, but pinning explicitly
 # so MAF version bumps can't silently drag us across major Pydantic lines.
@@ -53,6 +62,9 @@ uvicorn>=0.32.0
 # ── Dev / test ──────────────────────────────────────────────────────────────
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
+
+# ── Tooling (video / docs) ───────────────────────────────────────────────────
+python-pptx>=1.0.0   # build_narakeet_pptx.py — slide deck generation only
 
 # ── Removed from prior version (2026-04-24) ─────────────────────────────────
 # anthropic             → MAF owns the LLM client; no Anthropic escape hatch

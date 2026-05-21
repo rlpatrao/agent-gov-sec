@@ -1,300 +1,328 @@
-# Galaxy Scanner — Architecture & Design
+# Galaxy Agentic SDLC — Architecture
 
-**Last updated:** 2026-04-26
+**Last updated:** 2026-05-15
 **Runtime status:**
-- ✅ Local end-to-end run works (`run_scanner.py`)
-- ✅ Telemetry → Azure Application Insights (`galaxyscanner-ai`)
-- ✅ Container image `galaxy-scanner:0.2.1` built + pushed to `galaxyscannercrd63cdd.azurecr.io`
-- ✅ **APIM Consumption (`galaxyscanner-apim`) live and in the LLM-egress path** — bad-key → 401, missing Galaxy headers → 400, rate-limit at 100 RPM → 429, valid path → 200
-- 🔶 Postgres ledger: stdout mode (Postgres Flex Server deferred)
-- 🔶 Container Apps Job: blocked on Azure private-registry-creds API hiccup
+- ✅ Migration pipeline end-to-end (`scripts/run_migration.py`)
+- ✅ Scanner + ASTAnalyzer pipeline (`scripts/run_scanner.py`)
+- ✅ Discovery pipeline agents (5 agents; no orchestrator script yet)
+- ✅ Governance middleware stack (7 guards, all verified)
+- ✅ OTel → Application Insights live
+- ✅ APIM Consumption tier live as LLM-egress proxy
+- 🔶 Postgres ledger: stdout mode (Flex Server deferred)
+- 🔴 Container Apps Job: blocked on private-registry-creds API issue
 
 ---
 
-## 1. Goal in one sentence
+This platform has two distinct subsystems that share identity and governance infrastructure:
 
-A multi-agent **code-discovery pipeline** for the Galaxy migration platform: a `Scanner` walks a legacy repo, an `ASTAnalyzer` (called over a typed agent-to-agent envelope) performs deterministic tree-sitter extraction plus an LLM-grounded architecture summary, and every cross-call is governed by Microsoft Agent Framework + the agent_os middleware stack — with two independent hash-chained audit ledgers and full OpenTelemetry traces emitted to Application Insights.
+| Subsystem | Entry point | Description |
+|---|---|---|
+| **Part 1 — Governance Platform** | `governance/`, `core/`, `a2a/` | Security middleware, NHI registry, OTel tracing, hash-chained audit ledger, Azure connectivity |
+| **Part 2 — Payload App** | `scripts/`, `agents/` | Migration pipeline + Discovery pipeline running on top of the governance platform |
 
 ---
 
-## 2. System overview
+## Part 1 — Agent-Governance Security Platform
+
+### 1.1 Platform overview
+
+Every agent in the system — regardless of which pipeline it belongs to — runs through the same governance platform. The platform provides:
+
+- **Non-Human Identity (NHI):** each agent type has its own Entra App Registration; no shared credentials
+- **Governance middleware stack:** 7 ordered guards applied on every `agent.run()` call
+- **A2A protocol:** typed, audited message envelopes for all inter-agent communication
+- **OpenTelemetry tracing:** one trace ID per run, all agent spans under the same root
+- **Hash-chained audit ledger:** append-only compliance archive in Postgres (SHA-256 chained)
+- **APIM egress gateway:** the only path to Azure OpenAI; real AOAI key never in agent code
+
+---
+
+### 1.2 Non-Human Identity (NHI)
+
+Source: [`core/nhi_identity.py`](../core/nhi_identity.py)
+
+Every agent type has its own Entra service principal. In AKS, `ManagedIdentityCredential(client_id=...)` uses Workload Identity federated OIDC tokens. In local dev, placeholder strings are used — no real auth happens.
+
+```
+NHI_CLIENT_IDS registry (core/nhi_identity.py)
+ ─ Migration pipeline ─────────────────────────────────────────────────
+ Scanner              NHI_CLIENT_ID_SCANNER
+ ASTAnalyzer          NHI_CLIENT_ID_ASTANALYZER
+ Analyzer             NHI_CLIENT_ID_ANALYZER
+ LambdaAnalyzer       NHI_CLIENT_ID_LAMBDAANALYZER
+ Coder                NHI_CLIENT_ID_CODER
+ Tester               NHI_CLIENT_ID_TESTER
+ Reviewer             NHI_CLIENT_ID_REVIEWER
+ SecurityReviewer     NHI_CLIENT_ID_SECURITYREVIEWER
+ Security             NHI_CLIENT_ID_SECURITY
+ Architect            NHI_CLIENT_ID_ARCHITECT
+ IaCGen               NHI_CLIENT_ID_IACGEN
+ SLOWatcher           NHI_CLIENT_ID_SLOWATCHER
+ ─ Discovery pipeline ─────────────────────────────────────────────────
+ DiscoveryScanner     NHI_CLIENT_ID_DISCOVERYSCANNER
+ DiscoveryGrapher     NHI_CLIENT_ID_DISCOVERYGRAPHER
+ DiscoveryBRD         NHI_CLIENT_ID_DISCOVERYBRD
+ DiscoveryArchitect   NHI_CLIENT_ID_DISCOVERYARCHITECT
+ DiscoveryStories     NHI_CLIENT_ID_DISCOVERYSTORIES
+```
+
+The `nhi_id` (e.g. `Coder-local-coder-nhi`) is carried as:
+
+- `x-nhi-id` header on every APIM request → logged in APIM GatewayLogs
+- `governance.agent_id` on every governance audit event → queryable in App Insights `customEvents`
+- `nhi_id` column in the Postgres `trace_ledger` table
+
+It is **not** a span attribute on the OTel `pipeline.run` root span (that span only has `galaxy.run_id` and `galaxy.module`).
 
 ```mermaid
 flowchart LR
-  CLI["run_scanner.py CLI"] --> Walk["traverse_repo<br/>(os.walk + heuristics)"]
-  Walk --> Scanner["Scanner Agent<br/>(MAF + governance)"]
-  Scanner -->|"x-agent-type<br/>x-galaxy-run-id<br/>x-module-id<br/>x-nhi-id<br/>api-key (sub-key)"| APIM["APIM Consumption<br/>galaxyscanner-apim"]
-  APIM -->|"api-key from<br/>KV named-value"| AOAI[("Azure OpenAI<br/>galaxyscanner-openai")]
-  Scanner -->|"A2A envelope<br/>ASTRequest/v1"| AST["ASTAnalyzer Agent<br/>(MAF + governance)"]
-  AST --> Parser["tree-sitter<br/>(extract_ast)"]
-  AST -->|"same APIM headers"| APIM
-  AST -->|"A2A reply<br/>ASTReport/v1"| Scanner
+  Agent["Python agent process\n(NHI_CLIENT_ID_* from env)"]
+  Entra["Entra ID\n(App Registration per agent)"]
+  APIM["APIM Consumption\ngalaxyscanner-apim"]
+  AOAI["Azure OpenAI\ngalaxyscanner-openai"]
 
-  Scanner -. audit .-> SAud[("Audit log<br/>Scanner chain")]
-  AST -. audit .-> AAud[("Audit log<br/>AST chain")]
-  Scanner & AST -. OTel spans .-> AI[("App Insights<br/>galaxyscanner-ai")]
-  Scanner & AST -. secret refs .-> KV[("Key Vault<br/>galaxyscanner-kv-*")]
-  APIM -. KV named-value<br/>aoai-api-key .-> KV
-
-  classDef sink fill:#0a3,color:#fff;
-  classDef azure fill:#06f,color:#fff;
-  class AOAI,AI,KV azure
-  class SAud,AAud sink
+  Agent -->|"ManagedIdentityCredential\nfederated OIDC token"| Entra
+  Agent -->|"x-nhi-id + x-agent-type + Ocp-Apim-Subscription-Key"| APIM
+  APIM -->|"injects real AOAI key\nfrom KV named value"| AOAI
+  Entra -.->|"sign-in log per NHI"| EntraLog["Entra audit log\n(per-agent attribution)"]
 ```
 
 ---
 
-## 3. Code package map
+### 1.3 Governance middleware pipeline
 
-| Package / module | Role | Key entry points |
-|---|---|---|
-| [`run_scanner.py`](../run_scanner.py) | CLI entry; orchestrates one scan | `main(repo_path, run_id, module_id, attempt)` |
-| [`agents/scanner_agent.py`](../agents/scanner_agent.py) | Scanner: traversal + LLM analysis + A2A dispatch | `traverse_repo`, `build_scanner_agent`, `dispatch_ast_analysis` |
-| [`agents/ast_agent.py`](../agents/ast_agent.py) | ASTAnalyzer: handler that parses code + LLM summarises | `build_ast_agent`, `ASTAgentHandler.handle` |
-| [`agents/ast_parser/`](../agents/ast_parser/) | Deterministic tree-sitter extractor (no LLM, no network) | `extract_ast(repo_root, files) -> ASTFindings` |
-| [`agents/config.py`](../agents/config.py) | YAML → Pydantic config loader | `load_agent_config_cached(name)` |
-| [`agents/config/*.yaml`](../agents/config/) | Per-agent tunables (file caps, A2A allow-list, governance toggles) | `scanner.yaml`, `ast_analyzer.yaml` |
-| [`a2a/envelope.py`](../a2a/envelope.py) | Typed `A2ARequest` / `A2AResponse` dataclasses + `A2AStatus` enum | `A2ARequest.new(...)`, `A2AResponse.ok(...)` |
-| [`a2a/dispatcher.py`](../a2a/dispatcher.py) | Single A2A entrypoint: validate, audit, span, hand to handler | `a2a_call(request, handler, sender_audit, allowed_recipients)` |
-| [`governance/middleware.py`](../governance/middleware.py) | Factory wiring `agent_os.integrations.maf_adapter` middleware + audit backends | `build_governance_stack(agent_id, run_id)` |
-| [`governance/policies/*.yaml`](../governance/policies/) | YAML policies enforced by `GovernancePolicyMiddleware` | `galaxy-core.yaml`, `galaxy-tools.yaml`, `galaxy-pii.yaml`, `galaxy-ast.yaml` |
-| [`governance/adapters/postgres_audit_backend.py`](../governance/adapters/postgres_audit_backend.py) | Hash-chained Postgres `AuditBackend` | `PostgresHashChainBackend.write/.flush_async/.verify_chain` |
-| [`governance/adapters/otel_audit_backend.py`](../governance/adapters/otel_audit_backend.py) | OTel-event-on-current-span `AuditBackend` | `OtelAuditBackend.write` |
-| [`run_tracer.py`](../run_tracer.py) | `configure_tracing` (delegates to MAF) + `RunTracer.agent_span` | `configure_tracing()`, `RunTracer.inject_headers()` |
-| [`token_provider.py`](../token_provider.py) | Key Vault → env-var fallback for the AOAI key | `TokenProvider(secret_name, env_var_fallback).get_api_key()` |
-| [`nhi_identity.py`](../nhi_identity.py) | Per-agent Entra Non-Human-Identity registry | `NHIRegistry.get(agent_type) -> AgentIdentity` |
-| [`infra/ledger_schema.sql`](../infra/ledger_schema.sql) | Postgres `trace_ledger` table DDL — applies to Postgres Flex when wired | — |
-| [`Dockerfile`](../Dockerfile) | Container image (devcontainers-python:3.13 base, MCR-imported) | — |
+Source: [`governance/middleware.py`](../governance/middleware.py)
 
----
+`build_governance_stack()` returns `(middleware_list, pg_backend, audit_logger)`. The list is passed to MAF's `Agent(middleware=...)`.
 
-## 4. End-to-end scan: sequence diagram
-
-The "happy path" of `python run_scanner.py --repo … --run-id …`:
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant CLI as run_scanner.py
-  participant Trav as traverse_repo
-  participant SAg as Scanner MAF Agent
-  participant SMW as Scanner middleware
-  participant AOAI as Azure OpenAI
-  participant Disp as a2a_call dispatcher
-  participant AHand as ASTAgentHandler.handle
-  participant TS as tree-sitter
-  participant AAg as AST MAF Agent
-  participant AMW as AST middleware
-
-  CLI->>Trav: walk repo, classify lang, find entry-points
-  Trav-->>CLI: file_map (deterministic)
-  CLI->>SAg: agent.run(scanner_prompt)
-  SAg->>SMW: AuditTrail / GovernancePolicy / RogueDetection
-  SMW-->>SAg: allow
-  SAg->>AOAI: POST /openai/v1/responses (chat span)
-  AOAI-->>SAg: ScannerOutput JSON
-  SAg-->>CLI: response
-  CLI->>Disp: dispatch_ast_analysis()
-  Disp->>Disp: request.validate(); allowed_recipients check
-  Disp->>SMW: emit a2a_dispatch audit event
-  Disp->>AHand: await handler(request)
-  AHand->>TS: extract_ast(repo_root, files)
-  TS-->>AHand: ASTFindings (symbols, edges, routes, db_calls)
-  AHand->>AAg: agent.run(facts_prompt)
-  AAg->>AMW: AuditTrail / GovernancePolicy / RogueDetection
-  AMW-->>AAg: allow
-  AAg->>AOAI: POST /openai/v1/responses (2nd chat span)
-  AOAI-->>AAg: architecture summary + risks
-  AAg-->>AHand: response_text
-  AHand-->>Disp: A2AResponse.ok(ASTReport/v1)
-  Disp->>SMW: emit a2a_reply audit event
-  Disp-->>CLI: response
-  CLI->>CLI: merge ast_report into ScannerOutput
-  CLI->>SMW: pg.flush_async(); verify_chain()
-  CLI->>AMW: pg.flush_async(); verify_chain()
-```
-
-Two things worth highlighting:
-
-- The Scanner LLM call (step 6) and the AST LLM call (step 16) are **independent** invocations through MAF — each goes through its own middleware stack, its own NHI, its own audit log. Two policy evaluations, two sets of OTel spans, two ledger chains.
-- The A2A dispatcher (step 9) is the *only* code path between agents. It's where allow-list, audit, and tracing all clip in. Anything that bypasses `a2a_call` would silently bypass governance — see [a2a/dispatcher.py:46-150](../a2a/dispatcher.py#L46-L150).
-
----
-
-## 5. Governance middleware pipeline (per `agent.run()`)
-
-`build_governance_stack` at [governance/middleware.py:71-110](../governance/middleware.py#L71-L110) returns an ordered list passed straight to MAF's `Agent(middleware=...)`. The MAF runtime composes them around every `agent.run(...)`:
+**Execution order — guards 1–3 run before any toolkit middleware fires:**
 
 ```mermaid
 flowchart TD
-  Start([agent.run user_prompt]) --> AT_in[AuditTrailMiddleware<br/>log agent_invocation start]
-  AT_in --> GP[GovernancePolicyMiddleware]
-  GP -->|"PolicyEvaluator.evaluate({message, agent, ...})"| Decide{decision.action}
-  Decide -->|deny| Term[MiddlewareTermination<br/>'Policy violation' returned to caller]
-  Term --> AT_deny[AuditTrailMiddleware<br/>log policy_violation deny]
-  Decide -->|allow / audit| RD[RogueDetectionMiddleware<br/>function-level anomaly]
-  RD --> ChatLayer[ChatTelemetryLayer<br/>OpenAIChatClient.get_response]
-  ChatLayer -->|"POST /openai/v1/responses"| AOAI[(Azure OpenAI)]
-  AOAI -->|response| ChatLayer
-  ChatLayer --> AT_out[AuditTrailMiddleware<br/>log agent_invocation complete]
-  AT_out --> Sinks{Audit backends fan out}
-  Sinks --> Stdout[LoggingBackend<br/>stdout]
-  Sinks --> Otel[OtelAuditBackend<br/>span event on current OTel span]
-  Sinks --> Pg[PostgresHashChainBackend<br/>queued to trace_ledger table]
-  AT_deny --> Sinks
-  Sinks --> Done([response returns to caller])
+  Start(["agent.run(user_prompt)"]) --> PI
+
+  PI["① PromptInjectionGuardMiddleware\n7-vector taxonomy · no LLM call\nOWASP ASI-01"]
+  PI -->|"threat ≥ threshold"| Block1["→ audit_log.log(injection_blocked)\n→ MiddlewareTermination"]
+  PI -->|"threat < threshold"| CR
+
+  CR["② CredentialRedactorGuardMiddleware\nregex-based secret scan\nOWASP LLM06"]
+  CR -->|"credential found (redact mode)"| Redact["→ audit_log.log(credential_redacted)\n→ prompt cleaned · continues"]
+  CR --> CB
+
+  CB["③ ContextBudgetGuardMiddleware\ntoken pre-allocation · no LLM call\nOWASP LLM04"]
+  CB -->|"budget exceeded"| Block2["→ audit_log.log(budget_exceeded)\n→ MiddlewareTermination"]
+  CB --> AT
+
+  AT["④ AuditTrailMiddleware\nlog agent_invocation start\n(from agent_os toolkit)"]
+  AT --> GP
+
+  GP["⑤ GovernancePolicyMiddleware\nYAML declarative rules\ngalaxy-core / tools / pii / ast / egress"]
+  GP -->|"deny"| Block3["→ audit_log.log(policy_denied)\n→ MiddlewareTermination"]
+  GP --> Cap
+
+  Cap["⑥ CapabilityGuardMiddleware\nper-agent tool allow-list from YAML\n(from agent_os toolkit)"]
+  Cap --> RD
+
+  RD["⑦ RogueDetectionMiddleware\nbehavioral drift · anomaly detection\nOWASP LLM02"]
+  RD --> LLM
+
+  LLM(["Azure OpenAI\nvia APIM"])
+
+  LLM --> AT_out["④ AuditTrailMiddleware\nlog agent_invocation complete"]
+  AT_out --> Sinks
+
+  Block1 --> Sinks
+  Block2 --> Sinks
+  Block3 --> Sinks
+
+  Sinks["Audit backends fan-out"]
+  Sinks --> Log["LoggingBackend\nstdout"]
+  Sinks --> Otel["OtelAuditBackend\nspan event on current OTel span\n→ App Insights customEvents"]
+  Sinks --> PG["PostgresHashChainBackend\nasync-queued → trace_ledger table"]
 
   classDef block fill:#a00,color:#fff
   classDef azure fill:#06f,color:#fff
-  class Term,AT_deny block
-  class AOAI azure
+  class Block1,Block2,Block3 block
+  class LLM azure
 ```
 
-- The YAML policies that drive `GovernancePolicyMiddleware` are at [governance/policies/galaxy-core.yaml](../governance/policies/galaxy-core.yaml) (prompt-injection regex, oversized-prompt gate) and [governance/policies/galaxy-tools.yaml](../governance/policies/galaxy-tools.yaml) (per-agent tool allow-list).
-- `AuditTrailMiddleware` calls our `_CompatAuditLogger` ([governance/middleware.py:25-67](../governance/middleware.py#L25-L67)) which bridges the maf_adapter's legacy `log(event_type=...)` kwargs to the current `log(entry: AuditEntry)` shape and stamps a uuid `entry_id` so start/end pairs correlate.
+Guards 1–3 call `audit_log.log(...)` directly on block/redact, so all governance decisions are captured even when AuditTrailMiddleware (guard 4) never fires.
+
+**Per-agent tuning** in `agents/config/<agent>.yaml`:
+
+| Tunable | YAML key | Migration agents | Default |
+|---|---|---|---|
+| Token budget | `context_budget_tokens` | Analyzer 40k · Coder 64k · Tester 48k · Reviewer 64k · SecurityReviewer 48k | 8000 |
+| Injection threshold | `prompt_injection_block_threshold` | `high` (all migration agents) | `medium` |
+| Credential mode | `credential_mode` | `redact` (all agents) | `redact` |
+| Tool allow-list | `allowed_tools` | Coder: [write_file, apply_patch, validate_bicep] · Tester: [run_tests] | none |
+
+**YAML policy files** (loaded by `GovernancePolicyMiddleware`):
+
+| File | Enforces |
+|---|---|
+| [`governance/policies/galaxy-core.yaml`](../governance/policies/galaxy-core.yaml) | Prompt-injection regex · oversized-prompt gate |
+| [`governance/policies/galaxy-tools.yaml`](../governance/policies/galaxy-tools.yaml) | Per-agent tool allow-list |
+| [`governance/policies/galaxy-pii.yaml`](../governance/policies/galaxy-pii.yaml) | PII rules placeholder (no-op until Presidio wired) |
+| [`governance/policies/galaxy-ast.yaml`](../governance/policies/galaxy-ast.yaml) | AST-agent rules (deny outbound A2A from leaf) |
+| [`governance/policies/galaxy-egress.yaml`](../governance/policies/galaxy-egress.yaml) | Outbound network egress rules |
+| [`governance/configs/prompt-injection.yaml`](../governance/configs/prompt-injection.yaml) | Injection threat patterns + scoring thresholds |
 
 ---
 
-## 6. A2A protocol: envelope structure + dispatch flow
+### 1.4 A2A protocol
 
-### Envelope structure
+Source: [`a2a/envelope.py`](../a2a/envelope.py), [`a2a/dispatcher.py`](../a2a/dispatcher.py)
+
+All inter-agent calls use typed `A2ARequest`/`A2AResponse` envelopes. No agent module imports another agent's class directly.
 
 ```mermaid
 classDiagram
   class A2ARequest {
     +str conversation_id
     +str message_id
-    +Optional~str~ in_reply_to
-    +str sender   "NHI-qualified, e.g. Scanner-local-scanner-nhi"
+    +str sender
     +str recipient
     +str run_id
     +str module_id
-    +str intent   "verb phrase: analyze_ast"
-    +str payload_schema   "ASTRequest/v1"
+    +str intent
+    +str payload_schema  "e.g. CodingRequest/v1"
     +dict payload
     +float created_at
-    +to_json() str
     +validate()
+    +to_json() str
   }
   class A2AResponse {
     +str conversation_id
-    +str in_reply_to   "= request.message_id"
-    +str sender   "the original recipient"
-    +str recipient   "the original sender"
-    +str run_id
-    +str module_id
-    +A2AStatus status   "ok | denied | error | timeout"
-    +str payload_schema   "ASTReport/v1 or A2AError/v1"
+    +str in_reply_to
+    +A2AStatus status
+    +str payload_schema
     +dict payload
     +float latency_ms
+    +bool is_ok
   }
   class A2AStatus {
     <<enum>>
-    OK
-    DENIED
-    ERROR
-    TIMEOUT
+    OK · DENIED · ERROR · TIMEOUT
   }
-  class A2AError {
-    +str code
-    +str message
-    +dict details
-  }
-  A2ARequest "1" --> "1" A2AResponse : in_reply_to
+  A2ARequest --> A2AResponse : in_reply_to
   A2AResponse --> A2AStatus
-  A2AResponse o-- A2AError : payload (when status != ok)
 ```
 
-Source of truth: [a2a/envelope.py:43-195](../a2a/envelope.py#L43-L195).
+**Dispatch flow** (`a2a_call()` in [`a2a/dispatcher.py`](../a2a/dispatcher.py)):
 
-### Dispatch flow
+1. `request.validate()` — schema + recipient allow-list check
+2. `audit_log.log(a2a_dispatch)` — sender's audit trail records outbound
+3. OTel child span `a2a.dispatch.<RecipientType>` started (attributes: envelope JSON truncated to 8 KB)
+4. `await handler(request)` — recipient runs its own middleware stack inside
+5. `audit_log.log(a2a_reply)` — status + latency recorded
+6. Span closed with `a2a.status`, `a2a.latency_ms`
 
-```mermaid
-sequenceDiagram
-  autonumber
-  participant Caller as scanner_agent.dispatch_ast_analysis
-  participant Disp as a2a_call
-  participant SAud as Sender (Scanner) audit
-  participant Span as OTel a2a.dispatch span
-  participant Handler as ASTAgentHandler.handle
+**Migration pipeline A2A schemas:**
 
-  Caller->>Disp: a2a_call(request, handler, sender_audit, allowed_recipients=["ASTAnalyzer"])
-  Disp->>Disp: request.validate()
-  Disp->>Disp: split recipient on '-' → "ASTAnalyzer" in allow-list ✔
-  Disp->>SAud: log a2a_dispatch (event_type, run_id, conv_id, recipient, intent)
-  Disp->>Span: start span "a2a.dispatch.ASTAnalyzer"
-  Disp->>Span: set attribute a2a.request_envelope = request.to_json() (truncated to 8 KB)
-  Disp->>Handler: await handler(request)
-  alt success
-    Handler-->>Disp: A2AResponse(status=OK, payload=ASTReport/v1)
-  else handler raises
-    Handler--xDisp: Exception
-    Disp->>Span: record_exception(e)
-    Disp->>Disp: build A2AResponse(status=ERROR, payload=A2AError)
-  end
-  Disp->>Span: set attribute a2a.response_envelope, a2a.status, a2a.latency_ms
-  Disp->>SAud: log a2a_reply (status, latency_ms, in_reply_to, summary)
-  Disp-->>Caller: A2AResponse
-  Note right of Disp: If exception: re-raises after audit so circuit breakers see it
-```
+| Phase | Request schema | Response schema |
+|---|---|---|
+| Analysis | `AnalysisRequest/v1` | `AnalysisReport/v1` |
+| Code generation | `CodingRequest/v1` | `CodingReport/v1` |
+| Test evaluation | `TestRequest/v1` | `TestReport/v1` |
+| Code review | `ReviewRequest/v1` | `ReviewReport/v1` |
+| Security review | `SecurityReviewRequest/v1` | `SecurityReviewReport/v1` |
+| AST analysis | `ASTRequest/v1` | `ASTReport/v1` |
 
-Notes:
-- `allowed_recipients` is an explicit allow-list passed by the caller, layered on top of the YAML policy stack — see [a2a/dispatcher.py:77-93](../a2a/dispatcher.py#L77-L93). Belt and braces.
-- The full envelope JSON is now stamped on the dispatch span as `a2a.request_envelope` / `a2a.response_envelope` since [a2a/dispatcher.py:120-149](../a2a/dispatcher.py#L120-L149) — both queryable from App Insights.
+**Discovery pipeline A2A schemas:**
 
-### What the envelope does NOT carry
-
-- **No signature, no JWT, no SPIFFE SVID.** Sender/recipient are declarative strings. A2A is in-process today; no trust boundary is crossed. If/when A2A goes cross-process, an `auth: AuthBlock` field with a workload-identity-issued JWT is the natural extension. See discussion thread; not implemented.
+| Phase | Request schema | Response schema |
+|---|---|---|
+| Inventory scan | `DiscoveryScanRequest/v1` | `DiscoveryInventory/v1` |
+| Dependency graph | `DiscoveryGraphRequest/v1` | `DiscoveryGraphResponse/v1` |
+| BRD generation | `DiscoveryBRDRequest/v1` | `DiscoveryBRDResponse/v1` |
+| Architecture design | `DiscoveryArchitectRequest/v1` | `DiscoveryArchitectResponse/v1` |
+| Story generation | `DiscoveryStoriesRequest/v1` | `DiscoveryStoriesResponse/v1` |
 
 ---
 
-## 7. Observability: OTel span hierarchy + ingestion
+### 1.5 OTel tracing → Application Insights
 
-MAF emits OTel GenAI-semantic-convention spans through three layers (`AgentTelemetryLayer`, `ChatTelemetryLayer`, function-invocation spans). Our code adds two extra wrappers (`Scanner.run` / `ASTAnalyzer.run` from [run_tracer.py:160-171](../run_tracer.py#L160-L171)) and the A2A dispatch span. One scan emits this tree under one `TraceId`:
+Source: [`core/run_tracer.py`](../core/run_tracer.py)
+
+`configure_tracing()` is called once at process startup. Routing:
+- `APPLICATIONINSIGHTS_CONNECTION_STRING` set → `AzureMonitorTraceExporter` (direct, no collector)
+- `OTEL_EXPORTER_OTLP_ENDPOINT` set → gRPC OTLP exporter (collector sidecar / AKS)
+- Neither → no-op (safe for unit tests)
+
+**Root span:** `pipeline_span(run_id, module)` creates a single `pipeline.run` span. All MAF `AgentTelemetryLayer` child spans land under it — one `operation_Id` in App Insights covers the full agent chain.
 
 ```mermaid
 flowchart TB
-  Root["Scanner.run<br/>(RunTracer.agent_span)"]
-  Root --> SInvoke["invoke_agent Scanner<br/>(MAF AgentTelemetryLayer)"]
-  SInvoke --> SChat["chat gpt-5-3-codex<br/>(MAF ChatTelemetryLayer)"]
-  SChat --> SHttp["HTTP POST /openai/v1/responses<br/>(httpx auto-instrumentation)"]
-  Root --> A2A["a2a.dispatch.ASTAnalyzer<br/>(a2a/dispatcher.py)"]
-  A2A --> ARun["ASTAnalyzer.run"]
-  ARun --> AInvoke["invoke_agent ASTAnalyzer"]
-  AInvoke --> AChat["chat gpt-5-3-codex"]
-  AChat --> AHttp["HTTP POST /openai/v1/responses"]
+  Root["pipeline.run\n(pipeline_span context manager)\nattributes: galaxy.run_id, galaxy.module"]
+  Root --> A2AAna["a2a.dispatch.Analyzer\n(a2a/dispatcher.py OTel span)"]
+  A2AAna --> AnaLLM["chat &lt;model&gt;\n(MAF ChatTelemetryLayer)\ngen_ai.usage.input_tokens / output_tokens"]
+  Root --> A2ACod["a2a.dispatch.Coder"]
+  A2ACod --> CodLLM["chat &lt;model&gt;"]
+  Root --> A2ATes["a2a.dispatch.Tester"]
+  Root --> A2ARev["a2a.dispatch.Reviewer"]
+  Root --> A2ASec["a2a.dispatch.SecurityReviewer"]
+  A2ASec --> SecLLM["chat &lt;model&gt;"]
 
   style Root fill:#246,color:#fff
-  style A2A fill:#963,color:#fff
+  style A2AAna fill:#063,color:#fff
+  style A2ACod fill:#063,color:#fff
+  style A2ATes fill:#063,color:#fff
+  style A2ARev fill:#063,color:#fff
+  style A2ASec fill:#063,color:#fff
 ```
 
-### Ingestion path
+**Span attribute vocabulary** (queryable in App Insights `customDimensions`):
+
+| Attribute key | Source | What it contains |
+|---|---|---|
+| `galaxy.run_id` | `pipeline_span()` root span | Pipeline run identifier |
+| `galaxy.module` | `pipeline_span()` root span | Source module/repo name |
+| `gen_ai.usage.input_tokens` | MAF `ChatTelemetryLayer` | Tokens consumed (input) |
+| `gen_ai.usage.output_tokens` | MAF `ChatTelemetryLayer` | Tokens consumed (output) |
+| `gen_ai.request.model` | MAF `ChatTelemetryLayer` | Model deployment name |
+| `gen_ai.agent.name` | MAF `AgentTelemetryLayer` | Agent type |
+| `a2a.sender` / `a2a.recipient` | `a2a/dispatcher.py` | Agent hop attribution |
+| `a2a.intent` / `a2a.payload_schema` | `a2a/dispatcher.py` | A2A message metadata |
+| `a2a.status` / `a2a.latency_ms` | `a2a/dispatcher.py` | Dispatch outcome |
+| `governance.agent_id` | `OtelAuditBackend` → span event | NHI principal ID (e.g. `Coder-local-coder-nhi`) |
+| `governance.event_type` | `OtelAuditBackend` → span event | e.g. `prompt_injection_blocked`, `credential_redacted` |
+| `governance.decision` | `OtelAuditBackend` → span event | `allow` / `deny` / `audit` |
+| `governance.reason` | `OtelAuditBackend` → span event | Human-readable guard reason |
+
+**NHI attribution** (`governance.agent_id`) is on governance audit *span events*, not on span attributes. Query it from `customEvents` not `dependencies`:
+
+```kql
+-- All governance blocks in last 24h
+customEvents
+| where timestamp > ago(24h)
+| where name == "governance.audit_entry"
+| where customDimensions["governance.decision"] == "deny"
+| project timestamp,
+          customDimensions["governance.event_type"],
+          customDimensions["governance.agent_id"],
+          customDimensions["governance.reason"]
+| order by timestamp desc
+```
+
+**Ingestion path:**
 
 ```mermaid
 flowchart LR
-  Code["Python code (agent.run)"] -->|"OTel SDK contextvars"| Provider["TracerProvider<br/>(configured in run_tracer.configure_tracing)"]
+  Code["Python (agent.run)"] -->|"OTel SDK"| Provider["TracerProvider\ncore/run_tracer.py"]
   Provider --> BSP["BatchSpanProcessor"]
-  BSP --> Exp["AzureMonitorTraceExporter<br/>(connection string)"]
-  Exp -->|"HTTPS POST<br/>/v2.1/track"| AI[("App Insights<br/>galaxyscanner-ai")]
-  AI -->|"workspace-based"| LAW[("Log Analytics<br/>galaxyscanner-law")]
-
-  Provider -. fallback .-> OTLP["OTLPSpanExporter (gRPC)"]
-  OTLP -.-> Coll["external collector<br/>(unused today)"]
-
+  BSP --> Exp["AzureMonitorTraceExporter"]
+  Exp -->|"HTTPS /v2.1/track"| AI[("App Insights\ngalaxyscanner-ai")]
+  AI --> LAW[("Log Analytics\ngalaxyscanner-law")]
   classDef ax fill:#06f,color:#fff
   class AI,LAW ax
 ```
 
-`configure_tracing` at [run_tracer.py:51-117](../run_tracer.py#L51-L117) routes by env var:
-- `APPLICATIONINSIGHTS_CONNECTION_STRING` → Azure Monitor exporter (preferred, works from laptop or ACA)
-- `OTEL_EXPORTER_OTLP_ENDPOINT` → generic OTLP gRPC (collector sidecar / AKS)
-- neither → no-op, safe for unit tests
-
-Per-attribute size cap on App Insights is ~8 KB; the A2A envelope stamper at [a2a/dispatcher.py:228](../a2a/dispatcher.py#L228) truncates with a parseable suffix when needed.
-
 ---
 
-## 8. Hash-chained audit ledger (compliance archive)
+### 1.6 Hash-chained audit ledger
+
+Source: [`core/trace_ledger.py`](../core/trace_ledger.py), [`governance/adapters/postgres_audit_backend.py`](../governance/adapters/postgres_audit_backend.py)
 
 ```mermaid
 erDiagram
@@ -304,83 +332,55 @@ erDiagram
     TEXT     module_id
     TEXT     agent_type
     TEXT     nhi_id          "Entra NHI client_id"
-    TEXT     action          "llm_call | a2a_dispatch | a2a_reply | agent_invocation | policy_violation | …"
+    TEXT     action          "llm_call · a2a_dispatch · policy_violation · …"
     TEXT     input_summary   "first 200 chars, PII-scrubbed"
     TEXT     output_summary  "first 200 chars"
     INTEGER  tokens_used
     INTEGER  attempt
-    TEXT     outcome         "success | blocked | escalated | failed"
-    TEXT     entry_hash      "SHA-256 of (run_id|module_id|agent_type|action|outcome|attempt|prev_hash)"
-    TEXT     prev_hash       "= previous row's entry_hash"
+    TEXT     outcome         "success · blocked · escalated · failed"
+    TEXT     entry_hash      "SHA-256(run_id|module_id|agent_type|action|outcome|attempt|prev_hash)"
+    TEXT     prev_hash       "= previous row's entry_hash (genesis-0…0 for first)"
     TIMESTAMPTZ recorded_at
   }
 ```
 
-Schema: [infra/ledger_schema.sql](../infra/ledger_schema.sql).
-Hash computation: [governance/adapters/postgres_audit_backend.py:213-216](../governance/adapters/postgres_audit_backend.py#L213-L216).
-Verification: [governance/adapters/postgres_audit_backend.py:155-179](../governance/adapters/postgres_audit_backend.py#L155-L179) — re-computes the chain row by row; any tamper breaks the next link.
+**Hash formula:** `entry_hash = SHA-256(run_id | module_id | agent_type | action | outcome | attempt | prev_hash)`
 
-Note: the Postgres Flex Server resource isn't provisioned yet. Today the chain is computed in-memory and written to stdout via the `LoggingBackend`; the Postgres flush is a no-op until `POSTGRES_DSN` is set. **Two independent ledger chains** per run (one per agent NHI), correlated by `run_id` + `conversation_id`.
+Each agent type has its own ledger chain keyed by `nhi_id`. Cross-agent correlation uses `run_id` + `conversation_id` — chains are never shared between agents.
 
----
+**Current state:** `POSTGRES_DSN` unset → `PostgresHashChainBackend` operates in stdout mode (in-memory chain, logged to console). Chain logic is fully implemented; provisioning Postgres Flex Server activates it.
 
-## 9. Identity, secrets, and trust today
-
-```mermaid
-flowchart LR
-  subgraph Local[Laptop / .venv]
-    Code["agent code"]
-    Env[".env file"]
-    TP["TokenProvider"]
-    Code --> TP
-    TP --"AZURE_KEY_VAULT_URL empty<br/>→ env var fallback"--> Env
-  end
-
-  subgraph Azure["Azure (target — not deployed yet for the running agent)"]
-    Pod["Container App pod"]
-    WI["Workload Identity<br/>federated token"]
-    UAMI["User-Assigned MI<br/>galaxyscanner-mi"]
-    KV["Key Vault<br/>galaxyscanner-kv-d63cdd"]
-    Pod -- "DefaultAzureCredential" --> WI
-    WI -- exchanges for --> UAMI
-    UAMI -- "access policy:<br/>get + list" --> KV
-    KV -- "azure-openai-key" --> Pod
-  end
-```
-
-- **Today (laptop):** `TokenProvider` (defaults at [token_provider.py:44-49](../token_provider.py#L44-L49)) reads `AZURE_OPENAI_KEY` from `.env`. Key Vault is bypassed because `AZURE_KEY_VAULT_URL` is blank.
-- **Target (ACA):** the Container App pod has the User-Assigned Managed Identity `galaxyscanner-mi` attached. `DefaultAzureCredential` picks up the federated token, exchanges it for an AAD token bound to the MI, and uses that to call `KV.get_secret("azure-openai-key")`. No long-lived secret in the container's env.
-- **NHI (Non-Human Identity):** every agent type has its own Entra service principal client_id stamped onto every audit row as `nhi_id`. Today these are placeholder strings (`local-scanner-nhi`, etc.); real Entra IDs slot in once you provision them.
+Schema: [`infra/ledger_schema.sql`](../infra/ledger_schema.sql)
 
 ---
 
-## 10. Azure resource map
+### 1.7 Azure resource map
 
 ```mermaid
 flowchart LR
-  subgraph Sub[Subscription: AI Labs 8aee075f-…]
-    subgraph RG[Resource Group: galaxyscanner-rg]
-      KV["Key Vault<br/>galaxyscanner-kv-d63cdd<br/>access-policy mode"]
-      ACR["Azure Container Registry<br/>galaxyscannercrd63cdd<br/>(Basic, admin enabled)"]
-      MI["User-Assigned MI<br/>galaxyscanner-mi"]
-      LAW["Log Analytics<br/>galaxyscanner-law"]
-      AI["Application Insights<br/>galaxyscanner-ai<br/>(workspace-based)"]
-      AOAI["Azure OpenAI<br/>galaxyscanner-openai<br/>deployment: gpt-5-3-codex"]
-      ACAEnv["Container Apps Env<br/>galaxyscanner-aca-env<br/>(Succeeded)"]
-      Job{{"Container App Job<br/>galaxyscanner-job<br/>BLOCKED"}}
-      Pg{{"Postgres Flex Server<br/>(deferred)"}}
-      APIM["APIM Consumption<br/>galaxyscanner-apim<br/>(LLM egress live)"]
+  subgraph Sub["Subscription: AI Labs · 8aee075f"]
+    subgraph RG["Resource Group: galaxyscanner-rg · East US"]
+      KV["Key Vault\ngalaxyscanner-kv-d63cdd\nazure-openai-key · ai-conn-string"]
+      ACR["Container Registry\ngalaxyscannercrd63cdd\ngalaxy-scanner:0.2.1"]
+      MI["User-Assigned MI\ngalaxyscanner-mi\nScanner NHI (production)"]
+      LAW["Log Analytics\ngalaxyscanner-law"]
+      AI["App Insights\ngalaxyscanner-ai\n(workspace-based)"]
+      AOAI["Azure OpenAI\ngalaxyscanner-openai\ngpt-5-3-codex deployment"]
+      ACAEnv["Container Apps Env\ngalaxyscanner-aca-env ✅"]
+      Job{{"Container App Job\ngalaxyscanner-job\n🔴 BLOCKED"}}
+      Pg{{"Postgres Flex Server\n🔶 DEFERRED"}}
+      APIM["APIM Consumption\ngalaxyscanner-apim\n✅ LIVE"]
     end
   end
 
   AI --> LAW
   Job -. image pull .-> ACR
-  Job -. uses .-> MI
-  MI -. policy: get/list .-> KV
-  Job -. runtime LLM .-> AOAI
+  Job -. workload identity .-> MI
+  MI -. get/list .-> KV
   Job -. spans .-> AI
-  Job -. ledger .-> Pg
-  Job -. egress via .-> APIM
+  Job -. audit ledger .-> Pg
+  Job -. all LLM calls .-> APIM
+  APIM -. key from KV named value .-> KV
   APIM -. proxies to .-> AOAI
 
   classDef done fill:#0a3,color:#fff
@@ -391,139 +391,380 @@ flowchart LR
   class Pg deferred
 ```
 
-Identifiers and connection strings live in [azure-resources.md](../azure-resources.md).
+**APIM policy (live):**
+- Validates `Ocp-Apim-Subscription-Key` (subscription-level auth)
+- Rejects requests missing `x-agent-type` or `x-galaxy-run-id` (returns HTTP 400)
+- Rate-limits at 100 RPM per subscription key
+- Injects real AOAI key from Key Vault named value before forwarding
+- Stub `validate-jwt` policy in place; JWT enforcement not yet activated
+- Gateway: `https://galaxyscanner-apim.azure-api.net`; API path: `/openai`
+
+Resource IDs and connection strings: [`docs/azure-resources.md`](azure-resources.md)
 
 ---
 
-## 11. Code package dependency graph
+## Part 2 — Payload App
+
+The payload app is the set of agents and orchestrators that run on top of the governance platform to deliver business value. It has two pipelines that share the same governance infrastructure.
+
+---
+
+### 2.1 Migration pipeline overview
+
+```mermaid
+flowchart LR
+  subgraph Input
+    Legacy["legacy/&lt;repo&gt;/\n(source AWS code)"]
+  end
+
+  CLI["scripts/run_migration.py"]
+  Classifier["RepoClassifier\n(signal-based, no LLM)"]
+  Mapping["governance/mappings/aws-azure-reference.yaml\n(per codebase_type)"]
+
+  Legacy --> CLI
+  CLI --> Classifier
+  Classifier -->|"codebase_type"| Mapping
+  Mapping -->|"prompt + target_services"| CLI
+
+  subgraph Pipeline["Migration Pipeline (migrate_module)"]
+    direction TB
+    Analyzer["Analyzer\n(read-only analysis)"]
+    Coder["Coder\n(write_file / apply_patch / validate_bicep)"]
+    Tester["Tester\n(run_tests sandbox)"]
+    Reviewer["Reviewer\n(8-point quality gate)"]
+    Sec["SecurityReviewer\n(OWASP deterministic scan + LLM)"]
+    Analyzer --> Coder
+    Coder -->|"attempt 1–3"| Tester
+    Tester -->|"PASS"| Reviewer
+    Tester -->|"FAIL → failures JSON"| Coder
+    Reviewer --> Sec
+  end
+
+  CLI -->|"A2A envelopes"| Pipeline
+
+  subgraph Output["migrated/&lt;repo&gt;/vN/"]
+    Code["function_app.py\nrequirements.txt\nhost.json"]
+    Tests["tests/"]
+    IaC["infrastructure/main.bicep"]
+    Analysis["analysis/"]
+    Summary["run-summary.json"]
+    Logs["logs/ (3 JSONL channels)"]
+  end
+
+  Pipeline --> Output
+
+  Pipeline -->|"all LLM calls"| APIM["APIM"]
+  APIM -->|"proxies"| AOAI["Azure OpenAI"]
+  Pipeline -. "OTel spans" .-> AI["App Insights"]
+  Pipeline -. "secret refs" .-> KV["Key Vault"]
+
+  classDef azure fill:#06f,color:#fff
+  class APIM,AOAI,AI,KV azure
+```
+
+The **Scanner pipeline** (`scripts/run_scanner.py`) is a separate pre-migration discovery tool: Scanner walks the repo, then A2A-dispatches to ASTAnalyzer for tree-sitter extraction. Independent of the migration pipeline.
+
+---
+
+### 2.2 Code package map
+
+#### Governance & core (Part 1 — shared by both pipelines)
+
+| Module | Role | Key entry points |
+|---|---|---|
+| [`core/run_tracer.py`](../core/run_tracer.py) | OTel root span factory | `configure_tracing()`, `pipeline_span(run_id, module)` |
+| [`core/token_provider.py`](../core/token_provider.py) | Key Vault / env-var credential provider (5-min TTL cache) | `TokenProvider.get_api_key()` |
+| [`core/nhi_identity.py`](../core/nhi_identity.py) | NHI registry — 17 agent principals | `NHIRegistry.get(agent_type) → AgentIdentity` |
+| [`core/trace_ledger.py`](../core/trace_ledger.py) | Hash-chained Postgres ledger | `TraceLedger.record()`, `verify_chain()` |
+| [`core/discovery_artifacts.py`](../core/discovery_artifacts.py) | Pydantic models for discovery pipeline outputs | `Inventory`, `DependencyGraph`, `ModuleBRD`, `SystemBRD`, `Story`, `Backlog` |
+| [`governance/middleware.py`](../governance/middleware.py) | Governance stack factory | `build_governance_stack(agent_id, run_id, ...)` |
+| [`governance/adapters/otel_audit_backend.py`](../governance/adapters/otel_audit_backend.py) | OTel audit event emitter | `OtelAuditBackend.write()` |
+| [`governance/adapters/postgres_audit_backend.py`](../governance/adapters/postgres_audit_backend.py) | Postgres hash-chain backend | `PostgresHashChainBackend.create()`, `verify_chain()` |
+| [`a2a/envelope.py`](../a2a/envelope.py) | Typed A2A message envelopes | `A2ARequest.new()`, `A2AResponse.ok()` |
+| [`a2a/dispatcher.py`](../a2a/dispatcher.py) | A2A dispatch with audit + OTel | `a2a_call(request, handler, sender_audit, allowed_recipients)` |
+
+#### Agent factory
+
+| Module | Role | Key entry points |
+|---|---|---|
+| [`agents/_base.py`](../agents/_base.py) | Universal MAF agent builder | `build_agent(config, tools, prompt_file_override) → AgentBundle` |
+| [`agents/config.py`](../agents/config.py) | Pydantic v2 schema for agent YAML configs | `AgentConfigModel`, `load_agent_config_cached(name)` |
+
+#### Migration pipeline agents
+
+| Module | Role | A2A schemas |
+|---|---|---|
+| [`agents/scanner_agent.py`](../agents/scanner_agent.py) | Repo traversal + LLM analysis + A2A dispatch to ASTAnalyzer | (scanner pipeline only) |
+| [`agents/ast_agent.py`](../agents/ast_agent.py) | tree-sitter AST extraction | `ASTRequest/v1` → `ASTReport/v1` |
+| [`agents/analyzer_agent.py`](../agents/analyzer_agent.py) | Codebase-type-aware migration analysis | `AnalysisRequest/v1` → `AnalysisReport/v1` |
+| [`agents/coder_agent.py`](../agents/coder_agent.py) | Stack-aware code generation; `write_file`, `apply_patch`, `validate_bicep` tools | `CodingRequest/v1` → `CodingReport/v1` |
+| [`agents/tester_agent.py`](../agents/tester_agent.py) | Sandboxed pytest runner; 3-layer eval | `TestRequest/v1` → `TestReport/v1` |
+| [`agents/reviewer_agent.py`](../agents/reviewer_agent.py) | 8-point quality gate review | `ReviewRequest/v1` → `ReviewReport/v1` |
+| [`agents/security_reviewer_agent.py`](../agents/security_reviewer_agent.py) | OWASP deterministic scan + LLM deep analysis; BLOCKED aborts pipeline | `SecurityReviewRequest/v1` → `SecurityReviewReport/v1` |
+| [`agents/lambda_analyzer_agent.py`](../agents/lambda_analyzer_agent.py) | Lambda-specific analyzer variant | `AnalysisRequest/v1` → `AnalysisReport/v1` |
+
+#### Discovery pipeline agents
+
+| Module | Role | A2A schemas |
+|---|---|---|
+| [`agents/discovery_scanner_agent.py`](../agents/discovery_scanner_agent.py) | File tree walk → LLM-interpreted module `Inventory` | `DiscoveryScanRequest/v1` → `DiscoveryInventory/v1` |
+| [`agents/discovery_grapher_agent.py`](../agents/discovery_grapher_agent.py) | `Inventory` → `DependencyGraph` (edges: imports, reads, writes, invokes) | `DiscoveryGraphRequest/v1` → `DiscoveryGraphResponse/v1` |
+| [`agents/discovery_brd_agent.py`](../agents/discovery_brd_agent.py) | Graph → `SystemBRD` + per-module `ModuleBRD` markdown | `DiscoveryBRDRequest/v1` → `DiscoveryBRDResponse/v1` |
+| [`agents/discovery_architect_agent.py`](../agents/discovery_architect_agent.py) | BRD → target Azure architecture design per module | `DiscoveryArchitectRequest/v1` → `DiscoveryArchitectResponse/v1` |
+| [`agents/discovery_stories_agent.py`](../agents/discovery_stories_agent.py) | Architecture → user stories + wave-scheduled `Backlog` | `DiscoveryStoriesRequest/v1` → `DiscoveryStoriesResponse/v1` |
+
+#### Supporting libraries
+
+| Module | Role |
+|---|---|
+| [`agents/_lib/repo_classifier.py`](../agents/_lib/repo_classifier.py) | Signal-based `codebase_type` detection — no LLM, < 100 ms |
+| [`agents/_lib/run_logger.py`](../agents/_lib/run_logger.py) | Contextvar-based JSONL logger, 3 channels |
+| [`agents/_lib/file_tools.py`](../agents/_lib/file_tools.py) | Closure-bound sandboxed `write_file`, `apply_patch` |
+| [`agents/_lib/bicep_tool.py`](../agents/_lib/bicep_tool.py) | `validate_bicep` — calls `az bicep validate` |
+| [`agents/_lib/test_runner.py`](../agents/_lib/test_runner.py) | Sandboxed pytest runner (cwd locked, env scrubbed, 120s timeout) |
+| [`agents/_lib/security_scanner.py`](../agents/_lib/security_scanner.py) | Deterministic OWASP regex scanner — `scan_directory() → SecurityFinding[]` |
+| [`agents/_lib/complexity_scorer.py`](../agents/_lib/complexity_scorer.py) | Heuristic migration difficulty scorer |
+| [`agents/_lib/chunker.py`](../agents/_lib/chunker.py) | File chunker for large-source prompts |
+| [`agents/_lib/wave_scheduler.py`](../agents/_lib/wave_scheduler.py) | Topological DAG scheduler for story wave ordering |
+
+#### Orchestrator scripts
+
+| Script | Purpose | Key CLI args |
+|---|---|---|
+| [`scripts/run_migration.py`](../scripts/run_migration.py) | Migration pipeline orchestrator | `--source-dir legacy/<repo>` `--run-id` `--codebase-type` (override) |
+| [`scripts/run_scanner.py`](../scripts/run_scanner.py) | Scanner + ASTAnalyzer pipeline | `--repo` `--run-id` `--module-id` |
+
+---
+
+### 2.3 Migration pipeline sequence
+
+Happy path of `python scripts/run_migration.py --source-dir legacy/aws_legacy`:
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant CLI as scripts/run_migration.py
+  participant RC as RepoClassifier
+  participant Map as aws-azure-reference.yaml
+  participant Orch as migrate_module()
+  participant Ana as AnalyzerHandler
+  participant Cod as CoderHandler
+  participant Tes as TesterHandler
+  participant Rev as ReviewerHandler
+  participant Sec as SecurityReviewerHandler
+  participant AOAI as Azure OpenAI (via APIM)
+
+  CLI->>RC: classify_repo(source_dir)
+  RC-->>CLI: ClassificationResult(codebase_type, confidence, signals_matched)
+  CLI->>Map: lookup codebase_type → target_services + coder_prompt
+  CLI->>CLI: _versioned_output() → migrated/repo/vN/
+  CLI->>Orch: migrate_module(module, codebase_type, ...)
+
+  Note over Orch,Ana: Phase 1: Analysis
+  Orch->>Ana: A2A AnalysisRequest/v1
+  Ana->>AOAI: agent.run(source listing + prompt)
+  AOAI-->>Ana: analysis markdown
+  Ana-->>Orch: A2A AnalysisReport/v1 (complexity, target_services)
+
+  Note over Orch,Tes: Phase 2+3: Coder → Tester self-healing loop (up to 3 attempts)
+  loop attempt = 1..3
+    Orch->>Cod: A2A CodingRequest/v1 (analysis_md, previous_failures on retry)
+    Cod->>AOAI: agent.run(stack-specific prompt + source)
+    AOAI-->>Cod: write_file / apply_patch / validate_bicep tool calls
+    Cod-->>Orch: A2A CodingReport/v1 (files_written, files_modified)
+    Orch->>Tes: A2A TestRequest/v1 (migrated_source_dir, test_dir)
+    Tes->>Tes: make_run_tests(sandbox) → subprocess pytest
+    Tes->>AOAI: agent.run(pytest output + sprint contract)
+    AOAI-->>Tes: verdict + structured failures
+    Tes-->>Orch: A2A TestReport/v1 (verdict=PASS|FAIL, failures[])
+    alt verdict == PASS
+      Note over Orch: break loop
+    else verdict == FAIL and attempt < 3
+      Orch->>Cod: next attempt with previous_failures_json
+    end
+  end
+
+  Note over Orch,Rev: Phase 4: Review
+  Orch->>Rev: A2A ReviewRequest/v1
+  Rev->>AOAI: agent.run(8-point quality gate)
+  Rev-->>Orch: A2A ReviewReport/v1 (APPROVE|REVISE|BLOCK)
+
+  Note over Orch,Sec: Phase 5: Security Review
+  Orch->>Sec: A2A SecurityReviewRequest/v1
+  Sec->>Sec: security_scanner.scan_directory() (deterministic OWASP regex)
+  Sec->>AOAI: agent.run(findings + source)
+  AOAI-->>Sec: BLOCK|WARN|INFO verdict
+  Sec-->>Orch: A2A SecurityReviewReport/v1
+
+  alt sec == BLOCKED
+    Orch-->>CLI: status=blocked, exit 1
+  else
+    Orch-->>CLI: status=completed|partial, run-summary.json
+  end
+```
+
+**SecurityReviewer two-phase design:** Phase 1 runs `scan_directory()` deterministically (OWASP regex → `SecurityFinding[]` graded BLOCK/WARN/INFO). Phase 2 sends findings to the LLM for deep analysis. The LLM **cannot downgrade a regex BLOCK to APPROVE** — the deterministic scan is authoritative. `credential_mode: redact` is intentional because SecurityReviewer legitimately analyzes legacy code containing hardcoded credentials.
+
+---
+
+### 2.4 codebase_type classification
 
 ```mermaid
 flowchart TD
-  RS[run_scanner.py]
-  RS --> SAg[agents.scanner_agent]
-  RS --> AAg[agents.ast_agent]
-  RS --> RT[run_tracer]
-
-  SAg --> CFG[agents.config]
-  SAg --> A2A[a2a]
-  SAg --> GM[governance.middleware]
-  SAg --> NHI[nhi_identity]
-  SAg --> TP[token_provider]
-  SAg --> MAF["agent_framework<br/>+ agent_framework_openai"]
-
-  AAg --> CFG
-  AAg --> ASTP[agents.ast_parser]
-  AAg --> A2A
-  AAg --> GM
-  AAg --> NHI
-  AAg --> TP
-  AAg --> MAF
-
-  A2A --> AOA["agent_os.audit_logger"]
-  GM --> ADP["governance.adapters.postgres_audit_backend"]
-  GM --> ADO["governance.adapters.otel_audit_backend"]
-  GM --> AOI["agent_os.integrations.maf_adapter"]
-  AOI --> AOP["agent_os.policies"]
-
-  RT --> AFO["agent_framework.observability"]
-  RT --> AME["azure.monitor.opentelemetry.exporter"]
-
-  ASTP --> TS["tree_sitter + tree_sitter_python + tree_sitter_java"]
-
-  classDef ms fill:#06f,color:#fff
-  classDef ours fill:#063,color:#fff
-  classDef vendor fill:#444,color:#fff
-  class MAF,AFO,AOA,AOI,AOP ms
-  class RS,SAg,AAg,RT,CFG,A2A,GM,NHI,TP,ADP,ADO,ASTP ours
-  class AME,TS vendor
+  Repo["legacy/&lt;repo&gt;/"] --> RC["RepoClassifier\nagents/_lib/repo_classifier.py"]
+  RC --> Sig["Signal evaluation per type\nfile_required (0.3) · files_any_of (0.1)\ncontent_patterns (0.15) · dir_patterns (0.1)\ninfra_markers (0.2)"]
+  Sig --> T{"confidence ≥ threshold?"}
+  T -->|yes| Win["Winner codebase_type → ClassificationResult"]
+  T -->|no| None["codebase_type=None\n→ exit · use --codebase-type to override"]
+  Win --> Map["aws-azure-reference.yaml lookup"]
+  Map --> Prom["Coder prompt selection\nbuild_coder_agent(codebase_type)\n→ per-stack prompt_file_override\n+ shared coder_rules.md"]
 ```
+
+**Supported codebase types:**
+
+| codebase_type | Detected by | Target stack |
+|---|---|---|
+| `python_serverless` | `lambda_handler`, boto3, `requirements.txt` | Azure Functions (Python) |
+| `typescript_serverless` | `*.ts`, `tsconfig.json`, AWS SDK v3 | Azure Functions (TypeScript) |
+| `node_serverless` | `*.js`, `package.json`, `handler.js` | Azure Functions (Node.js) |
+| `java_serverless` | `Handler.java`, `pom.xml`, `aws-lambda-java-*` | Azure Functions (Java) |
+| `java_spring_boot` | `@SpringBootApplication`, Spring `pom.xml` | Azure App Service (Spring) |
+| `ecs_docker` | `task-definition.json`, `Dockerfile`, Fargate | Azure Container Apps |
+| `dotnet_serverless` | `*.csproj`, `Function.cs`, `AWSLambda.*` | Azure Functions (.NET) |
+| `php_web_app` | `*.php`, `composer.json`, Elastic Beanstalk | Azure App Service (PHP) |
+| `frontend_spa` | `src/App.tsx`, `vite.config.js`, S3+CloudFront | Azure Static Web Apps |
+| `iac_terraform` | `*.tf`, `provider "aws"`, modules | Bicep / Azure-native modules |
+
+RepoClassifier runs in < 100 ms with no LLM call. Use `--codebase-type <type>` to override.
 
 ---
 
-## 12. Status snapshot
+### 2.5 Discovery pipeline
+
+The discovery pipeline precedes migration. It produces a structured understanding of the source estate — inventory, dependency graph, requirements, target architecture, and a wave-scheduled migration backlog.
+
+```mermaid
+flowchart LR
+  Repo["legacy/&lt;repo&gt;/"] --> DS
+  subgraph Discovery["Discovery Pipeline (5 agents)"]
+    direction TB
+    DS["DiscoveryScanner\nFile tree → Inventory\n(modules, languages, entrypoints, LOC)"]
+    DG["DiscoveryGrapher\nInventory → DependencyGraph\n(imports, reads, writes, invokes edges)"]
+    DB["DiscoveryBRD\nGraph → SystemBRD + ModuleBRDs\n(markdown requirements docs)"]
+    DA["DiscoveryArchitect\nBRD → target Azure architecture\n(per-module design)"]
+    DT["DiscoveryStories\nArchitecture → Stories + Backlog\n(wave-scheduled by WaveScheduler)"]
+    DS --> DG --> DB --> DA --> DT
+  end
+
+  subgraph Artifacts["Output artifacts (core/discovery_artifacts.py)"]
+    Inv["Inventory\n(RepoMeta, modules list)"]
+    Graph["DependencyGraph\n(nodes, edges, edge kinds)"]
+    BRD["SystemBRD + ModuleBRD[]"]
+    Design["SystemDesign + ModuleDesign[]"]
+    Backlog["Stories + Backlog\n(wave-ordered)"]
+  end
+
+  DS --> Inv
+  DG --> Graph
+  DB --> BRD
+  DA --> Design
+  DT --> Backlog
+```
+
+**Pydantic artifact models** (`core/discovery_artifacts.py`): `RepoMeta`, `Inventory`, `DependencyGraph`, `ModuleBRD`, `SystemBRD`, `Story`, `Epic`, `Backlog`, `BacklogItem`, `CriticReport`.
+
+**Wave scheduler** (`agents/_lib/wave_scheduler.py`): topological sort of story `depends_on` / `blocks` relationships → assigns each story a `wave` number for sequential migration execution. Cycle detection included.
+
+**Note:** An orchestrator script (`scripts/run_discovery.py`) does not yet exist. The agents are individually buildable and callable via `build_discovery_*_agent()`.
+
+---
+
+### 2.6 Structured logging (3 JSONL channels)
+
+Source: [`agents/_lib/run_logger.py`](../agents/_lib/run_logger.py)
+
+`RunLogger` is a contextvar-based, thread-safe JSONL writer. Initialised by the orchestrator, retrieved anywhere via `get_run_logger()`.
+
+```
+migrated/<repo>/vN/logs/<run_id>/
+├── orchestration.jsonl   pipeline phase start/end events
+├── agents.jsonl          per-LLM-call metrics (latency, tokens, cost_usd)
+└── a2a.jsonl             A2A dispatch events (sender, recipient, intent, latency, status)
+```
+
+**Sample records:**
+
+```json
+// orchestration.jsonl
+{"ts":"2026-05-15T10:12:01Z","event":"start","phase":"pipeline","module":"aws_legacy","codebase_type":"python_serverless"}
+{"ts":"2026-05-15T10:12:25Z","event":"end",  "phase":"tester",  "module":"aws_legacy","attempt":1,"verdict":"PASS","failure_count":0}
+
+// agents.jsonl
+{"ts":"...","agent":"Coder","attempt":1,"latency_ms":8900,"tokens_in":22000,"tokens_out":4100,"cost_usd":0.096}
+
+// a2a.jsonl
+{"ts":"...","sender":"Orchestrator","recipient":"Tester","intent":"evaluate_module","latency_ms":6540,"status":"ok","payload_schema":"TestRequest/v1"}
+```
+
+Cost model: GPT-4o public list pricing (`$2.50/1M` input, `$10.00/1M` output). Token counts are authoritative; `cost_usd` is an estimate.
+
+---
+
+## Appendix A — Architectural rules
+
+1. **Single LLM-egress per agent.** Every LLM call goes through `agent.run()` — middleware fires automatically. Never construct an `OpenAIChatClient` outside a MAF `Agent`.
+
+2. **A2A is the only inter-agent path.** No agent module imports another agent's class. `a2a_call(...)` is the boundary; typed payload schemas (`*Request/v1`, `*Report/v1`) are the contract.
+
+3. **Tunables in YAML, code in Python.** Timeouts, token budgets, max files, injection thresholds — all in `agents/config/<agent>.yaml`. Per-agent `allowed_tools` lives in YAML, not code.
+
+4. **Sandbox at construction, not at call time.** `write_file`, `apply_patch`, and `run_tests` are closure-bound to `output_root` when the handler is built. The LLM cannot write outside `migrated/<repo>/vN/`.
+
+5. **`codebase_type` drives everything downstream.** One string from `RepoClassifier` selects the YAML mapping, the Coder prompt variant, and the Bicep template pattern. Never hard-code a codebase type in orchestrator logic.
+
+6. **Hash-chain integrity per agent.** Each NHI has its own ledger chain. Cross-agent correlation is by `run_id` + `conversation_id`. Do not share a `PostgresHashChainBackend` between agents.
+
+7. **BLOCKED is terminal.** When `SecurityReviewer` returns `recommendation=BLOCKED`, the orchestrator must exit non-zero. No downstream agent is called.
+
+8. **Versioned output is immutable.** Once `migrated/<repo>/vN/` is created, it is never overwritten. Each run increments N.
+
+9. **Loud over silent.** Pydantic `extra="forbid"` on all config models; Postgres errors at ERROR not swallowed; missing required env vars fail at startup; classification failures print per-type scores.
+
+10. **Use the framework.** No custom retry decorators, no custom span boilerplate, no custom OWASP regex when `security_scanner.py` already covers it.
+
+---
+
+## Appendix B — Status snapshot
 
 | Area | Status | Where |
 |---|---|---|
-| Local end-to-end run | ✅ Working | `python run_scanner.py --repo . --run-id …` |
-| MAF agent + middleware stack | ✅ Working | [agents/scanner_agent.py:215-258](../agents/scanner_agent.py#L215-L258) |
-| YAML policy enforcement | ✅ Working | live deny verified via injection probe |
-| A2A dispatch (Scanner → AST) | ✅ Working | round-trip verified `run-a2a-verify-001` |
-| A2A envelope visibility in App Insights | ✅ Working | `a2a.request_envelope` / `a2a.response_envelope` span attrs |
-| OTel → Application Insights | ✅ Working | direct `AzureMonitorTraceExporter` |
-| GenAI-convention spans (Agents preview dashboard) | ✅ Working | via `agent_framework.observability.configure_otel_providers` |
-| Pydantic+YAML config loader | ✅ Working | [agents/config.py](../agents/config.py) — 9/9 tests green |
-| tree-sitter Python + Java parser | ✅ Working | [agents/ast_parser/extractor.py](../agents/ast_parser/extractor.py) |
-| Hash-chained audit logic | ✅ Working in stdout mode | [governance/adapters/postgres_audit_backend.py](../governance/adapters/postgres_audit_backend.py) |
-| Container image (`galaxy-scanner:0.2.1`) | ✅ Built + pushed | `galaxyscannercrd63cdd.azurecr.io` |
-| Postgres Flex Server provision + DSN | 🔶 Deferred | unblocks the persistent ledger |
-| ACA Job create with private-registry creds | 🔴 Blocked | Azure API returns InternalServerError; needs MS support / ACR Standard upgrade / portal create |
-| APIM Consumption tier in front of AOAI | ✅ Live | sub-key auth + galaxy-header guards + 100 RPM rate-limit + KV-backed AOAI key forwarding; per-`x-agent-type` rate limits require Developer-tier upgrade (Consumption doesn't allow `rate-limit-by-key`) |
-| Cross-process A2A with workload-identity tokens | ⏸ Future | only matters once A2A is networked |
-| Compliance Auditor agent (joins Scanner+AST chains by `run_id`) | ⏸ Future | tamper-evident cross-agent verify |
+| Migration pipeline end-to-end | ✅ Working | `python scripts/run_migration.py --source-dir legacy/aws_legacy` |
+| RepoClassifier (10 types) | ✅ Working | [`agents/_lib/repo_classifier.py`](../agents/_lib/repo_classifier.py) |
+| Analyzer agent | ✅ Working | [`agents/analyzer_agent.py`](../agents/analyzer_agent.py) |
+| Coder stack-aware prompt selection | ✅ Working | [`agents/coder_agent.py`](../agents/coder_agent.py) |
+| Coder sandboxed tools (write_file, apply_patch, validate_bicep) | ✅ Working | [`agents/_lib/file_tools.py`](../agents/_lib/file_tools.py) |
+| Tester sandboxed pytest runner | ✅ Working | [`agents/_lib/test_runner.py`](../agents/_lib/test_runner.py) |
+| Coder → Tester self-healing retry loop | ✅ Working | [`scripts/run_migration.py`](../scripts/run_migration.py) |
+| Reviewer 8-point quality gate | ✅ Working | [`agents/reviewer_agent.py`](../agents/reviewer_agent.py) |
+| SecurityReviewer OWASP scan + LLM (two-phase) | ✅ Working | [`agents/security_reviewer_agent.py`](../agents/security_reviewer_agent.py) |
+| BLOCKED verdict aborts pipeline | ✅ Working | [`scripts/run_migration.py:367-376`](../scripts/run_migration.py#L367-L376) |
+| Scanner + ASTAnalyzer pipeline | ✅ Working | `python scripts/run_scanner.py` |
+| Discovery pipeline agents (5 agents) | ✅ Working | `agents/discovery_*_agent.py` |
+| Discovery orchestrator script | ⏸ Not yet created | `scripts/run_discovery.py` |
+| Versioned output (migrated/v1…vN) | ✅ Working | auto-incremented per run |
+| Structured JSONL logging (3 channels) | ✅ Working | [`agents/_lib/run_logger.py`](../agents/_lib/run_logger.py) |
+| `build_agent()` factory | ✅ Working | [`agents/_base.py`](../agents/_base.py) |
+| YAML policy enforcement (live deny verified) | ✅ Working | [`governance/middleware.py`](../governance/middleware.py) |
+| OTel → Application Insights | ✅ Working | `AzureMonitorTraceExporter` direct export |
+| Hash-chained audit logic | ✅ Working (stdout mode) | [`governance/adapters/postgres_audit_backend.py`](../governance/adapters/postgres_audit_backend.py) |
+| APIM Consumption tier | ✅ Live | sub-key auth + galaxy-header guards + 100 RPM |
+| NHI registry (17 agent types) | ✅ Working | [`core/nhi_identity.py`](../core/nhi_identity.py) |
+| Postgres Flex Server + persistent ledger | 🔶 Deferred | unblocks persistent hash chain |
+| ACA Job (private-registry creds) | 🔴 Blocked | Azure API InternalServerError |
+| Cross-process A2A with workload-identity tokens | ⏸ Future | needed once A2A is networked |
+| Per-agent rate limits at APIM | ⏸ Future | requires Consumption → Developer SKU upgrade |
+| JWT enforcement at APIM gateway | ⏸ Future | stub policy exists; enforcement not activated |
 
 ---
 
-## 13. Concrete file index (for one-click navigation)
-
-**Entrypoint and orchestration**
-- [run_scanner.py](../run_scanner.py) — CLI + agent wiring + flush + chain verify
-- [agents/scanner_agent.py](../agents/scanner_agent.py) — Scanner agent + traversal + dispatch
-- [agents/ast_agent.py](../agents/ast_agent.py) — ASTAnalyzer agent + handler
-
-**Domain glue**
-- [agents/ast_parser/extractor.py](../agents/ast_parser/extractor.py) — tree-sitter walker
-- [agents/config.py](../agents/config.py) — YAML loader + Pydantic schema
-- [agents/config/scanner.yaml](../agents/config/scanner.yaml) — Scanner tunables
-- [agents/config/ast_analyzer.yaml](../agents/config/ast_analyzer.yaml) — AST tunables
-
-**A2A**
-- [a2a/envelope.py](../a2a/envelope.py) — typed envelopes
-- [a2a/dispatcher.py](../a2a/dispatcher.py) — `a2a_call` + envelope-stamping helper
-
-**Governance**
-- [governance/middleware.py](../governance/middleware.py) — `build_governance_stack` + compat shim
-- [governance/policies/galaxy-core.yaml](../governance/policies/galaxy-core.yaml) — prompt-injection rules
-- [governance/policies/galaxy-tools.yaml](../governance/policies/galaxy-tools.yaml) — tool allow-list
-- [governance/policies/galaxy-pii.yaml](../governance/policies/galaxy-pii.yaml) — PII rules (placeholder)
-- [governance/policies/galaxy-ast.yaml](../governance/policies/galaxy-ast.yaml) — AST-specific rules
-- [governance/adapters/postgres_audit_backend.py](../governance/adapters/postgres_audit_backend.py) — hash-chained Postgres sink
-- [governance/adapters/otel_audit_backend.py](../governance/adapters/otel_audit_backend.py) — OTel span-event sink
-
-**Identity, secrets, telemetry**
-- [token_provider.py](../token_provider.py) — Key Vault + env-var fallback
-- [nhi_identity.py](../nhi_identity.py) — NHI registry per agent type
-- [run_tracer.py](../run_tracer.py) — `configure_tracing` + `RunTracer.agent_span`
-
-**Azure deploy**
-- [Dockerfile](../Dockerfile) — slim + non-root + ACR-imported base
-- [azure-resources.md](../azure-resources.md) — resource IDs + connection details
-- [infra/ledger_schema.sql](../infra/ledger_schema.sql) — Postgres ledger DDL
-
-**Reference docs**
-- [docs/maf-verification.md](maf-verification.md) — MAF Phase A verification notes
-- [docs/toolkit-verification.md](toolkit-verification.md) — agent_os toolkit verification notes
-- [GOVERNANCE_MIGRATION_PLAN.md](../GOVERNANCE_MIGRATION_PLAN.md) — original phased migration plan
-
-**Tests**
-- [tests/test_a2a_envelope.py](../tests/test_a2a_envelope.py) — envelope schema + replies
-- [tests/test_ast_extractor.py](../tests/test_ast_extractor.py) — tree-sitter extractor
-- [tests/test_config.py](../tests/test_config.py) — Pydantic+YAML loader
-- [tests/test_scanner_ast_a2a.py](../tests/test_scanner_ast_a2a.py) — Scanner→AST round-trip
-- [tests/test_security_traceability.py](../tests/test_security_traceability.py) — TokenProvider, NHI, governance stack, traverse_repo
-
----
-
-## 14. Architectural rules (the contract)
-
-1. **Single LLM-egress per agent.** Every LLM call goes through `agent.run()` — middleware fires automatically. Never construct an `OpenAIChatClient` and call it directly outside an `Agent`.
-2. **A2A is the only inter-agent path.** No agent imports another agent's class. `a2a_call(...)` is the boundary; envelope schemas (`*Request/v1`, `*Report/v1`) are the contract.
-3. **Tunables in YAML, code in Python.** If a number is operational, it lives in `agents/config/<agent>.yaml`. Prompt-shape internals (sampling caps for the LLM prompt) stay in code.
-4. **Filesystem presence is the source of truth for agent-type validity.** No Python enum of "known agent types"; the YAML on disk *is* the registry.
-5. **Hash-chain integrity per agent.** Each agent has its own `nhi_id` and its own ledger chain. Cross-agent correlation is by `run_id` + `conversation_id`, not by sharing chains.
-6. **Provenance over identity.** A2A envelopes carry `sender` / `recipient` as identity *labels*, not proofs. Workload Identity authenticates pods to Azure services; cross-agent identity proof is a future feature, deliberately not pretended-to today.
-7. **Loud over silent.** Pydantic `extra="forbid"` on every config model; Postgres errors logged at ERROR not swallowed; missing required env vars fail at startup, not at first dispatch.
-8. **Kept-as-is when MAF/agent_os already does it.** No custom retry decorators, no custom span boilerplate, no re-implementations of OWASP-Agentic-Top-10 defenses. The migration plan's guiding rule was *"use what the framework ships before writing anything custom"* — that still holds.
-
----
-
-*End of architecture document. Update the **Status snapshot** when phases unblock.*
+*Update the status table when items unblock. Last updated: 2026-05-15.*

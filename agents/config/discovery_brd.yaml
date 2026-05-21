@@ -1,0 +1,31 @@
+version: "1.0"
+name: discovery-brd-agent-config
+description: >
+  Discovery BRD — produces per-module and system-level Business Requirements
+  Documents (markdown). Runs per-module tasks in parallel (up to 4 concurrent).
+  Required sections: Purpose, Triggers, Inputs, Outputs, Business Rules,
+  Side Effects, Error Paths, Non-Functionals, PII/Compliance.
+  Output is consumed by the Architect stage.
+
+agent:
+  type: DiscoveryBRD
+  description: Extracts structured BRD markdown for each module and the system as a whole
+  max_file_scan_bytes: 256000
+  prompt_file: prompts/discovery_brd.md
+  max_output_tokens: 8000
+
+a2a:
+  allowed_recipients: []
+  max_files_per_dispatch: 0
+  timeout_seconds: 300          # parallel module tasks can run long
+
+governance:
+  enable_rogue_detection: true
+  enable_prompt_injection_guard: true
+  enable_credential_redactor: true
+  credential_mode: redact
+  enable_context_budget: true
+  context_budget_tokens: 60000
+  prompt_injection_block_threshold: high
+  allowed_tools: []
+  denied_tools: []

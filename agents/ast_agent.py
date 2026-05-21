@@ -18,19 +18,16 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import dataclass, asdict, field
 from typing import Optional
 
 from agent_framework import Agent
-from agent_framework_openai import OpenAIChatClient
 
 from a2a.envelope import A2AError, A2ARequest, A2AResponse, A2AStatus
+from agents._base import AgentBundle, build_agent, extract_response_text
 from agents.ast_parser import ASTFindings, extract_ast
 from agents.config import load_agent_config_cached
-from governance.middleware import build_governance_stack
-from nhi_identity import NHIRegistry
-from token_provider import TokenProvider
+from core.token_provider import TokenProvider
 
 logger = logging.getLogger(__name__)
 
@@ -73,30 +70,10 @@ class ASTReport:
         return asdict(self)
 
 
-# ── Prompts ───────────────────────────────────────────────────────────────────
-
-SYSTEM_PROMPT = """
-You are the ASTAnalyzer agent in the Galaxy migration platform.
-
-You receive a list of extracted AST facts produced by a deterministic
-tree-sitter parser — symbols, call edges, routes, DB calls, and static
-findings. Your job is to:
-
-  1. Produce a concise architecture summary (3-6 sentences) describing
-     the service's shape: what it exposes, what it persists, and how
-     components compose.
-  2. Rank the top 5 migration risks, each with severity, title, and
-     one-sentence evidence grounded in the facts you were given.
-
-Rules:
-  - Ground every claim in the facts you received. Do NOT invent
-    routes, DB calls, or call edges that aren't in the input.
-  - Do NOT reproduce raw source code — the facts already include
-    line numbers and short snippets.
-  - Your output must be valid JSON matching the schema.
-
-Severity values: "low" | "medium" | "high".
-"""
+# ── Prompt schema ─────────────────────────────────────────────────────────────
+# The system prompt itself is vendored to agents/prompts/ast_analyzer.md and
+# loaded by agents._base.build_agent. Only the per-call OUTPUT_SCHEMA, which
+# this agent stamps into the user message, stays in code.
 
 OUTPUT_SCHEMA = """{
   "architecture_summary": "3-6 sentences describing the service shape",
@@ -158,89 +135,19 @@ def _extract_json_object(text: str) -> Optional[dict]:
         return None
 
 
-def _extract_text(response) -> str:
-    """Mirror of run_scanner._extract_text — keep the agent loosely coupled
-    to MAF response shape changes."""
-    if hasattr(response, "text") and response.text:
-        return response.text
-    if hasattr(response, "messages"):
-        for m in response.messages:
-            if hasattr(m, "text") and m.text:
-                return m.text
-            if hasattr(m, "content"):
-                return str(m.content)
-    return str(response)
-
-
 # ── Agent construction ────────────────────────────────────────────────────────
 
 async def build_ast_agent(
     run_id: str,
     token_provider: Optional[TokenProvider] = None,
-) -> tuple[Agent, "PostgresHashChainBackend", "GovernanceAuditLogger"]:
-    """Build the AST agent with its own governance stack and NHI.
+) -> AgentBundle:
+    """ASTAnalyzer-specific factory wrapper.
 
-    Caller owns the pg_backend lifecycle (flush + close at end of run).
+    Thin shim over agents._base.build_agent so this module stays the
+    discoverable entry point. All wiring lives in the factory; per-agent
+    variations live in agents/config/ast_analyzer.yaml.
     """
-    # Egress decision: APIM if APIM_ENDPOINT is set, else direct Azure OpenAI.
-    apim_endpoint = os.environ.get("APIM_ENDPOINT")
-    if apim_endpoint:
-        tp = token_provider or TokenProvider(
-            secret_name="apim-subscription-key",
-            env_var_fallback="APIM_SUBSCRIPTION_KEY",
-        )
-        endpoint = apim_endpoint
-        egress = "apim"
-    else:
-        tp = token_provider or TokenProvider(
-            secret_name="azure-openai-key",
-            env_var_fallback="AZURE_OPENAI_KEY",
-        )
-        endpoint = os.environ["AZURE_OPENAI_ENDPOINT"]
-        egress = "aoai-direct"
-
-    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-5-3-codex")
-    api_version = os.environ.get("AZURE_OPENAI_API_VERSION") or "preview"
-
-    identity = NHIRegistry.get(AGENT_TYPE)
-    agent_id = f"{AGENT_TYPE}-{identity.client_id}"
-
-    client = OpenAIChatClient(
-        model=deployment,
-        api_key=tp.get_api_key(),
-        azure_endpoint=endpoint,
-        api_version=api_version,
-        default_headers={
-            "x-agent-type": AGENT_TYPE,
-            "x-nhi-id":     identity.client_id,
-        },
-    )
-
-    middleware, pg_backend, audit = await build_governance_stack(
-        agent_id=agent_id,
-        run_id=run_id,
-        enable_rogue_detection=True,
-    )
-
-    agent = Agent(
-        client=client,
-        instructions=SYSTEM_PROMPT,
-        name=AGENT_TYPE,
-        id=agent_id,
-        middleware=middleware,
-    )
-    logger.info(
-        "ast_agent.built",
-        extra={
-            "run_id": run_id,
-            "agent_id": agent_id,
-            "nhi_id": identity.client_id,
-            "deployment": deployment,
-            "egress": egress,
-            "endpoint": endpoint,
-        },
-    )
-    return agent, pg_backend, audit
+    return await build_agent("ast-analyzer", run_id, token_provider=token_provider)
 
 
 # ── A2A handler ───────────────────────────────────────────────────────────────
@@ -324,7 +231,7 @@ class ASTAgentHandler:
                     "x-module-id":     request.module_id,
                 }},
             )
-            raw = _extract_text(llm_response)
+            raw = extract_response_text(llm_response)
 
         parsed = _extract_json_object(raw) or {}
         architecture_summary = (parsed.get("architecture_summary") or "").strip()

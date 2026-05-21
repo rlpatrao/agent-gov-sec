@@ -1,0 +1,30 @@
+version: "1.0"
+name: discovery-stories-agent-config
+description: >
+  Discovery Stories — decomposes BRDs and designs into epics and stories
+  with dependency DAG. If DISCOVERY_FAST_STORIES=1, uses a deterministic
+  one-story-per-module fast-path. Otherwise invokes the LLM.
+  Output is consumed by WaveScheduler (deterministic, no agent).
+
+agent:
+  type: DiscoveryStories
+  description: Decomposes migration analysis into epics and stories with dependency tracking
+  max_file_scan_bytes: 256000
+  prompt_file: prompts/discovery_stories.md
+  max_output_tokens: 16000
+
+a2a:
+  allowed_recipients: []
+  max_files_per_dispatch: 0
+  timeout_seconds: 300
+
+governance:
+  enable_rogue_detection: true
+  enable_prompt_injection_guard: true
+  enable_credential_redactor: true
+  credential_mode: redact
+  enable_context_budget: true
+  context_budget_tokens: 80000
+  prompt_injection_block_threshold: high
+  allowed_tools: []
+  denied_tools: []

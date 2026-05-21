@@ -10,6 +10,7 @@ agent:
   type: ASTAnalyzer
   description: AST analysis and architecture discovery agent
   max_file_scan_bytes: 256000
+  prompt_file: prompts/ast_analyzer.md
 
 a2a:
   allowed_recipients: []            # leaf: never dispatches

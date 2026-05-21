@@ -1,0 +1,893 @@
+version: "1.0"
+description: >
+  AWS → Azure reference architecture mapping.
+  App/solution-specific names have been removed; this file defines generic
+  migration patterns keyed on codebase_type. The orchestrator (run_migration.py)
+  uses codebase_type returned by RepoClassifier to look up the relevant template.
+  Stop condition: if no entry matches the classified type, migration is aborted
+  with a MappingNotFoundError listing the supported types.
+
+# ── Platform service equivalence ──────────────────────────────────────────────
+#
+# One-to-one AWS → Azure service substitutions.  Referenced by target_services
+# inside each repository_type template below.
+#
+platform_services:
+  compute:
+    - aws: aws_lambda
+      azure: azure_functions
+      azure_tier: Consumption  # or Premium for VNet-bound / long-running
+      notes: >
+        HTTP triggers map 1:1.  SQS triggers become Service Bus triggers.
+        EventBridge/SNS triggers become Event Grid subscriptions.
+        Cold-start budget: 200 ms Node.js / 600 ms Java / 1 s .NET.
+
+    - aws: aws_lambda_container
+      azure: azure_functions_premium
+      azure_tier: Premium EP1
+      notes: >
+        Container-packaged Lambdas become Functions Premium with custom
+        container support.  Same Dockerfile; replace handler entrypoint.
+
+    - aws: ecs_fargate
+      azure: azure_container_apps
+      azure_tier: Consumption
+      notes: >
+        Task definitions map to Container App revisions.  Service Connect
+        becomes Dapr service invocation.  ALB listener rules become ingress rules.
+        Scale-to-zero supported on both sides.
+
+    - aws: ec2_auto_scaling
+      azure: azure_vmss
+      azure_tier: Standard_D2s_v5
+      notes: >
+        ASG launch templates map to VMSS uniform orchestration.
+        User data scripts map to custom script extension.
+
+    - aws: elastic_beanstalk
+      azure: azure_app_service
+      azure_tier: P1v3
+      notes: >
+        EB environment configs map to App Service deployment slots.
+        Procfile → startup command.  .ebextensions → deployment scripts.
+
+  messaging:
+    - aws: sqs_standard
+      azure: service_bus_queue
+      azure_tier: Standard
+      notes: >
+        Message retention, DLQ, visibility timeout map 1:1.
+        Long-polling → peek-lock with auto-renew.
+
+    - aws: sqs_fifo
+      azure: service_bus_queue_sessions
+      azure_tier: Premium
+      notes: >
+        Message groups → session IDs.  Exactly-once deduplication ID →
+        message-id dedup (idempotent receiver pattern still recommended).
+
+    - aws: sns
+      azure: service_bus_topic
+      azure_tier: Standard
+      notes: >
+        Fan-out subscriptions map to topic subscriptions with filter rules.
+        HTTPS endpoints map to EventGrid push subscriptions.
+
+    - aws: eventbridge
+      azure: event_grid
+      azure_tier: Standard
+      notes: >
+        Event buses map to Event Grid topics.  Rules + targets map to
+        subscriptions with filter policies.  Schema registry maps to
+        Event Grid schema registry.
+
+    - aws: kinesis_data_streams
+      azure: event_hubs
+      azure_tier: Standard
+      notes: >
+        Shards map to partitions.  Kinesis SDK → Event Hubs SDK or
+        Kafka protocol (drop-in for Kafka producers).
+        KCL checkpointing → Event Hubs checkpoint store on Blob.
+
+  data:
+    - aws: dynamodb
+      azure: cosmos_db_nosql
+      azure_tier: Serverless
+      notes: >
+        Partition key stays as partition key.  Sort key maps to id or
+        composite key strategy.  GSIs map to Cosmos DB indexes.
+        DynamoDB Streams → Cosmos DB change feed.
+        Serverless for sporadic; provisioned RU/s for predictable.
+
+    - aws: rds_postgres
+      azure: azure_database_postgresql_flexible
+      azure_tier: General Purpose D4s_v3
+      notes: >
+        Schema and queries migrate as-is for standard SQL.
+        RDS Proxy → PgBouncer sidecar or built-in connection pooling.
+        Multi-AZ → zone-redundant HA.
+
+    - aws: rds_mysql
+      azure: azure_database_mysql_flexible
+      azure_tier: General Purpose D4s_v3
+      notes: >
+        Same as PostgreSQL pattern above.  Aurora MySQL → Azure MySQL
+        with read replicas.
+
+    - aws: aurora_serverless
+      azure: azure_database_postgresql_flexible_serverless
+      azure_tier: Burstable B2s
+      notes: >
+        Aurora Serverless v2 scaling → Flexible Server auto-scaling.
+        Pause-on-idle → lowest compute tier with auto-pause.
+
+    - aws: elasticache_redis
+      azure: azure_cache_for_redis
+      azure_tier: C1 Standard
+      notes: >
+        Redis protocol compatible; no code changes for basic ops.
+        Redis Cluster → Azure Redis Cluster tier.
+        ElastiCache Serverless → Azure Cache with auto-scale.
+
+    - aws: s3
+      azure: azure_blob_storage
+      azure_tier: Standard_LRS
+      notes: >
+        Bucket → container.  Object key → blob name.  Bucket policy →
+        RBAC + container-level SAS or private-endpoint-only.
+        S3 event notifications → Blob trigger (Functions) or Event Grid.
+
+    - aws: s3_static_website
+      azure: static_web_apps
+      azure_tier: Free
+      notes: >
+        S3 static hosting + CloudFront → Azure Static Web Apps.
+        SPA routing rules map natively.  Custom domain + TLS included.
+        Build pipeline: GitHub Actions workflow auto-generated.
+
+  identity_and_security:
+    - aws: cognito_user_pools
+      azure: entra_external_id
+      azure_tier: External
+      notes: >
+        User pools → External ID tenants.  Hosted UI → built-in login page
+        or custom MSAL-powered SPA.  JWT issuer URL changes — update audience
+        claims in every service.  Pre/post-authentication triggers →
+        Entra auth events + custom extension policies.
+
+    - aws: cognito_identity_pools
+      azure: entra_workload_identity
+      azure_tier: Standard
+      notes: >
+        Federated identities map to workload identity federation.
+        AWS role ARN → Azure managed identity client ID.
+
+    - aws: iam_roles
+      azure: azure_managed_identity
+      azure_tier: User-assigned
+      notes: >
+        Task/Lambda execution roles → user-assigned managed identities.
+        Resource-based policies → Azure RBAC role assignments.
+        Inline policies → custom role definitions (minimal permissions).
+
+    - aws: secrets_manager
+      azure: azure_key_vault
+      azure_tier: Standard
+      notes: >
+        Secret ARNs → Key Vault secret URIs.  Rotation lambdas →
+        Key Vault rotation policies + Azure Functions rotation handler.
+        GetSecretValue SDK → SecretClient SDK; format is same JSON string.
+
+    - aws: parameter_store
+      azure: azure_app_configuration
+      azure_tier: Standard
+      notes: >
+        SSM parameters → App Configuration key-value pairs.
+        SecureString → Key Vault reference in App Configuration.
+        Hierarchical paths (/) map 1:1.
+
+  networking:
+    - aws: api_gateway_rest
+      azure: azure_api_management
+      azure_tier: Consumption
+      notes: >
+        Stages → APIM environments (via header/product policies).
+        Usage plans → APIM subscriptions + rate limit policies.
+        Lambda proxy → APIM backend with Functions URL.
+        Request/response mapping templates → APIM policies (XML).
+
+    - aws: api_gateway_http
+      azure: azure_api_management
+      azure_tier: Consumption
+      notes: Same as REST API Gateway but simpler — fewer policy transforms.
+
+    - aws: cloudfront
+      azure: azure_front_door
+      azure_tier: Standard
+      notes: >
+        Distribution → Front Door profile.  Origins → origin groups.
+        Behaviors → routing rules.  Lambda@Edge → Front Door Rules Engine
+        + Azure Functions for complex transforms.
+
+    - aws: alb
+      azure: azure_application_gateway
+      azure_tier: Standard_v2
+      notes: >
+        Listener rules → routing rules.  Target groups → backend pools.
+        WAF add-on maps to Application Gateway WAF v2.
+
+    - aws: route53
+      azure: azure_dns
+      azure_tier: Standard
+      notes: >
+        Hosted zones map 1:1.  Alias records → CNAME or A records.
+        Health checks → Azure Monitor + Traffic Manager.
+
+    - aws: vpc
+      azure: azure_virtual_network
+      azure_tier: Standard
+      notes: >
+        VPC CIDR → VNet address space.  Subnets map 1:1.
+        Security groups → NSGs.  NACLs → NSGs on subnets.
+        VPC peering → VNet peering.  PrivateLink → Private Endpoint.
+
+  observability:
+    - aws: cloudwatch_logs
+      azure: azure_monitor_logs
+      azure_tier: Pay-as-you-go
+      notes: Log groups → Log Analytics workspaces.  Filter patterns → KQL queries.
+
+    - aws: cloudwatch_metrics
+      azure: azure_monitor_metrics
+      azure_tier: Included
+      notes: >
+        Custom metrics → Application Insights custom metrics or
+        Azure Monitor custom metrics API.
+
+    - aws: xray
+      azure: azure_application_insights
+      azure_tier: Pay-as-you-go
+      notes: >
+        X-Ray SDK → Application Insights SDK or OpenTelemetry SDK.
+        Trace IDs and span correlation carry over with OTel.
+        Service map → Application Map in App Insights.
+
+  iac:
+    - aws: terraform_aws_provider
+      azure: terraform_azurerm_provider
+      notes: >
+        Replace provider block.  Most resource types have direct azurerm
+        equivalents.  Use azurerm_* resources; avoid old azurestack_*.
+        State backend: S3+DynamoDB → Azure Blob Storage backend.
+
+    - aws: cloudformation
+      azure: azure_bicep
+      notes: >
+        CloudFormation templates → Bicep modules.  Outputs map to
+        Bicep output declarations.  Nested stacks → Bicep modules.
+        StackSets → Bicep at management-group scope.
+
+    - aws: aws_cdk
+      azure: azure_bicep
+      notes: CDK constructs require manual translation to Bicep or Pulumi.
+
+
+# ── Repository type templates ──────────────────────────────────────────────────
+#
+# Each entry defines:
+#   codebase_type      : identifier returned by RepoClassifier
+#   display_name       : human-readable name shown in reports
+#   detect_signals     : filesystem/content signals used by RepoClassifier
+#   source_runtime     : primary AWS runtime / language
+#   target_runtime     : primary Azure runtime / language
+#   source_services    : AWS services this repo type typically uses
+#   target_services    : Azure replacements (references platform_services keys)
+#   migration_approach : ordered list of migration steps
+#   analyzer_prompt    : path to the agent prompt for analysis
+#   coder_prompt       : path to the agent prompt for code generation
+#   key_concerns       : list of migration-specific risks / gotchas
+#
+repository_types:
+
+  - codebase_type: python_serverless
+    display_name: Python Serverless (AWS Lambda)
+    detect_signals:
+      files_required: []
+      files_any_of:
+        - "**/*.py"
+        - "**/requirements.txt"
+        - "**/Pipfile"
+        - "**/pyproject.toml"
+      content_patterns:
+        - "import boto3"
+        - "aws_lambda_powertools"
+        - "def handler("
+        - "def lambda_handler("
+        - "event, context"
+      dir_patterns:
+        - "functions/"
+        - "lambdas/"
+        - "handlers/"
+      infra_markers:
+        - "aws_lambda"
+        - "aws_lambda_function"   # Terraform
+      confidence_threshold: 0.5
+    source_runtime: python3.x on AWS Lambda
+    target_runtime: Python 3.11 on Azure Functions (Consumption)
+    source_services:
+      - aws_lambda
+      - sqs_standard
+      - sqs_fifo
+      - dynamodb
+      - s3
+      - secrets_manager
+      - parameter_store
+      - cloudwatch_logs
+      - xray
+    target_services:
+      - azure_functions
+      - service_bus_queue
+      - service_bus_queue_sessions
+      - cosmos_db_nosql
+      - azure_blob_storage
+      - azure_key_vault
+      - azure_app_configuration
+      - azure_monitor_logs
+      - azure_application_insights
+    migration_approach:
+      - Rename handler module from lambda_function.py to function_app.py
+      - Replace boto3 with azure-sdk-for-python equivalents per service
+      - Replace Lambda handler signature (event, context) with Azure Functions @app.route() or trigger binding
+      - Replace SQS trigger with Service Bus trigger binding
+      - Replace DynamoDB client with azure-cosmos SDK
+      - Replace S3 client with azure-storage-blob SDK
+      - Replace Secrets Manager calls with Key Vault SecretClient
+      - Replace Parameter Store calls with App Configuration client
+      - Replace aws_lambda_powertools Logger/Tracer with opencensus-ext-azure or opentelemetry-sdk
+      - Update requirements.txt; remove boto3, aws-lambda-powertools
+      - Write host.json and local.settings.json for Functions runtime
+      - Write Bicep for Function App + Storage Account + App Service Plan
+    key_concerns:
+      - Lambda context object (remaining_time_in_millis, function_name) has no direct Azure equivalent — mock or remove
+      - SQS event shape differs from Service Bus message shape — update message parsing
+      - DynamoDB conditional expressions do not map to Cosmos DB — use optimistic concurrency (ETag)
+      - X-Ray active tracing → use OpenTelemetry SDK with App Insights exporter
+      - Lambda layers → shared packages must be inlined or published as a private PyPI package
+    analyzer_prompt: prompts/analyzer_python_serverless.md
+    coder_prompt: prompts/coder_python_serverless.md
+
+  - codebase_type: typescript_serverless
+    display_name: TypeScript Serverless (AWS Lambda)
+    detect_signals:
+      files_required: []
+      files_any_of:
+        - "**/*.ts"
+        - "**/tsconfig.json"
+        - "**/package.json"
+      content_patterns:
+        - "import * as AWS from aws-sdk"
+        - "from @aws-sdk/"
+        - "APIGatewayProxyHandler"
+        - "APIGatewayEvent"
+        - "Handler"
+        - "SQSHandler"
+        - "DynamoDBStreamHandler"
+      dir_patterns:
+        - "src/functions/"
+        - "src/handlers/"
+        - "functions/"
+      infra_markers:
+        - "aws_lambda"
+        - "serverless.yml"
+        - "serverless.ts"
+      confidence_threshold: 0.5
+    source_runtime: Node.js 18/20 on AWS Lambda (TypeScript)
+    target_runtime: Node.js 20 on Azure Functions (Consumption)
+    source_services:
+      - aws_lambda
+      - sqs_standard
+      - sqs_fifo
+      - dynamodb
+      - s3
+      - secrets_manager
+      - parameter_store
+      - cloudwatch_logs
+      - xray
+    target_services:
+      - azure_functions
+      - service_bus_queue
+      - service_bus_queue_sessions
+      - cosmos_db_nosql
+      - azure_blob_storage
+      - azure_key_vault
+      - azure_app_configuration
+      - azure_monitor_logs
+      - azure_application_insights
+    migration_approach:
+      - Replace aws-sdk v2/v3 with @azure/ SDK packages per service
+      - Replace Lambda handler type imports with @azure/functions types
+      - Replace Handler<APIGatewayEvent> with HttpHandler / app.http()
+      - Replace SQS trigger with Service Bus trigger binding
+      - Replace DynamoDB client with @azure/cosmos
+      - Replace S3 client with @azure/storage-blob
+      - Replace Secrets Manager with @azure/keyvault-secrets
+      - Update tsconfig.json target and module resolution
+      - Update package.json; remove aws-sdk, add @azure/*
+      - Write host.json, local.settings.json
+      - Write Bicep for Function App + Storage Account
+    key_concerns:
+      - Serverless Framework serverless.yml must be translated to Bicep — no direct equivalent
+      - AWS SDK v3 tree-shaking model differs from Azure SDK modular packages
+      - Lambda@Edge patterns cannot run in Azure Functions — use Front Door Rules Engine
+      - TypeScript strict mode may surface type errors when Azure SDK types differ from AWS SDK
+    analyzer_prompt: prompts/analyzer_typescript_serverless.md
+    coder_prompt: prompts/coder_typescript_serverless.md
+
+  - codebase_type: java_serverless
+    display_name: Java Serverless (AWS Lambda)
+    detect_signals:
+      files_required: []
+      files_any_of:
+        - "**/pom.xml"
+        - "**/build.gradle"
+        - "**/build.gradle.kts"
+        - "**/*.java"
+      content_patterns:
+        - "com.amazonaws.services.lambda"
+        - "RequestHandler<"
+        - "Context context"
+        - "software.amazon.awssdk"
+        - "aws-lambda-java-core"
+      dir_patterns:
+        - "src/main/java/"
+      infra_markers:
+        - "aws_lambda"
+        - "runtime.*java"
+      confidence_threshold: 0.6
+    source_runtime: Java 11/17/21 on AWS Lambda
+    target_runtime: Java 21 on Azure Functions (Consumption or Premium for warm-up)
+    source_services:
+      - aws_lambda
+      - sqs_standard
+      - dynamodb
+      - s3
+      - secrets_manager
+      - cloudwatch_logs
+    target_services:
+      - azure_functions
+      - service_bus_queue
+      - cosmos_db_nosql
+      - azure_blob_storage
+      - azure_key_vault
+      - azure_monitor_logs
+      - azure_application_insights
+    migration_approach:
+      - Replace aws-lambda-java-core with com.microsoft.azure.functions annotations
+      - Replace RequestHandler<I, O> interface with @FunctionName annotated methods
+      - Replace AWS SDK v2 software.amazon.awssdk.* with Azure SDK com.azure.*
+      - Replace DynamoDB DynamoDbClient with Cosmos DB CosmosClient
+      - Replace S3 S3Client with BlobServiceClient
+      - Replace Secrets Manager with Key Vault SecretClient
+      - Update pom.xml/build.gradle dependencies
+      - Write host.json, local.settings.json
+      - Consider GraalVM native compilation for cold-start budget
+      - Write Bicep for Function App (Premium EP1 if cold-start is critical)
+    key_concerns:
+      - Java cold-start in Lambda (~800 ms) worsens on Azure Functions without Premium tier
+      - AWS SDK v1 vs v2 differ significantly; confirm which SDK version is in use before mapping
+      - Lambda SnapStart has no equivalent — use Premium plan with pre-warmed instances
+      - Serialization (Jackson/Gson) wire formats must match updated API contracts
+    analyzer_prompt: prompts/analyzer_java_serverless.md
+    coder_prompt: prompts/coder_java_serverless.md
+
+  - codebase_type: java_spring_boot
+    display_name: Java Spring Boot (ECS / EC2)
+    detect_signals:
+      files_required: []
+      files_any_of:
+        - "**/pom.xml"
+        - "**/build.gradle"
+        - "**/*.java"
+      content_patterns:
+        - "@SpringBootApplication"
+        - "spring-boot-starter"
+        - "org.springframework"
+        - "SpringApplication.run"
+      dir_patterns:
+        - "src/main/java/"
+        - "src/main/resources/application"
+      infra_markers:
+        - "ecs_task_definition"
+        - "aws_ecs_service"
+        - "ecs_fargate"
+      confidence_threshold: 0.6
+    source_runtime: Java Spring Boot on ECS Fargate / EC2
+    target_runtime: Java Spring Boot on Azure Container Apps (Consumption)
+    source_services:
+      - ecs_fargate
+      - rds_postgres
+      - elasticache_redis
+      - sqs_standard
+      - s3
+      - secrets_manager
+      - cloudwatch_logs
+      - xray
+    target_services:
+      - azure_container_apps
+      - azure_database_postgresql_flexible
+      - azure_cache_for_redis
+      - service_bus_queue
+      - azure_blob_storage
+      - azure_key_vault
+      - azure_monitor_logs
+      - azure_application_insights
+    migration_approach:
+      - Keep Spring Boot application code as-is (no framework change)
+      - Replace spring-cloud-aws with spring-cloud-azure starter
+      - Replace SQS listener (@SqsListener) with Service Bus listener
+      - Replace S3 repository with Azure Blob Storage via spring-cloud-azure-starter-storage-blob
+      - Replace application-aws.properties with application-azure.properties
+      - Replace Secrets Manager references with Key Vault Spring starter
+      - Replace @EnableXRay / X-Ray SDK with Application Insights Spring starter
+      - Update Dockerfile — base image stays eclipse-temurin; remove AWS agent
+      - Write Container App environment + managed identity Bicep
+      - Configure Dapr sidecar for service-to-service calls if applicable
+    key_concerns:
+      - ECS task role → Container App managed identity — update all SDK credential chain lookups
+      - RDS Proxy connection pooling → HikariCP with Azure flexible server, configure SSL cert
+      - ECS service discovery (Cloud Map) → Dapr or Container Apps internal ingress
+      - Flyway/Liquibase migrations must run before deployment (init container or startup probe)
+    analyzer_prompt: prompts/analyzer_java_spring_boot.md
+    coder_prompt: prompts/coder_java_spring_boot.md
+
+  - codebase_type: ecs_docker
+    display_name: Generic Containerised Service (ECS Fargate)
+    detect_signals:
+      files_required:
+        - "Dockerfile"
+      files_any_of:
+        - "**/docker-compose*.yml"
+        - "**/task-definition*.json"
+      content_patterns:
+        - "FROM "
+        - "EXPOSE "
+      dir_patterns: []
+      infra_markers:
+        - "ecs_task_definition"
+        - "aws_ecs_service"
+        - "aws_ecs_cluster"
+      confidence_threshold: 0.7
+    source_runtime: Any containerised workload on ECS Fargate
+    target_runtime: Azure Container Apps (Consumption or Dedicated)
+    source_services:
+      - ecs_fargate
+      - sqs_standard
+      - s3
+      - secrets_manager
+      - cloudwatch_logs
+    target_services:
+      - azure_container_apps
+      - service_bus_queue
+      - azure_blob_storage
+      - azure_key_vault
+      - azure_monitor_logs
+      - azure_application_insights
+    migration_approach:
+      - Dockerfile is reused as-is; rebuild in Azure Container Registry
+      - Replace ECS task definition env vars with Container App environment variables backed by Key Vault refs
+      - Replace ECS service connect with Container Apps ingress + Dapr
+      - Replace CloudWatch log driver with Azure Monitor container insights
+      - Replace SQS SDK calls with Service Bus SDK in application code
+      - Write Container App environment Bicep (ACR, managed identity, ingress)
+    key_concerns:
+      - ECS service auto-scaling (CPU/memory) → KEDA scalers in Container Apps
+      - ECS exec → az containerapp exec
+      - Task metadata endpoint (169.254.170.2) not available — update health check logic
+      - ECS secrets injection via SSM → Container Apps Key Vault secret references
+    analyzer_prompt: prompts/analyzer_ecs_docker.md
+    coder_prompt: prompts/coder_ecs_docker.md
+
+  - codebase_type: frontend_spa
+    display_name: Frontend Single-Page Application (S3 + CloudFront)
+    detect_signals:
+      files_required: []
+      files_any_of:
+        - "**/package.json"
+        - "**/angular.json"
+        - "**/next.config.*"
+        - "**/vite.config.*"
+      content_patterns:
+        - "\"react\""
+        - "\"vue\""
+        - "\"@angular/core\""
+        - "\"next\""
+        - "\"vite\""
+        - "CloudFront"
+        - "S3Bucket"
+      dir_patterns:
+        - "src/"
+        - "public/"
+      infra_markers:
+        - "aws_s3_bucket_website_configuration"
+        - "aws_cloudfront_distribution"
+      confidence_threshold: 0.5
+    source_runtime: React / Vue / Angular / Next.js on S3 + CloudFront
+    target_runtime: Azure Static Web Apps (Free/Standard)
+    source_services:
+      - s3_static_website
+      - cloudfront
+      - cognito_user_pools
+      - api_gateway_rest
+    target_services:
+      - static_web_apps
+      - entra_external_id
+      - azure_api_management
+    migration_approach:
+      - Keep framework code (React/Vue/Angular) unchanged
+      - Replace Amplify Auth / Cognito SDK with MSAL.js
+      - Replace API calls to API Gateway URLs with APIM URLs
+      - Update environment variables (REACT_APP_API_URL → VITE_API_URL pattern)
+      - Write staticwebapp.config.json for routing + auth configuration
+      - Wire GitHub Actions workflow for Static Web Apps CI/CD
+      - Remove CloudFront-specific response headers — configure via Static Web App custom headers
+    key_concerns:
+      - Cognito hosted UI → Entra External ID requires MSAL redirect URI update + login flow re-testing
+      - CloudFront signed URLs / cookies → Azure CDN token auth or SAS tokens
+      - Lambda@Edge for SSR → Static Web Apps API routes (Azure Functions behind SWA)
+      - Environment-specific config injection must use SWA linked backend, not Lambda
+    analyzer_prompt: prompts/analyzer_frontend_spa.md
+    coder_prompt: prompts/coder_frontend_spa.md
+
+  - codebase_type: php_web_app
+    display_name: PHP Web Application (Elastic Beanstalk / EC2)
+    detect_signals:
+      files_required: []
+      files_any_of:
+        - "**/*.php"
+        - "**/composer.json"
+        - "**/composer.lock"
+        - "**/.platform/"
+      content_patterns:
+        - "<?php"
+        - "Aws\\Sdk"
+        - "aws/aws-sdk-php"
+        - "Laravel"
+        - "Symfony"
+        - "Drupal"
+      dir_patterns:
+        - "app/"
+        - "src/"
+      infra_markers:
+        - "aws_elastic_beanstalk"
+        - "aws_instance"
+      confidence_threshold: 0.5
+    source_runtime: PHP 8.x on Elastic Beanstalk or EC2
+    target_runtime: PHP 8.x on Azure App Service (P1v3)
+    source_services:
+      - elastic_beanstalk
+      - rds_mysql
+      - elasticache_redis
+      - s3
+      - secrets_manager
+      - cloudwatch_logs
+    target_services:
+      - azure_app_service
+      - azure_database_mysql_flexible
+      - azure_cache_for_redis
+      - azure_blob_storage
+      - azure_key_vault
+      - azure_monitor_logs
+    migration_approach:
+      - Keep framework code (Laravel/Symfony/Drupal) unchanged
+      - Replace aws/aws-sdk-php S3 disk driver with Azure Blob Storage Flysystem adapter
+      - Replace Secrets Manager SDK calls with Key Vault SDK (azure/azure-sdk-for-php)
+      - Replace .ebextensions/ environment config with App Service application settings + Key Vault refs
+      - Update DATABASE_URL to Azure MySQL flexible server connection string
+      - Update Redis connection string to Azure Cache endpoint
+      - Configure PHP runtime via App Service startup command or custom container
+      - Write App Service + MySQL + Redis Bicep
+    key_concerns:
+      - Elastic Beanstalk worker environments (SQS-backed) → App Service WebJob or Azure Functions queue trigger
+      - EB rolling deploy → App Service deployment slots with slot swap
+      - PHP session storage on EFS → Redis session handler (already supported by most frameworks)
+      - .htaccess rewrites → App Service rewrite rules in web.config
+    analyzer_prompt: prompts/analyzer_php_web_app.md
+    coder_prompt: prompts/coder_php_web_app.md
+
+  - codebase_type: iac_terraform
+    display_name: Infrastructure-as-Code (Terraform, AWS provider)
+    detect_signals:
+      files_required: []
+      files_any_of:
+        - "**/*.tf"
+        - "**/*.tfvars"
+        - "**/terraform.lock.hcl"
+      content_patterns:
+        - "provider \"aws\""
+        - "source = \"hashicorp/aws\""
+        - "aws_"
+      dir_patterns:
+        - "infra/"
+        - "terraform/"
+        - "modules/"
+      infra_markers: []
+      confidence_threshold: 0.7
+    source_runtime: Terraform with hashicorp/aws provider
+    target_runtime: Terraform with hashicorp/azurerm provider + Bicep (supplementary)
+    source_services:
+      - terraform_aws_provider
+    target_services:
+      - terraform_azurerm_provider
+    migration_approach:
+      - Replace provider "aws" {} with provider "azurerm" { features {} }
+      - Replace terraform { required_providers { aws = ... } } with azurerm
+      - Map each aws_* resource to its azurerm_* equivalent per platform_services
+      - Replace S3 backend with azurerm backend (storage account + container + key)
+      - Replace IAM roles/policies with azurerm_role_assignment + managed identities
+      - Replace VPC resources with azurerm_virtual_network, subnets, NSGs
+      - Update variable names and types where Azure uses different conventions
+      - Write module README documenting any manual steps (role propagation delay, etc.)
+    key_concerns:
+      - Terraform state migration: terraform state mv is not needed but state re-init is
+      - Some AWS resources have no direct azurerm equivalent — document as manual steps
+      - azurerm provider version must be >= 3.x for Container Apps support
+      - Azure subscription-level resources (management groups, policy) differ from AWS org-level
+    analyzer_prompt: prompts/analyzer_iac_terraform.md
+    coder_prompt: prompts/coder_iac_terraform.md
+
+  - codebase_type: dotnet_serverless
+    display_name: .NET Serverless (AWS Lambda)
+    detect_signals:
+      files_required: []
+      files_any_of:
+        - "**/*.csproj"
+        - "**/*.fsproj"
+        - "**/*.sln"
+      content_patterns:
+        - "Amazon.Lambda.Core"
+        - "Amazon.Lambda.APIGatewayEvents"
+        - "Amazon.Lambda.SQSEvents"
+        - "ILambdaContext"
+        - "AWSSDK"
+      dir_patterns:
+        - "src/"
+      infra_markers:
+        - "aws_lambda"
+        - "runtime.*dotnet"
+      confidence_threshold: 0.6
+    source_runtime: .NET 6/8 on AWS Lambda
+    target_runtime: .NET 8 on Azure Functions (Isolated Process)
+    source_services:
+      - aws_lambda
+      - sqs_standard
+      - dynamodb
+      - s3
+      - secrets_manager
+      - cloudwatch_logs
+    target_services:
+      - azure_functions
+      - service_bus_queue
+      - cosmos_db_nosql
+      - azure_blob_storage
+      - azure_key_vault
+      - azure_monitor_logs
+      - azure_application_insights
+    migration_approach:
+      - Replace Amazon.Lambda.Core with Microsoft.Azure.Functions.Worker
+      - Replace ILambdaContext parameter with FunctionContext
+      - Replace Lambda handler routing with Azure Functions triggers and bindings
+      - Replace AWSSDK.DynamoDBv2 with Microsoft.Azure.Cosmos
+      - Replace AWSSDK.S3 with Azure.Storage.Blobs
+      - Replace AWSSDK.SecretsManager with Azure.Security.KeyVault.Secrets
+      - Update *.csproj NuGet dependencies
+      - Write host.json, local.settings.json
+      - Write Bicep for Function App
+    key_concerns:
+      - Lambda in-process model vs .NET isolated process — Azure Functions requires isolated worker
+      - System.Text.Json vs Newtonsoft.Json serialisation differences in SDK defaults
+      - Lambda custom runtime → Azure Functions custom handler pattern if using AOT
+    analyzer_prompt: prompts/analyzer_dotnet_serverless.md
+    coder_prompt: prompts/coder_dotnet_serverless.md
+
+  - codebase_type: node_serverless
+    display_name: Node.js Serverless / JavaScript (AWS Lambda)
+    detect_signals:
+      files_required: []
+      files_any_of:
+        - "**/*.js"
+        - "**/package.json"
+      content_patterns:
+        - "require(aws-sdk)"
+        - "require(@aws-sdk/"
+        - "exports.handler"
+        - "module.exports.handler"
+      dir_patterns:
+        - "functions/"
+        - "handlers/"
+        - "src/"
+      infra_markers:
+        - "aws_lambda"
+        - "serverless.yml"
+      confidence_threshold: 0.5
+    source_runtime: Node.js 18/20 on AWS Lambda (JavaScript)
+    target_runtime: Node.js 20 on Azure Functions (Consumption)
+    source_services:
+      - aws_lambda
+      - sqs_standard
+      - dynamodb
+      - s3
+      - secrets_manager
+      - cloudwatch_logs
+    target_services:
+      - azure_functions
+      - service_bus_queue
+      - cosmos_db_nosql
+      - azure_blob_storage
+      - azure_key_vault
+      - azure_monitor_logs
+      - azure_application_insights
+    migration_approach:
+      - Replace require(aws-sdk) / require(@aws-sdk/...) with @azure/* packages
+      - Replace exports.handler = async (event, context) => with app.http() or app.storageQueue()
+      - Update package.json; remove aws-sdk, add @azure/functions@4
+      - Write host.json, local.settings.json
+      - Write Bicep for Function App
+    key_concerns:
+      - CommonJS vs ESM module resolution — Azure Functions v4 prefers ESM
+      - Serverless Framework plugins have no equivalent — use Bicep/Terraform
+      - Lambda event shape (Records[]) differs from Service Bus message shape
+    analyzer_prompt: prompts/analyzer_node_serverless.md
+    coder_prompt: prompts/coder_node_serverless.md
+
+
+# ── Migration phases ───────────────────────────────────────────────────────────
+#
+# Standard phase ordering applied to every codebase_type unless overridden.
+# The orchestrator loops Coder→Tester up to max_attempts within Phase 2.
+#
+migration_phases:
+  - phase: 1
+    name: Analysis
+    agent: Analyzer
+    description: Classify repo, score complexity, identify AWS dependencies
+
+  - phase: 2
+    name: Migration
+    agent: Coder
+    description: Rewrite source for Azure target runtime
+    max_attempts: 3
+    retry_on: ["FAIL", "PARTIAL"]
+
+  - phase: 3
+    name: Evaluation
+    agent: Tester
+    description: Run unit tests + LLM SDK-mock audit + contract check
+    max_attempts: 3
+    retry_on: ["FAIL", "PARTIAL"]
+
+  - phase: 4
+    name: Review
+    agent: Reviewer
+    description: LLM review for correctness, completeness, test coverage
+
+  - phase: 5
+    name: SecurityReview
+    agent: SecurityReviewer
+    description: OWASP static scan + LLM security audit; BLOCKED verdict aborts pipeline
+
+  - phase: 6
+    name: InfraValidation
+    agent: Coder
+    description: Validate and fix Bicep; az bicep build must succeed
+
+
+# ── Unsupported types ──────────────────────────────────────────────────────────
+#
+# When RepoClassifier returns a type not listed in repository_types, the
+# orchestrator raises MappingNotFoundError with this message template.
+#
+unsupported_message_template: >
+  No Azure migration mapping exists for codebase_type {codebase_type}.
+  Supported types: {supported_types}.
+  To add support, add an entry to governance/mappings/aws-azure-reference.yaml
+  and create the corresponding analyzer_prompt and coder_prompt files.

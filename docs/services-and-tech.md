@@ -1,6 +1,6 @@
 # Services & technology inventory
 
-**Last updated:** 2026-04-26 (commit `cbcbf6c`)
+**Last updated:** 2026-05-15
 **Scope:** Every Azure resource, external service, Python library, policy file, and env var the project depends on — with what it does, where it's configured, and current status.
 
 For visual flow + sequence diagrams, see [architecture.md](architecture.md).
@@ -10,17 +10,17 @@ For the original phased migration plan, see [GOVERNANCE_MIGRATION_PLAN.md](../GO
 
 ## 1. Azure resources
 
-All in subscription **AI Labs (`8aee075f-c478-4da6-872c-ebcfef7a11c6`)**, tenant **Virtusa (`0d85160c-5899-44ca-acc8-db1501b993b6`)**, region **East US**, resource group **`galaxyscanner-rg`** unless noted.
+All in subscription **AI Labs (`8aee075f-c478-4da6-872c-ebcfef7a11c6`)**, tenant **`0d85160c-5899-44ca-acc8-db1501b993b6`**, region **East US**, resource group **`galaxyscanner-rg`** unless noted.
 
 | # | Resource | Name | What it does | Status | Wired in code at |
 |---|---|---|---|---|---|
 | 1 | Resource Group | `galaxyscanner-rg` | Container for everything below | ✅ Provisioned | — |
-| 2 | Key Vault (access-policy mode) | `galaxyscanner-kv-d63cdd` | Stores `azure-openai-key`, `appinsights-connection-string`, `acr-password`. RBAC mode unavailable (your account lacks `roleAssignments/write`); access-policy mode works for Contributor. | ✅ Provisioned | [token_provider.py:50-69](../token_provider.py#L50-L69) reads `AZURE_KEY_VAULT_URL` + `DefaultAzureCredential` |
+| 2 | Key Vault (access-policy mode) | `galaxyscanner-kv-d63cdd` | Stores `azure-openai-key`, `appinsights-connection-string`, `acr-password`. RBAC mode unavailable (your account lacks `roleAssignments/write`); access-policy mode works for Contributor. | ✅ Provisioned | [core/token_provider.py](../core/token_provider.py) reads `AZURE_KEY_VAULT_URL` + `DefaultAzureCredential` |
 | 3 | Azure Container Registry (Basic) | `galaxyscannercrd63cdd` | Hosts `galaxy-scanner:0.2.1`, `galaxy-scanner:latest`, plus the imported `devcontainers-python:3.13` base. Admin enabled (Basic doesn't support scope-map tokens). | ✅ Provisioned | [Dockerfile:4](../Dockerfile#L4) `FROM galaxyscannercrd63cdd.azurecr.io/devcontainers-python:3.13` |
-| 4 | User-Assigned Managed Identity | `galaxyscanner-mi` | The Scanner's NHI. Federated tokens via Workload Identity exchange to this MI; `clientId=e581d9ea-…` ends up in `NHI_CLIENT_ID_SCANNER`. | ✅ Provisioned | [nhi_identity.py:39-48](../nhi_identity.py#L39-L48) reads it from env |
+| 4 | User-Assigned Managed Identity | `galaxyscanner-mi` | The Scanner's NHI. Federated tokens via Workload Identity exchange to this MI; `clientId=e581d9ea-…` ends up in `NHI_CLIENT_ID_SCANNER`. | ✅ Provisioned | [core/nhi_identity.py:41](../core/nhi_identity.py#L41) reads it from env |
 | 5 | Log Analytics workspace | `galaxyscanner-law` | Backing store for App Insights *and* Container Apps console-log capture. customerId `56bf830a-…`. | ✅ Provisioned | linked to App Insights below |
-| 6 | Application Insights (workspace-based) | `galaxyscanner-ai` | OTel span sink. Connection string in KV. Reads to KQL via the `Logs` blade or "Agents (preview)" dashboard. | ✅ Provisioned | [run_tracer.py:78-86](../run_tracer.py#L78-L86) wires `AzureMonitorTraceExporter` when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set |
-| 7 | Azure OpenAI Service | `galaxyscanner-openai` | Hosts the **`gpt-5-3-codex`** deployment. Endpoint `https://galaxyscanner-openai.openai.azure.com/`. Uses the **Responses API** (`/openai/v1/responses?api-version=preview`) since codex models don't support Chat Completions. | ✅ Provisioned + deployed | [agents/scanner_agent.py:227-232](../agents/scanner_agent.py#L227-L232), [agents/ast_agent.py:192-197](../agents/ast_agent.py#L192-L197) — `OpenAIChatClient(azure_endpoint=…)` |
+| 6 | Application Insights (workspace-based) | `galaxyscanner-ai` | OTel span sink. Connection string in KV. Reads to KQL via the `Logs` blade or "Agents (preview)" dashboard. | ✅ Provisioned | [core/run_tracer.py](../core/run_tracer.py) wires `AzureMonitorTraceExporter` when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set |
+| 7 | Azure OpenAI Service | `galaxyscanner-openai` | Hosts the **`gpt-5-3-codex`** deployment. Endpoint `https://galaxyscanner-openai.openai.azure.com/`. Uses the **Responses API** (`/openai/v1/responses?api-version=preview`) since codex models don't support Chat Completions. | ✅ Provisioned + deployed | [agents/scanner_agent.py](../agents/scanner_agent.py), [agents/ast_agent.py](../agents/ast_agent.py) — `OpenAIChatClient(azure_endpoint=…)` |
 | 8 | Container Apps Environment | `galaxyscanner-aca-env` | The control plane for the Container App Job. Linked to `galaxyscanner-law` for stdout capture. defaultDomain `happydesert-80e42b87.eastus.azurecontainerapps.io`. | ✅ Provisioned | — (only used when Job lands) |
 | 9 | Container App Job | `galaxyscanner-job` | Manual-triggered batch executing one scan run. | 🔴 **BLOCKED** — `az containerapp job create` returns InternalServerError when private-registry creds attached. Public-image jobs work; private-registry path doesn't. | — |
 | 10 | Postgres Flexible Server (B1ms) | `galaxyscanner-pg` (planned) | Persistent hash-chained `trace_ledger` archive — survives container restarts, queryable by Compliance Auditor agent. | 🔶 **Deferred** | [infra/ledger_schema.sql](../infra/ledger_schema.sql) DDL ready; [governance/adapters/postgres_audit_backend.py](../governance/adapters/postgres_audit_backend.py) wired |
@@ -139,6 +139,7 @@ All loaded by `PolicyEvaluator.load_policies(governance/policies/)` at [governan
 | [governance/policies/galaxy-tools.yaml](../governance/policies/galaxy-tools.yaml) | Per-agent tool allow-list (Scanner: `read_file`, `list_directory`, `stat_file`; deny network egress) |
 | [governance/policies/galaxy-pii.yaml](../governance/policies/galaxy-pii.yaml) | Placeholder for PII rules — currently `defaults.action=allow` (no-op) until Presidio/Content Safety is wired |
 | [governance/policies/galaxy-ast.yaml](../governance/policies/galaxy-ast.yaml) | AST-agent-specific rules (deny outbound A2A from leaf agent, etc.) |
+| [governance/policies/galaxy-egress.yaml](../governance/policies/galaxy-egress.yaml) | Outbound network egress control rules |
 
 ### Per-agent config (separate from policies)
 
@@ -153,20 +154,32 @@ All loaded by `PolicyEvaluator.load_policies(governance/policies/)` at [governan
 
 | Variable | Purpose | Set today (local)? | Read at |
 |---|---|---|---|
-| `AZURE_OPENAI_ENDPOINT` | Foundry endpoint URL | ✅ | [agents/scanner_agent.py:225](../agents/scanner_agent.py#L225) |
+| `AZURE_OPENAI_ENDPOINT` | Foundry endpoint URL | ✅ | [agents/scanner_agent.py](../agents/scanner_agent.py), [agents/_base.py](../agents/_base.py) |
 | `AZURE_OPENAI_DEPLOYMENT` | Deployment name (`gpt-5-3-codex`) | ✅ | same |
 | `AZURE_OPENAI_API_VERSION` | `preview` (literal) for Responses API | ✅ | same |
-| `AZURE_OPENAI_KEY` | Local-only; ACA fetches from KV instead | ✅ | [token_provider.py:96](../token_provider.py#L96) fallback path |
-| `AZURE_KEY_VAULT_URL` | KV URL; **blank locally** so env-var fallback wins | ✅ (blank) | [token_provider.py:50](../token_provider.py#L50) |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | App Insights connection | ✅ | [run_tracer.py:77](../run_tracer.py#L77) |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector fallback | ❌ unset (App Insights wins) | [run_tracer.py:78](../run_tracer.py#L78) |
-| `OTEL_SERVICE_NAME` | OTel resource attribute | ✅ `galaxy-scanner-local` | [run_tracer.py:74](../run_tracer.py#L74) |
-| `POSTGRES_DSN` | Async postgres connection | ❌ blank (stdout mode) | [governance/adapters/postgres_audit_backend.py:46-50](../governance/adapters/postgres_audit_backend.py#L46-L50) |
-| `NHI_CLIENT_ID_SCANNER` | Entra MI clientId for Scanner | ✅ placeholder `local-scanner-nhi` | [nhi_identity.py:39](../nhi_identity.py#L39) |
-| `NHI_CLIENT_ID_ARCHITECT` | (future agent) | ✅ placeholder | same |
-| `NHI_CLIENT_ID_CODER` | (future agent) | ✅ placeholder | same |
-| `NHI_CLIENT_ID_REVIEWER` | (future agent) | ✅ placeholder | same |
-| `NHI_CLIENT_ID_SECURITY` | (future agent) | ✅ placeholder | same |
+| `AZURE_OPENAI_KEY` | Local-only; ACA fetches from KV instead | ✅ | [core/token_provider.py](../core/token_provider.py) fallback path |
+| `AZURE_KEY_VAULT_URL` | KV URL; **blank locally** so env-var fallback wins | ✅ (blank) | [core/token_provider.py](../core/token_provider.py) |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | App Insights connection | ✅ | [core/run_tracer.py](../core/run_tracer.py) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector fallback | ❌ unset (App Insights wins) | [core/run_tracer.py](../core/run_tracer.py) |
+| `OTEL_SERVICE_NAME` | OTel resource attribute | ✅ `galaxy-scanner-local` | [core/run_tracer.py](../core/run_tracer.py) |
+| `POSTGRES_DSN` | Async postgres connection | ❌ blank (stdout mode) | [governance/adapters/postgres_audit_backend.py](../governance/adapters/postgres_audit_backend.py) |
+| `NHI_CLIENT_ID_SCANNER` | Entra MI clientId for Scanner | ✅ placeholder `local-scanner-nhi` | [core/nhi_identity.py:41](../core/nhi_identity.py#L41) |
+| `NHI_CLIENT_ID_ASTANALYZER` | Entra MI clientId for ASTAnalyzer | ✅ placeholder | same |
+| `NHI_CLIENT_ID_ANALYZER` | Entra MI clientId for Analyzer | ✅ placeholder | same |
+| `NHI_CLIENT_ID_LAMBDAANALYZER` | Entra MI clientId for LambdaAnalyzer | ✅ placeholder | same |
+| `NHI_CLIENT_ID_CODER` | Entra MI clientId for Coder | ✅ placeholder | same |
+| `NHI_CLIENT_ID_TESTER` | Entra MI clientId for Tester | ✅ placeholder | same |
+| `NHI_CLIENT_ID_REVIEWER` | Entra MI clientId for Reviewer | ✅ placeholder | same |
+| `NHI_CLIENT_ID_SECURITY` | Entra MI clientId for Security | ✅ placeholder | same |
+| `NHI_CLIENT_ID_SECURITYREVIEWER` | Entra MI clientId for SecurityReviewer | ✅ placeholder | same |
+| `NHI_CLIENT_ID_ARCHITECT` | Entra MI clientId for Architect | ✅ placeholder | same |
+| `NHI_CLIENT_ID_IACGEN` | Entra MI clientId for IaCGen | ✅ placeholder | same |
+| `NHI_CLIENT_ID_SLOWATCHER` | Entra MI clientId for SLOWatcher | ✅ placeholder | same |
+| `NHI_CLIENT_ID_DISCOVERYSCANNER` | Entra MI clientId for DiscoveryScanner | ✅ placeholder | same |
+| `NHI_CLIENT_ID_DISCOVERYGRAPHER` | Entra MI clientId for DiscoveryGrapher | ✅ placeholder | same |
+| `NHI_CLIENT_ID_DISCOVERYBRD` | Entra MI clientId for DiscoveryBRD | ✅ placeholder | same |
+| `NHI_CLIENT_ID_DISCOVERYARCHITECT` | Entra MI clientId for DiscoveryArchitect | ✅ placeholder | same |
+| `NHI_CLIENT_ID_DISCOVERYSTORIES` | Entra MI clientId for DiscoveryStories | ✅ placeholder | same |
 | `AZURE_CLIENT_ID` | Hint for `DefaultAzureCredential` to pick a specific MI when multiple are attached | only set inside ACA Job spec | — |
 | `CLAUDE_CODE_USE_FOUNDRY` | Claude Code CLI setting (unrelated to scanner) | ✅ `1` | not read by scanner |
 
@@ -178,10 +191,12 @@ For a copy-pasteable example see [.env.example](../.env.example).
 
 The keys you can `customDimensions[…]` against in App Insights KQL. Sources:
 
-- **GenAI semantic conventions** (emitted by MAF) — full list in [agent_framework.observability.OtelAttr](../.venv/lib/python3.14/site-packages/agent_framework/observability.py#L170): `gen_ai.system`, `gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.response.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.agent.name`, `gen_ai.tool.name`, etc.
-- **Galaxy attributes** (emitted by our `RunTracer.agent_span`) at [run_tracer.py:160-168](../run_tracer.py#L160-L168): `galaxy.run_id`, `galaxy.module_id`, `galaxy.agent_type`, `galaxy.attempt`, `galaxy.nhi_id`.
-- **A2A attributes** at [a2a/dispatcher.py:105-114](../a2a/dispatcher.py#L105-L114) and [a2a/dispatcher.py:140-149](../a2a/dispatcher.py#L140-L149): `a2a.conversation_id`, `a2a.message_id`, `a2a.sender`, `a2a.recipient`, `a2a.intent`, `a2a.payload_schema`, `a2a.status`, `a2a.latency_ms`, `a2a.request_envelope`, `a2a.response_envelope` (truncated to 8 KB each).
-- **Governance audit attributes** (emitted by `OtelAuditBackend`) at [governance/adapters/otel_audit_backend.py:42-71](../governance/adapters/otel_audit_backend.py#L42-L71): `governance.agent_id`, `governance.event_type`, `governance.action`, `governance.decision`, `governance.reason`, `governance.latency_ms`, plus arbitrary scalar metadata flattened as `governance.metadata.<key>`.
+- **GenAI semantic conventions** (emitted by MAF `ChatTelemetryLayer` / `AgentTelemetryLayer`): `gen_ai.system`, `gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.response.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.agent.name`, `gen_ai.tool.name`.
+- **Galaxy pipeline attributes** (on the `pipeline.run` root span emitted by `pipeline_span()` in [core/run_tracer.py](../core/run_tracer.py)): `galaxy.run_id`, `galaxy.module`. These are the **only** `galaxy.*` keys on span dimensions; `galaxy.nhi_id`, `galaxy.agent_type`, and `galaxy.attempt` are **not** span attributes.
+- **A2A attributes** ([a2a/dispatcher.py](../a2a/dispatcher.py)): `a2a.conversation_id`, `a2a.message_id`, `a2a.sender`, `a2a.recipient`, `a2a.intent`, `a2a.payload_schema`, `a2a.status`, `a2a.latency_ms`, `a2a.request_envelope`, `a2a.response_envelope` (truncated to 8 KB each).
+- **Governance audit attributes** (emitted by `OtelAuditBackend` as *span events*, not span attributes — [governance/adapters/otel_audit_backend.py](../governance/adapters/otel_audit_backend.py)): `governance.agent_id` (NHI principal e.g. `Coder-local-coder-nhi`), `governance.event_type`, `governance.action`, `governance.decision`, `governance.reason`, `governance.latency_ms`, plus arbitrary scalar metadata as `governance.metadata.<key>`. Query these from `customEvents` not `dependencies`.
+
+**NHI attribution** is only available via `governance.agent_id` in governance audit events. It is not on the OTel span dimensions directly.
 
 ---
 
@@ -205,15 +220,18 @@ The keys you can `customDimensions[…]` against in App Insights KQL. Sources:
 
 ```bash
 # 1. Run a local scan and watch all governance + LLM activity
-.venv/bin/python run_scanner.py --repo . --run-id run-debug-$(date +%s) --module-id debug
+.venv/bin/python scripts/run_scanner.py --repo . --run-id run-debug-$(date +%s) --module-id debug
 
-# 2. Check what's currently in the venv
+# 2. Run the migration pipeline against the sample legacy repo
+.venv/bin/python scripts/run_migration.py --source-dir legacy/aws_legacy
+
+# 3. Check what's currently in the venv
 uv pip list --python .venv/bin/python | grep -iE "agent|opentel|azure|tree-sitter|pydantic"
 
-# 3. Verify telemetry is reaching App Insights (look for "Items accepted: N")
-.venv/bin/python run_scanner.py --repo . --run-id ai-test --module-id m 2>&1 | grep "Items accepted"
+# 4. Verify telemetry is reaching App Insights (look for "Items accepted: N")
+.venv/bin/python scripts/run_scanner.py --repo . --run-id ai-test --module-id m 2>&1 | grep "Items accepted"
 
-# 4. Fire a policy-deny probe
+# 5. Fire a policy-deny probe
 .venv/bin/python -c "
 import asyncio; from dotenv import load_dotenv; load_dotenv()
 from agents.scanner_agent import build_scanner_agent
@@ -224,11 +242,11 @@ async def main():
 asyncio.run(main())
 "
 
-# 5. Read ACR repos / tags
+# 6. Read ACR repos / tags
 az acr repository list --name galaxyscannercrd63cdd
 az acr repository show-tags --name galaxyscannercrd63cdd --repository galaxy-scanner
 
-# 6. Tail App Insights using KQL (see architecture.md §7 for full queries)
+# 7. Query governance blocks in App Insights KQL
 az monitor app-insights query --app galaxyscanner-ai \
-  --analytics-query "traces | where customDimensions has 'governance.event_type' | take 20"
+  --analytics-query "customEvents | where name == 'governance.audit_entry' | where customDimensions['governance.decision'] == 'deny' | take 20"
 ```

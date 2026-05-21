@@ -1,0 +1,32 @@
+version: "1.0"
+name: lambda-analyzer-agent-config
+description: >
+  LambdaAnalyzer (Tier 2 migration analysis). Receives a Lambda module path
+  + optional context paths via A2A, runs a deterministic complexity scorer,
+  and asks an LLM to produce a per-module migration analysis.md grounded in
+  the source files. Read-only — never modifies source. Leaf agent today;
+  future Coder agent will consume the analysis.md it produces.
+
+agent:
+  type: LambdaAnalyzer
+  description: AWS Lambda → Azure Functions migration analyst (read-only)
+  max_file_scan_bytes: 256000
+  prompt_file: prompts/lambda_analyzer.md
+  # Analysis output is markdown — generous cap because the document includes
+  # an AWS deps table and per-section narrative.
+  max_output_tokens: 8000
+
+a2a:
+  allowed_recipients: []           # leaf today: never dispatches outbound
+  max_files_per_dispatch: 0        # moot when allowed_recipients is empty
+  timeout_seconds: 120             # inbound dispatcher deadline; LLM call is the slow bit
+
+governance:
+  enable_rogue_detection: true
+  enable_prompt_injection_guard: true
+  enable_credential_redactor: true
+  credential_mode: redact
+  enable_context_budget: true
+  # Larger budget than Scanner/AST because we send the actual source contents
+  # (chunked to fit) plus the deterministic scorer's breakdown.
+  context_budget_tokens: 32000

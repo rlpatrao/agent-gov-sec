@@ -1,54 +1,52 @@
-# Galaxy Scanner — User Guide
+# Galaxy Agentic SDLC — User Guide
 
-A practical "how do I do X" guide for working with this framework. Pairs with [architecture.md](architecture.md) (the visual system view) and [services-and-tech.md](services-and-tech.md) (the inventory lookup).
+A practical "how do I do X" guide for working with the AWS → Azure migration pipeline. Pairs with [architecture.md](architecture.md) (the visual system view) and [services-and-tech.md](services-and-tech.md) (the resource inventory).
 
-**Last updated:** commit `13edd02`
+**Last updated:** 2026-05-15
 
 ---
 
 ## Table of contents
 
 1. [Quick start](#1-quick-start)
-2. [Anatomy of an agent run](#2-anatomy-of-an-agent-run)
-3. [Adding a new agent](#3-adding-a-new-agent)
-4. [Security setup](#4-security-setup)
-5. [Agent-to-Agent (A2A) communication](#5-agent-to-agent-a2a-communication)
+2. [Anatomy of a migration run](#2-anatomy-of-a-migration-run)
+3. [Adding a new source stack](#3-adding-a-new-source-stack)
+4. [Pre-migration pipelines](#4-pre-migration-pipelines)
+   - [4.1 Scanner pipeline](#41-scanner-pipeline)
+   - [4.2 Discovery pipeline](#42-discovery-pipeline)
+5. [Security setup](#5-security-setup)
 6. [Policies — the YAML rule engine](#6-policies--the-yaml-rule-engine)
-7. [Guardrails available](#7-guardrails-available)
-8. [Audit and observability](#8-audit-and-observability)
-9. [Testing](#9-testing)
-10. [Configuration reference](#10-configuration-reference)
-11. [Common operations and debugging](#11-common-operations-and-debugging)
-12. [Roadmap and known gaps](#12-roadmap-and-known-gaps)
+7. [Structured logs](#7-structured-logs)
+8. [Testing](#8-testing)
+9. [Configuration reference](#9-configuration-reference)
+10. [Common operations and debugging](#10-common-operations-and-debugging)
 
 ---
 
 ## 1. Quick start
 
 ### Prerequisites
+
 - Python 3.13 or 3.14
 - `uv` (or `pip`)
 - `az` CLI logged into the right Azure subscription
-- Access to the Azure resources documented in [services-and-tech.md §1](services-and-tech.md#1-azure-resources)
+- Access to the Azure resources documented in [azure-resources.md](azure-resources.md)
 
-### Set up a local environment
+### Install
 
 ```bash
 git clone <repo>
 cd agentic-sdlc
-
-# venv
 uv venv --python 3.14 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
 ```
 
 ### Wire up `.env`
 
-Copy the example and fill in the secrets. The file is **gitignored**; never commit it.
+Copy the block below into a `.env` file at the project root. The file is gitignored — never commit it.
 
 ```bash
-cat > .env <<'EOF'
-# Egress: comment out APIM_* to call Azure OpenAI directly
+# LLM egress — comment out APIM_* to call Azure OpenAI directly
 APIM_ENDPOINT=https://galaxyscanner-apim.azure-api.net
 APIM_SUBSCRIPTION_KEY=<from `az keyvault secret show -n apim-subscription-key`>
 
@@ -59,265 +57,368 @@ AZURE_OPENAI_KEY=<from `az keyvault secret show -n azure-openai-key`>
 
 APPLICATIONINSIGHTS_CONNECTION_STRING=<from `az keyvault secret show -n appinsights-connection-string`>
 
+# Per-agent NHI identities (placeholders fine for local dev)
+# Migration pipeline
+NHI_CLIENT_ID_CLASSIFIER=local-classifier-nhi
 NHI_CLIENT_ID_SCANNER=local-scanner-nhi
+NHI_CLIENT_ID_ASTANALYZER=local-astanalyzer-nhi
+NHI_CLIENT_ID_ANALYZER=local-analyzer-nhi
+NHI_CLIENT_ID_LAMBDAANALYZER=local-lambdaanalyzer-nhi
 NHI_CLIENT_ID_ARCHITECT=local-architect-nhi
 NHI_CLIENT_ID_CODER=local-coder-nhi
 NHI_CLIENT_ID_REVIEWER=local-reviewer-nhi
 NHI_CLIENT_ID_SECURITY=local-security-nhi
+NHI_CLIENT_ID_SECURITYREVIEWER=local-securityreviewer-nhi
+NHI_CLIENT_ID_TESTER=local-tester-nhi
+NHI_CLIENT_ID_IACGEN=local-iacgen-nhi
+NHI_CLIENT_ID_SLOWATCHER=local-slowatcher-nhi
+# Discovery pipeline
+NHI_CLIENT_ID_DISCOVERYSCANNER=local-discoveryscanner-nhi
+NHI_CLIENT_ID_DISCOVERYGRAPHER=local-discoverygrapher-nhi
+NHI_CLIENT_ID_DISCOVERYBRD=local-discoverybrd-nhi
+NHI_CLIENT_ID_DISCOVERYARCHITECT=local-discoveryarchitect-nhi
+NHI_CLIENT_ID_DISCOVERYSTORIES=local-discoverystories-nhi
 
-OTEL_SERVICE_NAME=galaxy-scanner-local
+OTEL_SERVICE_NAME=galaxy-migration-local
 AZURE_KEY_VAULT_URL=
 POSTGRES_DSN=
-EOF
 ```
 
-### Run a scan
+### Run the migration pipeline
 
 ```bash
-.venv/bin/python run_scanner.py \
-  --repo /path/to/some/legacy/service \
-  --run-id run-001 \
-  --module-id payments-service
+# Classify + migrate the bundled example repo
+uv run python scripts/run_migration.py --source-dir legacy/aws_legacy
+
+# Override the detected stack type
+uv run python scripts/run_migration.py --source-dir legacy/aws_legacy --codebase-type python_serverless
+
+# Override language as well (e.g. for Java multi-module repos)
+uv run python scripts/run_migration.py --source-dir legacy/my_java_repo --codebase-type java_spring_boot --language java
 ```
 
-You'll see two LLM calls (Scanner + AST), governance audit lines, an A2A dispatch, ledger chain verification, and a structured JSON output.
+Output lands in `migrated/<repo-name>/v<N>/` — the version number is auto-incremented so previous runs are never overwritten.
 
 ### Run the tests
 
 ```bash
-.venv/bin/python -m pytest tests/ -v
+uv run python -m pytest tests/ -x -q
 ```
 
-40 tests; takes about 2 seconds.
+168 tests; takes ~15 seconds.
 
 ---
 
-## 2. Anatomy of an agent run
+## 2. Anatomy of a migration run
 
-Knowing what each line below does makes everything else in this guide easier.
+### What the pipeline does, phase by phase
+
+When you run `python scripts/run_migration.py --source-dir legacy/aws_legacy` the orchestrator executes five sequential phases for each module:
+
+**Phase 0 (before agents):** `RepoClassifier` walks the source tree deterministically — no LLM. It accumulates a confidence score for each known `codebase_type` using file globs, content regex, directory patterns, and infra markers. The highest-scoring type above its threshold wins. The result is logged and written into `run-summary.json`.
+
+If no type clears its threshold, the pipeline exits early and prints per-type scores. Use `--codebase-type <type>` to override.
+
+**Phase 1 — Analyzer:** Reads source files (up to `max_file_scan_bytes` per file), looks up the canonical AWS→Azure mapping in `governance/mappings/aws-azure-reference.yaml`, and calls the LLM with a structured analysis prompt. Returns an `AnalysisReport/v1` containing:
+- `analysis_markdown` — the full migration analysis document (written to `analysis/`)
+- `complexity_level` — low / medium / high
+- `target_services` — list of recommended Azure services
+
+**Phase 2 — Coder (up to 3 attempts):** Receives the analysis report + source files + optional sprint contract. Calls the LLM with a stack-specific prompt (e.g. `coder_python_serverless.md`) prepended with the universal `coder_rules.md` quality gates. The LLM writes files directly via sandboxed `write_file` / `apply_patch` tool calls. At the end of a successful attempt:
+- `function_app.py` (or equivalent) — the migrated Azure Functions code
+- `requirements.txt` / `host.json` / `local.settings.json` — runtime config
+- `tests/` — unit test suite
+- `infrastructure/main.bicep` — IaC
+
+**Phase 3 — Tester (one per Coder attempt):** Runs the generated test suite via a sandboxed `subprocess` pytest call (cwd locked to the test dir, Azure / APIM secrets scrubbed from the subprocess env, 120s timeout). The LLM then performs two additional layers on top of the raw pass/fail:
+- Layer 2: SDK mock audit — did the tests actually mock Azure SDK calls correctly?
+- Layer 3: sprint-contract check — do the tests cover what the contract requires?
+
+Returns `TestReport/v1` with `verdict` (PASS/FAIL) and a structured `failures[]` list. On FAIL the orchestrator serialises the failures into `previous_failures_json` and passes them back into the next Coder attempt. After 3 FAIL attempts the pipeline continues to Review marked as `partial`.
+
+**Phase 4 — Reviewer:** 8-point quality gate (read-only). Receives the migrated source, the analysis report, the test results, and the sprint contract. Returns `ReviewReport/v1` with:
+- `recommendation`: APPROVE / REVISE / BLOCK
+- `confidence`: 0–100
+- `blocking_issues[]`: actionable strings the Coder should fix
+
+**Phase 5 — SecurityReviewer:** First runs a deterministic OWASP regex scan over the migrated code (fast, no LLM), then calls the LLM for deep analysis (logic vulnerabilities, IDOR, auth bypass, Azure-specific misuse). Returns `SecurityReviewReport/v1`. If `recommendation == BLOCKED`, the orchestrator immediately writes the run summary, emits a structured log entry, and exits with code 1. No further agents are called.
+
+### Output directory layout
+
+```
+migrated/aws_legacy/v8/
+├── function_app.py           # migrated Azure Functions handler
+├── requirements.txt
+├── host.json
+├── local.settings.json
+├── tests/                    # generated unit test suite
+├── infrastructure/
+│   └── main.bicep            # Bicep IaC
+├── analysis/                 # AnalysisReport markdown
+├── eval/                     # Tester evaluation outputs
+├── run-summary.json          # single-file result snapshot
+└── logs/
+    └── <run_id>/
+        ├── orchestration.jsonl
+        ├── agents.jsonl
+        └── a2a.jsonl
+```
+
+### run-summary.json
+
+A machine-readable snapshot written at the end of every pipeline run regardless of outcome:
+
+```json
+{
+  "run_id": "run-1777386138",
+  "module": "aws_legacy",
+  "codebase_type": "python_serverless",
+  "classifier_confidence": 0.82,
+  "status": "completed",
+  "test_verdict": "PASS",
+  "review": {
+    "recommendation": "APPROVE",
+    "confidence": 88
+  },
+  "security_review": {
+    "recommendation": "WARN",
+    "block_count": 0,
+    "warn_count": 2
+  },
+  "elapsed_seconds": 47.3
+}
+```
+
+`status` values: `completed` (tests pass), `partial` (tests never passed but pipeline ran to end), `blocked` (SecurityReviewer blocked), `analysis_failed`.
+
+---
+
+## 3. Adding a new source stack
+
+Adding support for a new AWS stack type takes four steps.
+
+### Step 1: Add classifier signals
+
+Open [`agents/_lib/repo_classifier.py`](../agents/_lib/repo_classifier.py) and append a `_TypeSignals` entry to the `_TYPES` list:
 
 ```python
-# 1. Build the agent (one-time per run)
-agent, pg_backend, audit = await build_scanner_agent(run_id="run-001")
-
-# 2. Invoke it (per request)
-response = await agent.run(
-    user_prompt,
-    options={"extra_headers": {
-        "x-galaxy-run-id": run_id,
-        "x-module-id":     module_id,
-    }},
-)
-
-# 3. Tear down (flush audits + verify hash chain)
-await pg_backend.flush_async()
-chain_ok = await pg_backend.verify_chain()
-audit.flush()
-await pg_backend.close()
+_TypeSignals(
+    codebase_type="kotlin_serverless",
+    files_any_of=["**/*.kt", "**/build.gradle.kts"],
+    content_patterns=[
+        r"import com\.amazonaws\.services\.lambda",
+        r"fun handleRequest\s*\(",
+        r"RequestHandler",
+    ],
+    dir_patterns=["functions", "handlers"],
+    infra_markers=["aws_lambda", "aws_lambda_function"],
+    confidence_threshold=0.4,
+),
 ```
 
-What happens behind the scenes for step 2:
+Signal weights: `file_required=0.3`, `files_any_of=0.1 each match`, `content_patterns=0.15 each`, `dir_patterns=0.1 each`, `infra_markers=0.2 each`. Set `confidence_threshold` conservatively — a value of `0.35–0.45` is typical. Run the test suite to confirm no regressions.
 
-```
-agent.run(prompt)
-  → AuditTrailMiddleware.process     (start event)
-  → GovernancePolicyMiddleware       (YAML rules — deny on injection / oversize)
-  → RogueDetectionMiddleware         (anomaly check)
-  → ChatTelemetryLayer               (opens 'chat <model>' OTel span)
-    → OpenAIChatClient.get_response  (HTTP POST to APIM with all headers)
-      → APIM (validates sub-key, headers, rate-limit, injects AOAI key)
-        → Azure OpenAI               (gpt-5-3-codex)
-  ← response text
-  → AuditTrailMiddleware             (complete event)
-  → audit logger fans out: stdout + OTel span event + Postgres backend
-```
+### Step 2: Add a mapping entry
 
-Source: see the call graph in [architecture.md §5](architecture.md#5-governance-middleware-pipeline-per-agentrun).
-
----
-
-## 3. Adding a new agent
-
-Concrete recipe — say you're adding a `Coder` agent that takes the `ASTReport` and produces a refactor plan.
-
-### Step 1: Pick an NHI client_id
-
-For local dev: `NHI_CLIENT_ID_CODER=local-coder-nhi` already exists in the example `.env`. For Azure, register a real Entra service principal and put its `clientId` here.
-
-The registry is at [nhi_identity.py:39-48](../nhi_identity.py#L39-L48).
-
-### Step 2: Add a config YAML
+Open [`governance/mappings/aws-azure-reference.yaml`](../governance/mappings/aws-azure-reference.yaml) and add a `repository_types` entry:
 
 ```yaml
-# agents/config/coder.yaml
-version: "1.0"
-name: coder-agent-config
-description: >
-  Coder agent. Takes ASTReport input, produces refactor plan.
-
-agent:
-  type: Coder
-  description: Refactor-plan generator
-  max_file_scan_bytes: 100000      # this agent reads source code into prompts
-
-a2a:
-  allowed_recipients:
-    - Reviewer                     # can dispatch refactor proposals to Reviewer
-  max_files_per_dispatch: 20
-  timeout_seconds: 60
-
-governance:
-  enable_rogue_detection: true
+repository_types:
+  - codebase_type: kotlin_serverless
+    description: AWS Lambda written in Kotlin
+    target_services:
+      - azure_functions_premium
+      - azure_service_bus
+    migration_approach: >
+      Rewrite as Azure Functions (Kotlin/JVM). Replace AWS SDK calls with
+      Azure SDK for Java. Replace SQS triggers with Service Bus triggers.
+    key_concerns:
+      - JVM cold start on Consumption tier — use Premium EP1
+      - Replace Lambda context with Azure Functions ExecutionContext
+    coder_prompt: prompts/coder_kotlin_serverless.md
+    analyzer_prompt: prompts/analyzer.md
 ```
 
-The Pydantic schema enforcing this YAML lives at [agents/config.py:34-67](../agents/config.py#L34-L67). `extra="forbid"` means typos fail loud.
+The `coder_prompt` field is the path (relative to `agents/`) to the per-stack Coder system prompt. The `analyzer_prompt` field is optional (defaults to the generic `analyzer.md`).
 
-### Step 3: Write the agent module
+### Step 3: Write the Coder prompt
+
+Create `agents/prompts/coder_kotlin_serverless.md`. It only needs to cover what is different from the universal rules — the `coder_rules.md` shared prompt is always prepended automatically (via `shared_prompt_files` in [`agents/config/coder.yaml`](../agents/config/coder.yaml)).
+
+Useful sections to include:
+- Stack identity (what the source is, what the target is)
+- Service substitution table (SQS → Service Bus, DynamoDB → Cosmos DB, etc.)
+- Code patterns (handler signature before/after)
+- Testing requirements specific to this stack
+- Known pitfalls
+
+### Step 4: Add tests
+
+At minimum, add a classifier test in `tests/test_repo_classifier.py`:
 
 ```python
-# agents/coder_agent.py
-from agent_framework import Agent
-from agent_framework_openai import OpenAIChatClient
-
-from agents.config import load_agent_config_cached
-from governance.middleware import build_governance_stack
-from nhi_identity import NHIRegistry
-from token_provider import TokenProvider
-
-_config = load_agent_config_cached("coder")
-AGENT_TYPE = _config.agent_type
-MAX_FILE_SCAN_BYTES = _config.max_file_scan_bytes
-ALLOWED_A2A_RECIPIENTS = _config.a2a.allowed_recipients
-
-SYSTEM_PROMPT = """
-You are the Coder agent. Given an ASTReport and a target architecture,
-produce a step-by-step refactor plan as JSON.
-...
-"""
-
-
-async def build_coder_agent(run_id: str, token_provider=None):
-    apim_endpoint = os.environ.get("APIM_ENDPOINT")
-    if apim_endpoint:
-        tp = token_provider or TokenProvider(
-            secret_name="apim-subscription-key",
-            env_var_fallback="APIM_SUBSCRIPTION_KEY",
-        )
-        endpoint = apim_endpoint
-    else:
-        tp = token_provider or TokenProvider(
-            secret_name="azure-openai-key",
-            env_var_fallback="AZURE_OPENAI_KEY",
-        )
-        endpoint = os.environ["AZURE_OPENAI_ENDPOINT"]
-
-    identity = NHIRegistry.get(AGENT_TYPE)
-    agent_id = f"{AGENT_TYPE}-{identity.client_id}"
-
-    client = OpenAIChatClient(
-        model=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-5-3-codex"),
-        api_key=tp.get_api_key(),
-        azure_endpoint=endpoint,
-        api_version=os.environ.get("AZURE_OPENAI_API_VERSION") or "preview",
-        default_headers={"x-agent-type": AGENT_TYPE, "x-nhi-id": identity.client_id},
+def test_classify_kotlin_serverless(tmp_path):
+    (tmp_path / "src/main/kotlin").mkdir(parents=True)
+    (tmp_path / "src/main/kotlin/Handler.kt").write_text(
+        "fun handleRequest(input: Map<String, Any>, context: Context): String { return \"ok\" }"
     )
-
-    middleware, pg_backend, audit = await build_governance_stack(
-        agent_id=agent_id, run_id=run_id, enable_rogue_detection=True,
-    )
-
-    return Agent(
-        client=client, instructions=SYSTEM_PROMPT,
-        name=AGENT_TYPE, id=agent_id, middleware=middleware,
-    ), pg_backend, audit
-```
-
-The pattern is intentionally repetitive across [agents/scanner_agent.py:228-289](../agents/scanner_agent.py#L228-L289) and [agents/ast_agent.py:184-228](../agents/ast_agent.py#L184-L228) — each agent has its own NHI, its own audit, its own ledger chain. **Don't share governance stacks between agents.**
-
-### Step 4: (Optional) Tighten policies for this agent
-
-If `Coder` should be denied access to certain tools, add a rule in [governance/policies/galaxy-tools.yaml](../governance/policies/galaxy-tools.yaml):
-
-```yaml
-- name: deny-coder-execute-tools
-  priority: 95
-  message: Coder may not execute arbitrary code.
-  condition:
-    field: tool_name
-    operator: matches
-    value: "execute_code|shell_exec|eval"
-  action: deny
-```
-
-### Step 5: Wire into your run script
-
-Mirror what [run_scanner.py](../run_scanner.py) does for Scanner+AST: `await build_coder_agent(...)`, then `await coder_agent.run(prompt, options={"extra_headers": ...})`. If Coder calls Reviewer via A2A, see §5.
-
-### Step 6: Add tests
-
-```python
-# tests/test_coder_agent.py
-@pytest.mark.asyncio
-async def test_coder_agent_builds():
-    from agents.coder_agent import build_coder_agent
-    agent, pg, _ = await build_coder_agent(run_id="test-coder-001")
-    assert agent.name == "Coder"
-    await pg.close()
+    (tmp_path / "build.gradle.kts").write_text("implementation(\"com.amazonaws:aws-lambda-java-core:1.2.3\")")
+    result = classify_repo(tmp_path)
+    assert result.codebase_type == "kotlin_serverless"
+    assert result.confidence >= 0.4
 ```
 
 ---
 
-## 4. Security setup
+## 4. Pre-migration pipelines
+
+Two standalone pipelines run before migration to understand the codebase. Neither calls the migration agents.
+
+### 4.1 Scanner pipeline
+
+Lightweight two-agent flow: deterministic tree walk → LLM interpretation → tree-sitter AST extraction. Use it for a quick structural snapshot of a single module.
+
+#### Run the scanner
+
+```bash
+uv run python scripts/run_scanner.py \
+  --repo legacy/aws_legacy \
+  --run-id run-001 \
+  --module-id aws_legacy
+```
+
+#### What it does
+
+1. `traverse_repo` walks the source tree (heuristics-based file filtering, no LLM), classifies language, identifies entry points.
+2. `Scanner` agent calls the LLM with the traversal results → produces `ScannerOutput` JSON (summary, dependencies, risks).
+3. The scanner dispatches an A2A `ASTRequest/v1` to `ASTAnalyzer`.
+4. `ASTAnalyzer` runs deterministic tree-sitter extraction (symbols, call edges, routes, DB calls) and calls the LLM for an architecture summary.
+5. The AST report is merged back into the Scanner output and written to stdout.
+
+#### Output
+
+```json
+{
+  "module": "aws_legacy",
+  "language": "python",
+  "entry_points": ["handler.py:lambda_handler"],
+  "summary": "...",
+  "ast_report": {
+    "symbols": [...],
+    "call_edges": [...],
+    "routes": [...],
+    "db_calls": [...]
+  }
+}
+```
+
+---
+
+### 4.2 Discovery pipeline
+
+Five-agent workflow that produces a full pre-migration knowledge base: inventory, dependency graph, BRD, target architecture design, and a wave-scheduled migration backlog. Run this before migration for large or unfamiliar codebases.
+
+#### Agents
+
+| Stage | Agent | A2A schema | Output model |
+|---|---|---|---|
+| 1 | `DiscoveryScanner` | `DiscoveryScanRequest/v1` → `DiscoveryInventory/v1` | `Inventory` (modules, languages, entry points, LOC) |
+| 2 | `DiscoveryGrapher` | `DiscoveryGraphRequest/v1` → `DiscoveryGraph/v1` | `DependencyGraph` (module edges, shared libs) |
+| 3 | `DiscoveryBRD` | `DiscoveryBRDRequest/v1` → `DiscoveryBRD/v1` | `BRD` (business requirements, constraints) |
+| 4 | `DiscoveryArchitect` | `DiscoveryArchRequest/v1` → `DiscoveryArch/v1` | `TargetArchitecture` (Azure service mapping, design) |
+| 5 | `DiscoveryStories` | `DiscoveryStoriesRequest/v1` → `DiscoveryBacklog/v1` | `MigrationBacklog` (wave schedule, story-point estimates) |
+
+Pydantic models for all artifacts live in [`core/discovery_artifacts.py`](../core/discovery_artifacts.py).
+
+#### Run the discovery pipeline
+
+No orchestrator script exists yet — a `scripts/run_discovery.py` orchestrator is not yet written. Each agent is individually invokable via A2A:
+
+```python
+import asyncio
+from a2a.envelope import A2ARequest
+from agents.discovery_scanner_agent import build_discovery_scanner_agent, DiscoveryScannerHandler
+
+async def run():
+    bundle = await build_discovery_scanner_agent(run_id="disc-001")
+    handler = DiscoveryScannerHandler(bundle.agent, nhi_id=bundle.nhi_id)
+    req = A2ARequest.new(
+        sender="Orchestrator", recipient="DiscoveryScanner",
+        run_id="disc-001", module_id="disc-001/my_repo",
+        intent="discover_repo", payload_schema="DiscoveryScanRequest/v1",
+        payload={"repo_id": "my_repo", "repo_path": "/path/to/repo"},
+    )
+    result = await handler.handle(req)
+    print(result.payload["inventory"])
+
+asyncio.run(run())
+```
+
+#### Sanity checks
+
+Each discovery agent runs a deterministic post-LLM validation step after receiving the LLM response and before returning. For example, `DiscoveryScannerHandler.sanity_check()` verifies that every listed handler entrypoint file exists on disk and that the detected language matches the file extension. If the sanity check fails, the agent returns an A2A error instead of propagating a hallucinated artifact downstream.
+
+#### When to use which pre-migration pipeline
+
+| Use case | Tool |
+|---|---|
+| Quick structural snapshot of a single module | Scanner pipeline (`scripts/run_scanner.py`) |
+| Full inventory + BRD + architecture + wave plan for a portfolio | Discovery pipeline (invoke agents individually) |
+| Generate the full AWS → Azure migration | Migration pipeline (`scripts/run_migration.py`) |
+| Classify a repo's type without running agents | `python -c "from agents._lib.repo_classifier import classify_repo; print(classify_repo('legacy/aws_legacy'))"` |
+
+---
+
+---
+
+## 5. Security setup
 
 Five mechanisms layered, each with a different trust boundary.
 
-### 4.1 Identity per agent (NHI)
+### 5.1 Identity per agent (NHI)
 
-Every agent type has its own Entra-backed Non-Human Identity. Audit rows are stamped with `nhi_id`, so a downstream Compliance Auditor can answer "did Scanner read this file?" independently of "did Coder modify it?".
+Every agent type has its own Entra-backed Non-Human Identity. Audit rows are stamped with `nhi_id` so a downstream Compliance Auditor can answer "did Coder write this file?" independently of "did Reviewer approve it?".
 
 ```python
-identity = NHIRegistry.get("Scanner")
-identity.client_id          # = NHI_CLIENT_ID_SCANNER from env
-identity.agent_type         # = "Scanner"
-str(identity)               # = "Scanner/<client_id>"
+identity = NHIRegistry.get("Coder")
+identity.client_id      # = NHI_CLIENT_ID_CODER from env
+identity.agent_type     # = "Coder"
+str(identity)           # = "Coder/local-coder-nhi"
 ```
 
-Source: [nhi_identity.py:51-77](../nhi_identity.py#L51-L77).
+Source: [`core/nhi_identity.py`](../core/nhi_identity.py).
 
-In Azure: each NHI is a User-Assigned Managed Identity in `galaxyscanner-rg`. Today only `galaxyscanner-mi` (Scanner) is provisioned; future agents need their own MI.
+In Azure: each NHI is a User-Assigned Managed Identity in `galaxyscanner-rg`. Today only `galaxyscanner-mi` (Scanner) is provisioned; migration agents use placeholder strings locally and will need their own MIs before production deployment.
 
-### 4.2 Secrets via Workload Identity + Key Vault
-
-The pattern at [token_provider.py](../token_provider.py) keeps secrets out of containers and out of `.env` files in production:
+### 5.2 Secrets via Workload Identity + Key Vault
 
 | Layer | What runs | Auth |
 |---|---|---|
-| Laptop dev | `python run_scanner.py` | env-var fallback (`AZURE_OPENAI_KEY` / `APIM_SUBSCRIPTION_KEY` in `.env`) |
+| Laptop dev | `python scripts/run_migration.py` | env-var fallback in `.env` |
 | Azure Container App | container with UAMI attached | Federated token → AAD → KV access policy → secret retrieved |
 
-To add a new secret used by your agent code:
+Use `TokenProvider` for every secret — never `os.environ` directly:
 
 ```python
-# Don't read os.environ directly. Use TokenProvider.
+from core.token_provider import TokenProvider
+
 tp = TokenProvider(
-    secret_name="my-new-secret",          # name in Key Vault
-    env_var_fallback="MY_NEW_SECRET",     # local-dev fallback
+    secret_name="my-new-secret",       # Key Vault secret name
+    env_var_fallback="MY_NEW_SECRET",  # local dev fallback
 )
-value = tp.get_api_key()    # Cached for 5 minutes
+value = tp.get_api_key()   # cached for 5 minutes
 ```
 
-KV access policies are managed via `az keyvault set-policy`. Today the relevant grants:
-- `me` (`rpatrao@virtusa.com`) — full secret CRUD
-- `galaxyscanner-mi` (Scanner UAMI) — `get`, `list`
-- `galaxyscanner-apim` (system-assigned MI) — `get` (for KV-backed named values)
+Source: [`core/token_provider.py`](../core/token_provider.py).
 
-### 4.3 APIM subscription key (the agent → APIM trust boundary)
+### 5.3 APIM subscription key
 
-Every LLM call from an agent goes through `https://galaxyscanner-apim.azure-api.net`. APIM enforces:
-- **Sub-key validation** — `api-key` header must be a valid product subscription
-- **Galaxy header guards** — calls without `x-agent-type` or `x-galaxy-run-id` get 400 with origin marker
-- **Rate-limit** — 100 RPM per subscription (Consumption tier limit; per-agent rate-limits require Developer SKU)
-- **AOAI key forwarding** — APIM injects the real AOAI api-key from a KV-backed named value before forwarding
+Every LLM call from any agent goes through `https://galaxyscanner-apim.azure-api.net`. APIM enforces:
+
+- **Sub-key validation** — `api-key` header must be a valid product subscription (→ 401 on failure)
+- **Required-headers guard** — calls without `x-agent-type` or `x-galaxy-run-id` → 400
+- **Rate-limit** — 100 RPM per subscription (Consumption tier; per-agent limits require Developer SKU)
+- **AOAI key forwarding** — APIM injects the real AOAI api-key from a KV-backed named value
 
 To rotate the sub-key:
 ```bash
@@ -325,209 +426,83 @@ SUB=$(az account show --query id -o tsv)
 NEW=$(az rest --method post \
   --uri "https://management.azure.com/subscriptions/$SUB/resourceGroups/galaxyscanner-rg/providers/Microsoft.ApiManagement/service/galaxyscanner-apim/subscriptions/galaxy-scanner-sub/regenerateKey?keyKind=primary&api-version=2022-08-01" \
   --query primaryKey -o tsv)
-az keyvault secret set --vault-name galaxyscanner-kv-d63cdd --name apim-subscription-key --value "$NEW"
-# update .env or restart Container App so new value flows
+az keyvault secret set --vault-name galaxyscanner-kv-d63cdd \
+  --name apim-subscription-key --value "$NEW"
+# Update .env or restart Container App so the new value flows
 ```
 
-### 4.4 JWT validation (stub today, ready when you flip it)
+### 5.4 Tool sandboxing
 
-The current [APIM policy](#) has a `set-variable name="jwtPresent"` that records whether an `Authorization: Bearer ...` header is present, but doesn't enforce it. To turn enforcement on, replace the `set-variable` block with:
+Coder's `write_file` and `apply_patch` tools are closure-bound to `output_root` at handler construction. The binding happens in `make_write_file(root)` and `make_apply_patch(root)` in [`agents/_lib/file_tools.py`](../agents/_lib/file_tools.py). Any path outside `output_root` returns an `ERROR: path outside sandbox` string to the LLM — it is not an exception, so the agent can self-correct.
 
-```xml
-<validate-jwt header-name="Authorization" failed-validation-httpcode="401"
-               failed-validation-error-message="Invalid or expired token"
-               require-scheme="Bearer" require-signed-tokens="true">
-  <openid-config url="https://login.microsoftonline.com/0d85160c-5899-44ca-acc8-db1501b993b6/v2.0/.well-known/openid-configuration" />
-  <required-claims>
-    <claim name="aud"><value>api://galaxyscanner-apim</value></claim>
-  </required-claims>
-</validate-jwt>
-```
+`CapabilityGuardMiddleware` enforces the `allowed_tools` list from the agent's YAML config as a second gate. If a tool name is not in the list, it is denied at the middleware layer before the tool callable is ever invoked.
 
-Prerequisite: register an Entra app representing the API, with an audience claim of `api://galaxyscanner-apim`. Each agent's UAMI then needs to acquire a token for that audience and send it as `Authorization: Bearer <token>` (in addition to the sub-key, until you fully transition).
+Tester's `run_tests` tool is similarly closure-bound: the subprocess cwd is locked to the test directory and the subprocess environment has Azure credentials and APIM keys scrubbed.
 
-### 4.5 Hash-chained audit trail
+### 5.5 Hash-chained audit trail
 
-Tamper-evident, structured, per-agent. See [§8 Audit and observability](#8-audit-and-observability).
-
----
-
-## 5. Agent-to-Agent (A2A) communication
-
-A2A is the **only sanctioned path** between agents. No agent imports another agent's class.
-
-### 5.1 Calling another agent
+Every agent invocation writes a row to the `trace_ledger` table (stdout mode today; Postgres when `POSTGRES_DSN` is set). Each row hashes the previous row's hash, making any tampering detectable:
 
 ```python
-from a2a.envelope import A2ARequest
-from a2a.dispatcher import a2a_call
-
-# Build the envelope
-request = A2ARequest.new(
-    sender=scanner_agent.id,         # your NHI-qualified id
-    recipient=ast_agent.id,           # callee's id
-    run_id=run_id,
-    module_id=module_id,
-    intent="analyze_ast",             # short verb phrase
-    payload_schema="ASTRequest/v1",   # versioned schema name
-    payload={"repo_root": "...", "files": [...]},
-)
-
-# Dispatch — the dispatcher logs audit + opens an OTel span
-response = await a2a_call(
-    request=request,
-    handler=ast_handler.handle,                  # callee's coroutine
-    sender_audit=scanner_audit,                  # YOUR audit logger
-    allowed_recipients=ALLOWED_A2A_RECIPIENTS,   # belt-and-braces allow-list
-)
-
-if response.is_ok:
-    do_something_with(response.payload)
-else:
-    log_error(response.payload["message"])
+chain_ok = await pg_backend.verify_chain()
+# False means a row was modified after the fact
 ```
 
-Source: [a2a/dispatcher.py:46-150](../a2a/dispatcher.py#L46-L150).
-
-### 5.2 Implementing a handler (when you're the recipient)
-
-```python
-class CoderAgentHandler:
-    def __init__(self, agent, run_tracer=None, nhi_id=""):
-        self._agent = agent
-        self._run_tracer = run_tracer
-        self._nhi_id = nhi_id
-
-    async def handle(self, request: A2ARequest) -> A2AResponse:
-        # 1. Validate the schema
-        if request.payload_schema != "AST_to_Coder/v1":
-            return A2AResponse.error(
-                request=request,
-                error=A2AError(code="schema_mismatch",
-                               message=f"expected AST_to_Coder/v1, got {request.payload_schema}"),
-                status=A2AStatus.ERROR,
-            )
-
-        # 2. Run domain logic + LLM call
-        plan = await self._agent.run(
-            build_prompt(request.payload),
-            options={"extra_headers": {
-                "x-galaxy-run-id": request.run_id,
-                "x-module-id":     request.module_id,
-            }},
-        )
-
-        # 3. Wrap result
-        return A2AResponse.ok(
-            request=request,
-            payload={"refactor_plan": plan},
-            payload_schema="RefactorPlan/v1",
-            latency_ms=0.0,        # dispatcher fills wall-clock
-        )
-```
-
-Mirrors [agents/ast_agent.py ASTAgentHandler.handle](../agents/ast_agent.py).
-
-### 5.3 The allow-list
-
-Two-layer allow-list:
-- **Per-call**, declared in code: the `allowed_recipients=` argument to `a2a_call`. Compile-time certainty about who you're talking to.
-- **Per-agent**, declared in YAML: [agents/config/scanner.yaml:14-17](../agents/config/scanner.yaml#L14-L17) `a2a.allowed_recipients`. Operational tuning without code change.
-
-If a recipient isn't on either list, the dispatcher returns `A2AResponse(status=DENIED)` *without* invoking the handler. The deny lands in your audit log as `outcome=deny`.
-
-### 5.4 What the envelope carries (and what it doesn't)
-
-Carried (see [a2a/envelope.py:43-118](../a2a/envelope.py#L43-L118)):
-- `conversation_id` (stable across the whole multi-agent chain), `message_id`, `in_reply_to`
-- `sender`, `recipient` — NHI-qualified identity *labels*
-- `run_id`, `module_id` — Galaxy-level correlation
-- `intent`, `payload_schema`, `payload`
-
-NOT carried:
-- Signatures, JWTs, SPIFFE SVIDs — sender/recipient are declarative strings, not proofs. A2A is in-process today. When you go cross-process, an `auth: AuthBlock` field needs to be added with sender's MI-issued JWT.
-
-### 5.5 Visibility
-
-Every A2A dispatch generates:
-- An `a2a_dispatch` event in the sender's audit log ([a2a/dispatcher.py:162-178](../a2a/dispatcher.py#L162-L178))
-- An `a2a.dispatch.<RecipientType>` OTel span with the full envelope JSON stamped as `a2a.request_envelope` and `a2a.response_envelope` attributes (truncated to 8 KB)
-- An `a2a_reply` event with status, latency, and a one-line summary
-
-KQL to retrieve full envelopes for one run:
-
-```kql
-dependencies
-| where name startswith "a2a.dispatch."
-| where customDimensions["galaxy.run_id"] == "<run-id>"
-| extend
-    req = parse_json(tostring(customDimensions["a2a.request_envelope"])),
-    rsp = parse_json(tostring(customDimensions["a2a.response_envelope"]))
-| project timestamp, req.intent, req.sender, req.recipient, rsp.status,
-          request_files = req.payload.files,
-          response_payload = rsp.payload
-| order by timestamp asc
-```
+See [`infra/ledger_schema.sql`](../infra/ledger_schema.sql) for the table DDL and [architecture.md §1.6](architecture.md#16-hash-chained-audit-ledger) for the full explanation.
 
 ---
 
 ## 6. Policies — the YAML rule engine
 
-Runtime governance is declarative. Every `agent.run()` is intercepted by `GovernancePolicyMiddleware` which evaluates [governance/policies/*.yaml](../governance/policies/) against the call's context, sorted by priority descending. First-match-wins.
+Runtime governance is declarative. Every `agent.run()` is intercepted by `GovernancePolicyMiddleware`, which evaluates `governance/policies/*.yaml` against the call's context (sorted by priority descending, first-match-wins).
 
-### 6.1 Policy schema
+### Policy schema
 
 ```yaml
 version: "1.0"
-name: my-policy-pack            # logical name
+name: my-policy-pack
 description: >
   What these rules cover.
 
 defaults:
-  action: allow                  # what to do if no rule matches
+  action: allow
 
 rules:
-  - name: my-rule                # unique within file
-    priority: 100                # higher = checked first
+  - name: my-rule
+    priority: 100        # higher = checked first
     message: >
-      Human-readable explanation that becomes the deny reason.
+      Human-readable explanation returned to the caller on deny.
     condition:
-      field: <context-field>     # see 6.2
+      field: <context-field>     # see table below
       operator: <op>             # eq | ne | gt | lt | gte | lte | in | matches | contains
-      value: <value>             # string | int | list | regex
-    action: deny                 # allow | deny | audit | block
+      value: <value>
+    action: deny         # allow | deny | audit | block
 ```
 
-### 6.2 Available context fields
-
-`maf_adapter.GovernancePolicyMiddleware` populates these for every agent invocation (see [.venv/lib/python3.14/site-packages/agent_os/integrations/maf_adapter.py](#) for source):
+### Available context fields
 
 | Field | Type | Source |
 |---|---|---|
-| `agent` | str | The agent's `name` (e.g. `Scanner`) |
+| `agent` | str | The agent's `name` (e.g. `Coder`) |
 | `message` | str | Last user message verbatim |
 | `timestamp` | float | `time.time()` |
 | `stream` | bool | Whether the call is streaming |
 | `message_count` | int | Number of messages in the conversation |
 | `tool_name` | str | (function-level only) the tool being invoked |
 
-Add custom context by writing your own `AgentMiddleware` that calls `evaluator.evaluate({...})` with whatever extra fields you've computed.
-
-### 6.3 Operators reference
+### Operators reference
 
 | Operator | Use case | Example |
 |---|---|---|
 | `eq`, `ne` | Exact match | `value: 0` |
 | `gt`, `lt`, `gte`, `lte` | Numeric thresholds | `value: 6000` |
-| `in` | Membership in list | `value: ["read_file", "list_directory"]` |
-| `matches` | Regex (use `(?i)` for case-insensitive) | `value: "(?i)ignore previous instructions\|...\|new persona"` |
-| `contains` | Substring (single value, not a list) | `value: "secret"` |
+| `in` | Membership in list | `value: ["write_file", "apply_patch"]` |
+| `matches` | Regex (`(?i)` for case-insensitive) | `value: "(?i)ignore previous instructions"` |
+| `contains` | Substring | `value: "secret"` |
 
-Wrap multiple alternatives in a single `matches` regex rather than writing N rules — faster and clearer. See [governance/policies/galaxy-core.yaml:14-23](../governance/policies/galaxy-core.yaml#L14-L23).
+Use a single `matches` regex with alternation rather than N separate rules — faster and easier to read.
 
-### 6.4 Adding a rule
-
-Three-line addition to [governance/policies/galaxy-core.yaml](../governance/policies/galaxy-core.yaml):
+### Adding a rule
 
 ```yaml
   - name: deny-credit-card-leak
@@ -540,105 +515,72 @@ Three-line addition to [governance/policies/galaxy-core.yaml](../governance/poli
     action: deny
 ```
 
-Restart the agent process. No code change.
+Add to any file under `governance/policies/` and restart the agent process. No code change needed.
 
-### 6.5 Testing a policy
+### Testing a policy
 
-The policy probe pattern at [tests/test_security_traceability.py](../tests/test_security_traceability.py) — fire a denied prompt directly and assert a `MiddlewareTermination` or denied response surfaces:
+Write a probe test — it gives you a guaranteed regression check:
 
 ```python
 @pytest.mark.asyncio
 async def test_credit_card_blocked():
-    from agents.scanner_agent import build_scanner_agent
-    agent, pg, _ = await build_scanner_agent(run_id="probe-cc")
+    from agents.coder_agent import build_coder_agent
+    from pathlib import Path
+    bundle = await build_coder_agent(run_id="probe-cc", sandbox_root=Path("/tmp/probe"))
     try:
-        resp = await agent.run("My card is 4111 1111 1111 1111, please save it")
-        assert "Policy violation" in str(resp)
+        resp = await bundle.agent.run("My card is 4111 1111 1111 1111, please save it")
+        assert "Policy violation" in str(resp) or "deny" in str(resp).lower()
     finally:
-        await pg.close()
+        await bundle.pg_backend.close()
 ```
 
 ---
 
-## 7. Guardrails available
+## 7. Structured logs
 
-The Microsoft Agent Governance Toolkit ships ~40 governance modules; we wire a subset and have plumbing-ready wrappers for several more. **Full inventory in [guardrails-inventory.md](guardrails-inventory.md).** Quick view of what's actually in the live stack today, in fail-fast order:
+Each migration run writes three JSONL files to `migrated/<repo>/vN/logs/<run_id>/`. They are independent of the OTel telemetry stream — they exist even with no Azure connection.
 
-| # | Guardrail | What it stops | Source | Lives at |
-|---|---|---|---|---|
-| 1 | **APIM sub-key validation** | Unauthorised callers (no key, wrong key) | APIM policy → 401 | API-level policy XML |
-| 2 | **APIM required-headers guard** | Calls without `x-agent-type` or `x-galaxy-run-id` | APIM policy → 400 with origin marker | API-level policy XML |
-| 3 | **APIM rate-limit** | Runaway loops, abuse | `<rate-limit calls="100" renewal-period="60" />` → 429 | API-level policy XML |
-| 4 | **PromptInjectionGuardMiddleware** | 7-vector taxonomy (direct override, delimiter, encoding, role-play, context manipulation, canary leak, multi-turn) with NONE/LOW/MEDIUM/HIGH/CRITICAL threat levels — blocks at ≥ MEDIUM by default | wraps `agent_os.prompt_injection.PromptInjectionDetector` | [governance/guards/prompt_injection.py](../governance/guards/prompt_injection.py); config at [governance/configs/prompt-injection.yaml](../governance/configs/prompt-injection.yaml) |
-| 5 | **CredentialRedactorGuardMiddleware** | API keys, AWS access keys, GitHub tokens, generic secret patterns. Two modes: `redact` (strip + proceed) or `deny` (block) | wraps `agent_os.credential_redactor.CredentialRedactor` | [governance/guards/credential_redactor.py](../governance/guards/credential_redactor.py) |
-| 6 | **ContextBudgetGuardMiddleware** | Token-budget allocation pre-call + actual-usage record post-call | wraps `agent_os.context_budget.ContextScheduler` | [governance/guards/context_budget.py](../governance/guards/context_budget.py) |
-| 7 | **GovernancePolicyMiddleware** (YAML rules) | Anything declared in [governance/policies/*.yaml](../governance/policies/) (defense-in-depth net for prompt injection; future per-agent rules) | from `agent_os.integrations.maf_adapter` | bundled |
-| 8 | **CapabilityGuardMiddleware** | Tool allow/deny list (function-level) — dormant today (no tools) | from `agent_os.integrations.maf_adapter` | bundled |
-| 9 | **RogueDetectionMiddleware** | Statistical anomalies in tool-use patterns | from `agent_os.integrations.maf_adapter` | bundled |
-| 10 | **AuditTrailMiddleware** | Hash-chain start/end pair per invocation | from `agent_os.integrations.maf_adapter` | bundled |
-| 11 | **A2A allow-list (dispatcher)** | Cross-agent calls to unintended recipients | two-layer: `allowed_recipients` arg + YAML | [a2a/dispatcher.py:77-93](../a2a/dispatcher.py#L77-L93) |
-| 12 | **PostgresHashChainBackend.verify_chain** | Silent tampering with the audit trail | re-computes SHA-256 chain row by row | [governance/adapters/postgres_audit_backend.py:155-179](../governance/adapters/postgres_audit_backend.py#L155-L179) |
-| 13 | **OtelAuditBackend span-status** | Missed alerts in App Insights | sets span status = ERROR on `decision in {deny, block}` | [governance/adapters/otel_audit_backend.py](../governance/adapters/otel_audit_backend.py) |
+### orchestration.jsonl — pipeline phases
 
-### Guards available but not yet wired
+One record per phase start/end event. Useful for timing and status at a glance.
 
-These ship in the toolkit and have wrappers/skeletons in [governance/guards/](../governance/guards/), waiting for a use case:
-
-| Guard | Status | Activates when |
-|---|---|---|
-| **EgressPolicy** ([guards/egress.py](../governance/guards/egress.py), config [galaxy-egress.yaml](../governance/configs/galaxy-egress.yaml)) | 🟠 Reference-loaded; needs binding to a `FunctionMiddleware` | A tool-using agent (Coder, Reviewer) lands and starts making outbound HTTP calls |
-| **EscalationManager** ([guards/escalation.py](../governance/guards/escalation.py)) | 🟠 Wrapper exists; not bound to deny path | You wire an `approval_handler` (Slack webhook, Service Bus, Azure Queue) |
-| **TransparencyInterceptor** | 🟠 Available in `agent_os` | You want users to approve tool calls before they execute |
-| **GovernanceEventBus** | 🟠 Available | You need fan-out: one denial → multiple sinks (Slack + SIEM + queue) |
-| **CircuitBreaker** (`agent_sre.cascade.circuit_breaker`) | 🔴 Mentioned in plan, deferred | Foundry experiences outages; you want fail-fast instead of httpx retries |
-
-### Gaps the toolkit does NOT close
-
-- **Output content safety** — no module inspects model responses. An `OutputSafetyMiddleware` is the natural addition; both `agent_compliance.PromptDefenseEvaluator` (CI-time) and Azure AI Content Safety (runtime) are options.
-- **PII redaction** — [galaxy-pii.yaml](../governance/policies/galaxy-pii.yaml) is a stub. Wire Azure AI Content Safety or extend `CredentialRedactor` patterns.
-- **JWT validation** — APIM policy has the `set-variable` stub but `validate-jwt` isn't enforced. See [§4.4](#44-jwt-validation-stub-today-ready-when-you-flip-it).
-- **Per-agent rate-limit** — Consumption tier limit. Upgrade to Developer ($50/mo) for `rate-limit-by-key` keyed on `x-agent-type`.
-
-For the comprehensive view (every toolkit module, every adapter, every SRE primitive, plus the documented packaging quirks we've worked around), see [guardrails-inventory.md](guardrails-inventory.md).
-
----
-
-## 8. Audit and observability
-
-Three sinks, one event payload (`AuditEntry`).
-
-```python
-# Every audit.log(entry) fans out to:
-audit.add_backend(LoggingBackend())                 # stdout
-audit.add_backend(OtelAuditBackend())                # span event on current OTel span
-audit.add_backend(await PostgresHashChainBackend.create(run_id))   # row in trace_ledger
+```bash
+# Show all phase end events for a run
+cat migrated/aws_legacy/v8/logs/*/orchestration.jsonl | jq 'select(.event == "end")'
 ```
 
-### 8.1 Stdout (always on)
+Key fields: `event` (start/end), `phase` (pipeline/analysis/coder/tester/review/security_review), `module`, `status`, `attempt`, `verdict`, `failure_count`, `files_written`.
 
-Every entry shows up in your terminal as a `agent_os.audit — [<event_type>] agent=<id> action=<name> decision=<outcome>` line. Easiest debugging path.
+### agents.jsonl — LLM call metrics
 
-### 8.2 App Insights (live today)
+One record per agent LLM call. Use for cost attribution and latency profiling.
 
-Two complementary views:
+```bash
+# Total estimated cost for a run
+cat migrated/aws_legacy/v8/logs/*/agents.jsonl | jq -s '[.[].cost_usd] | add'
 
-**Per-call governance events** — every `AuditEntry` becomes an OTel span event:
-
-```kql
-traces
-| where customDimensions has "governance.event_type"
-| where customDimensions["governance.metadata.run_id"] == "<run-id>"
-| project timestamp,
-          event = tostring(customDimensions["governance.event_type"]),
-          agent = tostring(customDimensions["governance.agent_id"]),
-          action = tostring(customDimensions["governance.action"]),
-          decision = tostring(customDimensions["governance.decision"]),
-          reason = tostring(customDimensions["governance.reason"])
-| order by timestamp asc
+# Show Coder token usage across all attempts
+cat migrated/aws_legacy/v8/logs/*/agents.jsonl | jq 'select(.agent == "Coder")'
 ```
 
-**Span tree per run** — see what the agent actually called:
+Key fields: `agent`, `attempt`, `latency_ms`, `tokens_in`, `tokens_out`, `cost_usd`.
 
+Cost model: GPT-4o public list pricing ($2.50/1M input, $10.00/1M output). Token counts are authoritative.
+
+### a2a.jsonl — inter-agent dispatches
+
+One record per A2A call. Use for latency breakdown across agents.
+
+```bash
+# Show all A2A calls with latency
+cat migrated/aws_legacy/v8/logs/*/a2a.jsonl | jq '{sender, recipient, intent, latency_ms, status}'
+```
+
+Key fields: `sender`, `recipient`, `intent`, `latency_ms`, `status` (ok/error), `payload_schema`.
+
+### App Insights KQL queries
+
+**Full span tree for a run:**
 ```kql
 union dependencies, requests
 | where customDimensions["galaxy.run_id"] == "<run-id>"
@@ -648,214 +590,330 @@ union dependencies, requests
 | order by timestamp asc
 ```
 
-### 8.3 Postgres hash chain (when you provision Postgres Flex)
-
-The compliance archive. Today the chain is computed in-memory; setting `POSTGRES_DSN` flips on persistence to the table at [infra/ledger_schema.sql](../infra/ledger_schema.sql).
-
-To verify integrity:
-```python
-chain_ok = await pg_backend.verify_chain()
-# False means a row was tampered with — re-computed entry_hash doesn't match stored value
+**Governance events (policy denials, audit entries):**
+```kql
+traces
+| where customDimensions has "governance.event_type"
+| where customDimensions["governance.metadata.run_id"] == "<run-id>"
+| project timestamp,
+          event = tostring(customDimensions["governance.event_type"]),
+          agent = tostring(customDimensions["governance.agent_id"]),
+          decision = tostring(customDimensions["governance.decision"])
+| order by timestamp asc
 ```
 
-The hash is `SHA-256(run_id|module_id|agent_type|action|outcome|attempt|prev_hash)`. Editing any column breaks the chain at that row and every row after it.
-
-### 8.4 OTel attributes you can query
-
-Full vocabulary in [services-and-tech.md §7](services-and-tech.md#7-telemetry-attribute-vocabulary). The most useful:
-
-| Attribute | What it identifies |
-|---|---|
-| `galaxy.run_id` | One scan run |
-| `galaxy.module_id` | What's being analyzed |
-| `galaxy.agent_type` | Which agent emitted the span |
-| `gen_ai.request.model` | Which deployment was called |
-| `gen_ai.usage.total_tokens` | Cost attribution |
-| `governance.decision` | `allow` / `deny` / `audit` / `block` |
-| `governance.event_type` | `agent_invocation` / `policy_evaluation` / `policy_violation` / `a2a_dispatch` / `a2a_reply` / `audit_trail` / ... |
-| `a2a.conversation_id` | One Scanner→AST chain |
-| `a2a.request_envelope` / `a2a.response_envelope` | Full envelope JSON (truncated to 8 KB) |
+**A2A envelopes:**
+```kql
+dependencies
+| where name startswith "a2a.dispatch."
+| where customDimensions["galaxy.run_id"] == "<run-id>"
+| extend
+    req = parse_json(tostring(customDimensions["a2a.request_envelope"])),
+    rsp = parse_json(tostring(customDimensions["a2a.response_envelope"]))
+| project timestamp, req.intent, req.sender, req.recipient, rsp.status
+| order by timestamp asc
+```
 
 ---
 
-## 9. Testing
+## 8. Testing
 
-### 9.1 Run the suite
+### Run the suite
 
 ```bash
-.venv/bin/python -m pytest tests/ -v
+uv run python -m pytest tests/ -x -q        # stop on first failure
+uv run python -m pytest tests/ -v            # verbose
+uv run python -m pytest tests/test_coder_agent.py -v   # single file
 ```
 
-40 tests, ~2 seconds. Coverage:
-- [tests/test_a2a_envelope.py](../tests/test_a2a_envelope.py) — envelope schema, status codes, replies
-- [tests/test_ast_extractor.py](../tests/test_ast_extractor.py) — tree-sitter Python + Java extraction
-- [tests/test_config.py](../tests/test_config.py) — Pydantic+YAML loading, schema validation, typo rejection
-- [tests/test_scanner_ast_a2a.py](../tests/test_scanner_ast_a2a.py) — Scanner→AST round-trip mocked
-- [tests/test_security_traceability.py](../tests/test_security_traceability.py) — TokenProvider, NHI, governance stack wiring, traverse_repo
+168 tests, ~15 seconds. All tests run without Azure credentials (agents are mocked; LLM calls are not made).
 
-### 9.2 Pattern: live policy probe
+### Test file map
 
-When you add a deny rule, write a probe test that confirms a denied prompt actually gets denied. The pattern:
+| File | Covers |
+|---|---|
+| `tests/test_a2a_envelope.py` | Envelope schema, status codes, reply construction |
+| `tests/test_analyzer_agent.py` | AnalyzerHandler validation, happy-path with stub agent |
+| `tests/test_ast_extractor.py` | tree-sitter Python + Java extraction |
+| `tests/test_coder_agent.py` | Sandboxed write_file / apply_patch, snapshot/diff, A2A handler |
+| `tests/test_config.py` | Pydantic+YAML loading, schema validation, typo rejection |
+| `tests/test_guards.py` | GovernancePolicyMiddleware rules, CredentialRedactor, PromptInjection |
+| `tests/test_lambda_analyzer_agent.py` | Legacy LambdaAnalyzer (retained for compatibility) |
+| `tests/test_repo_classifier.py` | All 10 codebase types, edge cases, confidence thresholds |
+| `tests/test_reviewer_agent.py` | ReviewerHandler validation, APPROVE / REVISE / BLOCK parsing |
+| `tests/test_scanner_ast_a2a.py` | Scanner → AST round-trip with in-memory handler |
+| `tests/test_security_reviewer_agent.py` | SecurityReviewerHandler, BLOCKED verdict propagation |
+| `tests/test_security_traceability.py` | TokenProvider, NHI, governance stack wiring, traverse_repo |
+| `tests/test_tester_agent.py` | TesterHandler, sandboxed pytest runner, failure JSON parsing |
+
+### Pattern: sandbox tool tests
+
+The canonical approach for testing sandboxed tools:
+
+```python
+def test_write_file_rejects_path_outside_sandbox(tmp_path):
+    from agents._lib.file_tools import make_write_file
+    write_file = make_write_file(tmp_path / "sandbox")
+    result = write_file(str(tmp_path / "escape" / "evil.py"), "import os; os.system('rm -rf /')")
+    assert result.startswith("ERROR: path outside sandbox")
+```
+
+### Pattern: A2A round-trip with a stub agent
 
 ```python
 @pytest.mark.asyncio
-async def test_my_new_rule_blocks():
-    from agents.scanner_agent import build_scanner_agent
-    agent, pg, _ = await build_scanner_agent(run_id="probe-rule")
-    try:
-        resp = await agent.run("the offending prompt")
-        # Either an exception is raised by middleware, or the response contains
-        # the policy-violation marker:
-        assert "Policy violation" in str(resp) or "deny" in str(resp).lower()
-    finally:
-        await pg.close()
+async def test_coder_handler_happy_path(tmp_path):
+    from agents.coder_agent import CoderHandler
+
+    class _StubAgent:
+        async def run(self, prompt, **kw):
+            # Simulate the LLM calling write_file via the stub handler
+            return SimpleNamespace(output="Migration summary: wrote function_app.py")
+
+    handler = CoderHandler(_StubAgent(), nhi_id="test-nhi")
+    req = A2ARequest.new(
+        sender="Orchestrator", recipient="Coder",
+        run_id="test-001", module_id="test-001/my_module",
+        intent="migrate_module", payload_schema="CodingRequest/v1",
+        payload={"module": "my_module", "language": "python",
+                 "codebase_type": "python_serverless",
+                 "attempt": 1, "output_root": str(tmp_path), ...},
+    )
+    resp = await handler.handle(req)
+    assert resp.is_ok
 ```
 
-### 9.3 Pattern: A2A round-trip with a mocked recipient
+### Pattern: policy probe
 
-See [tests/test_scanner_ast_a2a.py](../tests/test_scanner_ast_a2a.py) — uses an in-memory handler instead of a real AST agent so the test doesn't need Azure credentials. Useful for testing your dispatch logic, allow-list, error handling.
-
-### 9.4 Pattern: schema validation
-
-To validate a new YAML field doesn't silently disappear:
+When you add a deny rule, write a probe test that confirms it fires:
 
 ```python
-def test_my_new_config_field():
-    from agents.config import load_agent_config
-    cfg = load_agent_config("scanner")
-    assert cfg.my_new_field is not None  # Pydantic raises if YAML missing it
+@pytest.mark.asyncio
+async def test_my_new_rule_blocks(tmp_path):
+    bundle = await build_coder_agent(run_id="probe", sandbox_root=tmp_path)
+    try:
+        resp = await bundle.agent.run("the offending prompt")
+        assert "Policy violation" in str(resp) or "deny" in str(resp).lower()
+    finally:
+        await bundle.pg_backend.close()
 ```
-
-`extra="forbid"` on every model means typos (`maxFiles` vs `max_files_per_dispatch`) raise `ConfigError` at load time, not at first use.
 
 ---
 
-## 10. Configuration reference
+## 9. Configuration reference
 
-### 10.1 Environment variables (`.env` / Container App env)
+### 9.1 Environment variables
 
-| Variable | Purpose | Required? | Where read |
-|---|---|---|---|
-| `APIM_ENDPOINT` | When set, agents call APIM instead of AOAI directly | Optional | [agents/scanner_agent.py:243](../agents/scanner_agent.py#L243) |
-| `APIM_SUBSCRIPTION_KEY` | Local dev fallback for the APIM sub-key | Optional (KV preferred in ACA) | [token_provider.py](../token_provider.py) |
-| `AZURE_OPENAI_ENDPOINT` | Direct AOAI URL when APIM_ENDPOINT is unset | Required if no APIM | same |
-| `AZURE_OPENAI_DEPLOYMENT` | Deployment name (`gpt-5-3-codex`) | Required | same |
-| `AZURE_OPENAI_API_VERSION` | `preview` for Responses API | Optional (defaults to `preview`) | same |
-| `AZURE_OPENAI_KEY` | Direct AOAI key | Required if no APIM and no KV | same |
-| `AZURE_KEY_VAULT_URL` | KV URL; blank locally to force env-var fallback | Optional | [token_provider.py:50](../token_provider.py#L50) |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | OTel → App Insights | Optional but strongly recommended | [run_tracer.py:77](../run_tracer.py#L77) |
-| `OTEL_SERVICE_NAME` | OTel resource attribute | Optional (defaults to `galaxy-platform`) | [run_tracer.py:74](../run_tracer.py#L74) |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector fallback | Optional | [run_tracer.py:78](../run_tracer.py#L78) |
-| `POSTGRES_DSN` | Hash-chain ledger persistence | Optional (stdout mode if unset) | [governance/adapters/postgres_audit_backend.py](../governance/adapters/postgres_audit_backend.py) |
-| `NHI_CLIENT_ID_SCANNER` ... `_REVIEWER` | Per-agent Entra service principal IDs | Required (placeholders OK locally) | [nhi_identity.py:39-48](../nhi_identity.py#L39-L48) |
-| `AZURE_CLIENT_ID` | Disambiguates which UAMI to use when multiple are attached | ACA only | — |
-| `CLAUDE_CODE_USE_FOUNDRY` | Unrelated to scanner; for Claude Code CLI | n/a | n/a |
+| Variable | Purpose | Required? |
+|---|---|---|
+| `APIM_ENDPOINT` | When set, all agents route through APIM instead of AOAI directly | Optional |
+| `APIM_SUBSCRIPTION_KEY` | Local dev fallback for APIM sub-key | Optional (KV preferred in ACA) |
+| `AZURE_OPENAI_ENDPOINT` | Direct AOAI URL when `APIM_ENDPOINT` is unset | Required if no APIM |
+| `AZURE_OPENAI_DEPLOYMENT` | Deployment name (`gpt-5-3-codex`) | Required |
+| `AZURE_OPENAI_API_VERSION` | `preview` for Responses API | Optional (defaults to `preview`) |
+| `AZURE_OPENAI_KEY` | Direct AOAI key | Required if no APIM and no KV |
+| `AZURE_KEY_VAULT_URL` | KV URL; leave blank locally to force env-var fallback | Optional |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | OTel → App Insights | Optional but strongly recommended |
+| `OTEL_SERVICE_NAME` | OTel resource attribute | Optional (defaults to `galaxy-platform`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector fallback | Optional |
+| `POSTGRES_DSN` | Hash-chain ledger persistence | Optional (stdout mode if unset) |
+| `NHI_CLIENT_ID_CLASSIFIER` | RepoClassifier NHI (no LLM calls; for audit attribution) | Required (placeholder OK locally) |
+| `NHI_CLIENT_ID_SCANNER` | Scanner agent NHI client ID | Required |
+| `NHI_CLIENT_ID_ASTANALYZER` | ASTAnalyzer agent NHI client ID | Required |
+| `NHI_CLIENT_ID_ANALYZER` | Analyzer agent NHI client ID | Required |
+| `NHI_CLIENT_ID_LAMBDAANALYZER` | LambdaAnalyzer NHI client ID | Required |
+| `NHI_CLIENT_ID_ARCHITECT` | Architect agent NHI client ID | Required |
+| `NHI_CLIENT_ID_CODER` | Coder agent NHI client ID | Required |
+| `NHI_CLIENT_ID_REVIEWER` | Reviewer agent NHI client ID | Required |
+| `NHI_CLIENT_ID_SECURITY` | Security agent NHI client ID | Required |
+| `NHI_CLIENT_ID_SECURITYREVIEWER` | SecurityReviewer agent NHI client ID | Required |
+| `NHI_CLIENT_ID_TESTER` | Tester agent NHI client ID | Required |
+| `NHI_CLIENT_ID_IACGEN` | IaCGen agent NHI client ID | Required |
+| `NHI_CLIENT_ID_SLOWATCHER` | SLOWatcher agent NHI client ID | Required |
+| `NHI_CLIENT_ID_DISCOVERYSCANNER` | DiscoveryScanner NHI client ID | Required |
+| `NHI_CLIENT_ID_DISCOVERYGRAPHER` | DiscoveryGrapher NHI client ID | Required |
+| `NHI_CLIENT_ID_DISCOVERYBRD` | DiscoveryBRD NHI client ID | Required |
+| `NHI_CLIENT_ID_DISCOVERYARCHITECT` | DiscoveryArchitect NHI client ID | Required |
+| `NHI_CLIENT_ID_DISCOVERYSTORIES` | DiscoveryStories NHI client ID | Required |
+| `MAX_MIGRATION_ATTEMPTS` | Max Coder → Tester retry cycles (default: 3) | Optional |
+| `TESTER_TIMEOUT_SECONDS` | pytest subprocess timeout in seconds (default: 120) | Optional |
+| `AZURE_CLIENT_ID` | Disambiguates which UAMI to use when multiple are attached | ACA only |
 
-### 10.2 Per-agent config YAML schema
+### 9.2 Per-agent YAML config schema
 
-`agents/config/<agent>.yaml`. Pydantic schema at [agents/config.py:34-67](../agents/config.py#L34-L67).
+All agent configs live at `agents/config/<agent>.yaml`. Pydantic schema enforces `extra="forbid"` — typos raise at load time.
 
 ```yaml
 version: "1.0"               # required
 name: <free-form>            # required
-description: <free-form>     # optional
+description: <text>          # optional
 
 agent:
-  type: <PascalCase>         # required, ^[A-Za-z][A-Za-z0-9]*$
-  description: <text>        # optional
-  max_file_scan_bytes: int   # required, 1..1_000_000
+  type: <PascalCase>              # required, e.g. Coder
+  description: <text>            # optional
+  max_file_scan_bytes: int        # required, 1..1_000_000
+  prompt_file: <path>            # required, relative to agents/
+  shared_prompt_files:           # optional list, prepended to prompt_file content
+    - prompts/_shared/coder_rules.md
+  max_output_tokens: int         # optional, model output cap
 
 a2a:
-  allowed_recipients: [str]  # required, may be empty for leaf agents
-  max_files_per_dispatch:    # required, 0..10000 (0 valid for leaf agents)
-    int
-  timeout_seconds:           # required, 1..3600
-    int
+  allowed_recipients: [str]      # required; empty list for leaf agents
+  max_files_per_dispatch: int    # required; 0 for leaf agents
+  timeout_seconds: int           # required, 1..3600
 
 governance:
-  enable_rogue_detection:    # optional, defaults true
-    bool
+  enable_rogue_detection: bool        # default true
+  enable_prompt_injection_guard: bool # default true
+  enable_credential_redactor: bool    # default true
+  credential_mode: redact | deny      # default redact
+  enable_context_budget: bool         # default true
+  context_budget_tokens: int          # token budget for pre-call allocation
+  prompt_injection_block_threshold: high | medium | low  # default high
+  allowed_tools: [str]               # tool function names; empty for read-only agents
+  denied_tools: [str]                # explicit deny list (belt and braces)
 ```
 
-`extra: forbid` is set on every model — typos raise `ConfigError`.
+### 9.3 YAML `aws-azure-reference.yaml` entry schema
 
-### 10.3 Policy YAML schema
+Add entries under `repository_types:` for new codebase types:
 
-`governance/policies/*.yaml`. See [§6.1](#61-policy-schema) for the full layout. Loaded by [governance/middleware.py:78-94](../governance/middleware.py#L78-L94) — every file in the directory is auto-loaded; no manifest needed.
+```yaml
+repository_types:
+  - codebase_type: <string>          # must match classifier output exactly
+    description: <text>
+    target_services: [str]           # list of Azure service identifiers
+    migration_approach: <text>       # narrative for the Analyzer prompt
+    key_concerns: [str]              # bullet points surfaced in analysis
+    coder_prompt: <path>             # path to Coder system prompt, relative to agents/
+    analyzer_prompt: <path>          # optional; defaults to prompts/analyzer.md
+```
+
+### 9.4 Policy YAML schema
+
+Files under `governance/policies/*.yaml`. All files in the directory are auto-loaded at agent build time; no manifest needed.
+
+```yaml
+version: "1.0"
+name: <string>
+description: <text>
+defaults:
+  action: allow | deny
+rules:
+  - name: <unique-within-file>
+    priority: int            # higher = evaluated first
+    message: <text>          # deny reason returned to caller
+    condition:
+      field: <context-field>
+      operator: eq | ne | gt | lt | gte | lte | in | matches | contains
+      value: <string | int | list | regex>
+    action: allow | deny | audit | block
+```
 
 ---
 
-## 11. Common operations and debugging
+## 10. Common operations and debugging
 
-### "Scanner output is empty / detected wrong language"
+### "RepoClassifier returned None / wrong type"
 
-The traversal is deterministic — it's not the LLM hallucinating. Check:
-- `_EXCLUDED_DIRS` at [agents/scanner_agent.py:53-60](../agents/scanner_agent.py#L53-L60) — is your repo's source dir incorrectly excluded?
-- `_LANG_EXT` at [agents/scanner_agent.py:62-66](../agents/scanner_agent.py#L62-L66) — does your file extension map to a language?
-- `_ENTRY_HINTS` at [agents/scanner_agent.py:68-79](../agents/scanner_agent.py#L68-L79) — entry-point detection for your language?
+Print the per-type scores to see where confidence fell short:
 
-### "401 from APIM" / "Invalid subscription key"
+```bash
+python -c "
+from agents._lib.repo_classifier import classify_repo
+r = classify_repo('legacy/aws_legacy')
+print('winner:', r.codebase_type, 'confidence:', r.confidence)
+import json; print(json.dumps(r.scores, indent=2))
+"
+```
+
+Common causes:
+- Missing required files: the `files_required` signals weren't all present.
+- Wrong extension: check the `files_any_of` globs match actual file names.
+- Low content hits: the source might not use the expected import patterns (e.g. wrapped boto3).
+
+Override with `--codebase-type <type>` while you refine the signals.
+
+### "Pipeline produced partial / tests failed every attempt"
+
+1. Look at the Tester failure JSON in `agents.jsonl` or `orchestration.jsonl`:
+   ```bash
+   cat migrated/<repo>/vN/logs/*/orchestration.jsonl | jq 'select(.phase == "tester" and .event == "end")'
+   ```
+2. Look at the raw pytest output in `migrated/<repo>/vN/eval/`.
+3. Check whether the Coder wrote tests that actually import the function under test (common cause: the generated test file has placeholder imports).
+4. If the test runner itself errors (`ERROR` in a2a.jsonl status, not `FAIL`), the sandbox may be misconfigured — confirm `sandbox_root` exists and `run_tests` can locate it.
+
+### "SecurityReviewer BLOCKED the pipeline"
+
+The `blocking_issues[]` list in `run-summary.json` describes the specific finding. Common triggers:
+- Hardcoded connection strings in the generated code
+- Missing input validation on HTTP trigger payloads
+- Azure SDK calls with `verify=False`
+
+Fix by adjusting the Coder prompt (`agents/prompts/coder_<type>.md` or `agents/prompts/_shared/coder_rules.md`) to make the pattern explicit, then re-run.
+
+### "401 from APIM / Invalid subscription key"
 
 ```bash
 az keyvault secret show --vault-name galaxyscanner-kv-d63cdd \
   --name apim-subscription-key --query value -o tsv
 ```
-Compare to `APIM_SUBSCRIPTION_KEY` in your `.env`. If they differ, copy the KV value over.
 
-### "400 from APIM" / "x-agent-type header required"
+Compare to `APIM_SUBSCRIPTION_KEY` in `.env`. If they differ, copy the KV value. If the key is correct, check whether the subscription is expired in the APIM portal.
 
-You called the agent with a path that doesn't pass `extra_headers`. Make sure every `agent.run(...)` includes:
-```python
-options={"extra_headers": {"x-galaxy-run-id": run_id, "x-module-id": module_id}}
-```
-And that your client was built with `default_headers={"x-agent-type": ..., "x-nhi-id": ...}`. See [agents/scanner_agent.py:265-273](../agents/scanner_agent.py#L265-L273).
+### "400 from APIM / x-agent-type header required"
+
+Every `agent.run(...)` call must pass `extra_headers` via the options dict. The `build_agent()` factory handles this automatically when you use it; the error only appears if you construct an `OpenAIChatClient` outside the factory.
 
 ### "Hash chain broken"
 
-`pg_backend.verify_chain()` returning False means an audit row was modified after the fact. This is the design — tamper detection is the point. Compare `entry_hash` in Postgres to a re-computed hash; the row where they diverge is the tamper point.
+`pg_backend.verify_chain()` returning `False` means a `trace_ledger` row was modified after writing. This is tamper detection working as designed. Re-compute the hash for the row where the chain diverges:
 
-If it's broken without obvious tampering, check whether the `_compute_hash` field set in [governance/adapters/postgres_audit_backend.py:213-216](../governance/adapters/postgres_audit_backend.py#L213-L216) matches what `verify_chain` re-computes — if you change one, change the other.
+```python
+from governance.adapters.postgres_audit_backend import PostgresHashChainBackend
+# ...
+broken_at = await backend.find_first_broken_link()
+```
+
+If the chain breaks without deliberate tampering, check whether `_compute_hash` in [`governance/adapters/postgres_audit_backend.py`](../governance/adapters/postgres_audit_backend.py) and `verify_chain` use the same field order in the hash input — they must be identical.
+
+In stdout mode (no `POSTGRES_DSN`), the "chain" is in-memory only and resets on each run. This is expected.
 
 ### "App Insights data not appearing"
 
-- 2-5 minute ingestion lag is normal; refresh the portal.
-- Check `Items received: N. Items accepted: N` in the run log — if N=0 either the connection string is wrong or the BatchSpanProcessor hasn't flushed yet.
-- KQL: `traces | where timestamp > ago(10m) | take 5` — if zero rows, the export isn't reaching the workspace.
+- 2–5 minute ingestion lag is normal; refresh the portal.
+- KQL smoke test: `traces | where timestamp > ago(10m) | take 5` — if zero rows, the connection string is wrong or `BatchSpanProcessor` hasn't flushed.
+- Check the `APPLICATIONINSIGHTS_CONNECTION_STRING` value is from the `galaxyscanner-ai` resource, not a different workspace.
 
 ### "ImportError after fresh install"
 
-If `from agent_framework import Agent` fails with "cannot import name `__version__`", a transitively-installed package overwrote `agent_framework/__init__.py` with an empty file (the `azure-ai-search` bug — see [docs/toolkit-verification.md](toolkit-verification.md)). Fix:
+If `from agent_framework import Agent` fails with `cannot import name '__version__'`, a transitively-installed package has overwritten `agent_framework/__init__.py`:
+
 ```bash
 uv pip uninstall --python .venv/bin/python agent-framework-azure-ai-search
 uv pip install --python .venv/bin/python --force-reinstall --no-deps agent-framework-core
 ```
 
+See [`docs/toolkit-verification.md`](toolkit-verification.md) for the full packaging quirks log.
+
 ### "Policy isn't firing"
 
-Check the `field` name in your YAML matches what the middleware actually populates. The full list is at [§6.2](#62-available-context-fields). Common mistake: writing `field: user_input_lower` (doesn't exist) instead of `field: message` with a `(?i)` regex.
+Check the `field` name in your YAML matches what the middleware actually populates (the list is in [§6](#6-policies--the-yaml-rule-engine)). Common mistake: writing `field: user_input` (doesn't exist) instead of `field: message`. Also check `priority` — the rule must be higher than any allow rule that would match first.
+
+### "I need to add a tool to the Coder"
+
+1. Write the tool as a plain Python callable in `agents/_lib/`.
+2. Add it to `allowed_tools` in `agents/config/coder.yaml`.
+3. Pass it as `tools=[my_tool]` to `build_coder_agent()` in `run_migration.py`.
+4. The `CapabilityGuardMiddleware` will automatically accept it because its name is now in the YAML list.
+5. Make the tool's sandbox binding in a factory function (closure over the output root) like `make_write_file` and `make_apply_patch`.
 
 ### "I want to bypass governance for a debug session"
 
-Don't, and there's no flag for it. The whole point is that governance is the contract. If you need to test that a deny-rule fires, use the [§9.2 probe pattern](#92-pattern-live-policy-probe). If you need to test what happens *after* a deny, write your test against [governance/middleware.py](../governance/middleware.py) directly.
+There is no flag for this and one won't be added. Governance is the contract. If you need to confirm a deny-rule fires, use the [§8 policy probe pattern](#pattern-policy-probe). If you need to trace what happens after a deny, write a unit test against the middleware directly.
 
 ---
 
-## 12. Roadmap and known gaps
-
-What's coming, in rough priority order:
-
-| Item | Why it's worth doing | Effort |
-|---|---|---|
-| **Postgres Flex Server provisioning** | Persists the hash-chain ledger across container restarts. Today's stdout mode loses state on each run. | ~1 hour, ~$15/mo ongoing |
-| **Container Apps Job actually deployed** | Currently blocked by an Azure API hiccup (private-registry-creds returns InternalServerError). Three unblocks documented in [architecture.md §12](architecture.md#12-status-snapshot). | depends on unblock path |
-| **JWT validation enforcement at APIM** | Replaces sub-key for production. Stub policy already in place. | ~2 hours + Entra app reg |
-| **Per-agent rate limits at APIM** | Requires SKU upgrade Consumption → Developer | $50/mo + ~30 min config |
-| **Cross-process A2A through APIM** | One Container App per agent; networked envelopes; needs `auth: AuthBlock` on `A2ARequest` | ~3-4 hours, gated on Phase J unblocking |
-| **Compliance Auditor agent** | Joins Scanner+AST hash chains by `run_id`; verifies cross-agent integrity | ~3 hours |
-| **Output content-safety middleware** | Inspects model responses before returning — closes a real gap | ~2 hours |
-| **Real PII detection in galaxy-pii.yaml** | Wire Azure AI Content Safety or Presidio | ~2 hours |
-| **Per-agent UAMI in Azure** | Each NHI gets its own real Entra service principal (today only Scanner does) | ~30 min per agent + IT for role grants |
-| **More agent types** | Coder, Reviewer, Security, Tester, IaCGen, SLOWatcher are placeholders in the NHI registry | varies — recipe in [§3](#3-adding-a-new-agent) |
-
-For deep architecture context, including mermaid diagrams and the full file index, see [architecture.md](architecture.md).
-For the resource + tech inventory and KQL recipes, see [services-and-tech.md](services-and-tech.md).
+For the full system design with Mermaid diagrams and file indexes, see [architecture.md](architecture.md).
+For the resource and technology inventory and KQL recipes, see [services-and-tech.md](services-and-tech.md).

@@ -23,16 +23,13 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Optional
 
-from agent_framework import Agent
-from agent_framework_openai import OpenAIChatClient
 from agent_os.audit_logger import GovernanceAuditLogger
 
 from a2a import A2ARequest, A2AResponse, a2a_call
 from a2a.dispatcher import A2AHandler
+from agents._base import AgentBundle, build_agent
 from agents.config import load_agent_config_cached
-from governance.middleware import build_governance_stack
-from nhi_identity import NHIRegistry
-from token_provider import TokenProvider
+from core.token_provider import TokenProvider
 
 logger = logging.getLogger(__name__)
 
@@ -97,26 +94,10 @@ class ScannerOutput:
         return json.dumps(asdict(self), indent=2)
 
 
-# ── Prompts ───────────────────────────────────────────────────────────────────
-
-SYSTEM_PROMPT = """
-You are the Scanner agent in the Galaxy migration platform.
-
-Your job: analyse a legacy Java or Python service and produce a structured
-inventory of what it does — its live files, entry points, external
-dependencies, and dead code.
-
-Rules:
-- Focus on business logic and external interfaces only
-- Ignore test files, build scripts, generated code unless they reveal dependencies
-- Flag unreachable, unused, or deprecated files as dead
-- Do not reproduce source code in your output
-- Do not make implementation suggestions — that is the Architect's job
-- Output must be valid JSON matching the schema provided
-
-Your output is the sole source of truth for all downstream agents.
-Accuracy is more important than completeness.
-"""
+# ── Prompt schema ─────────────────────────────────────────────────────────────
+# The system prompt itself is vendored to agents/prompts/scanner.md and loaded
+# by agents._base.build_agent. Only the per-call OUTPUT_SCHEMA — which the
+# Scanner stamps into the user message — stays in code.
 
 OUTPUT_SCHEMA = """{
   "language": "java|python|...",
@@ -228,78 +209,15 @@ def parse_scanner_output(raw: str, module_id: str, file_map: dict) -> ScannerOut
 async def build_scanner_agent(
     run_id: str,
     token_provider: Optional[TokenProvider] = None,
-) -> tuple[Agent, "PostgresHashChainBackend", "GovernanceAuditLogger"]:
-    """Build a Scanner Agent wired to Azure OpenAI + the Galaxy governance stack.
+) -> AgentBundle:
+    """Scanner-specific factory wrapper.
 
-    Returns ``(agent, pg_backend, audit_logger)``. The caller owns the
-    lifecycle of ``pg_backend`` — call ``await pg_backend.flush_async()``
-    and ``await pg_backend.close()`` at the end of the run.
+    Thin shim over agents._base.build_agent so this module stays the
+    discoverable entry point. All wiring (APIM/AOAI, NHI, governance stack,
+    OTel) is owned by the factory; per-agent variations live in
+    agents/config/scanner.yaml.
     """
-    # Egress decision: APIM if APIM_ENDPOINT is set, else direct Azure OpenAI.
-    # APIM mode rewrites: the sub-key replaces the AOAI key (APIM injects the
-    # real AOAI key from a KV-backed named value via inbound policy).
-    apim_endpoint = os.environ.get("APIM_ENDPOINT")
-    if apim_endpoint:
-        tp = token_provider or TokenProvider(
-            secret_name="apim-subscription-key",
-            env_var_fallback="APIM_SUBSCRIPTION_KEY",
-        )
-        endpoint = apim_endpoint
-        egress = "apim"
-    else:
-        tp = token_provider or TokenProvider(
-            secret_name="azure-openai-key",
-            env_var_fallback="AZURE_OPENAI_KEY",
-        )
-        endpoint = os.environ["AZURE_OPENAI_ENDPOINT"]
-        egress = "aoai-direct"
-
-    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-5-3-codex")
-    api_version = os.environ.get("AZURE_OPENAI_API_VERSION") or "preview"
-
-    identity = NHIRegistry.get(AGENT_TYPE)
-    agent_id = f"{AGENT_TYPE}-{identity.client_id}"
-
-    client = OpenAIChatClient(
-        model=deployment,
-        api_key=tp.get_api_key(),
-        azure_endpoint=endpoint,
-        api_version=api_version,
-        default_headers={
-            # APIM uses these for governance attribution + rate limiting.
-            # x-galaxy-run-id and x-module-id vary per call, stamped via
-            # `extra_headers` on agent.run(...) by run_scanner.py.
-            "x-agent-type": AGENT_TYPE,
-            "x-nhi-id":     identity.client_id,
-        },
-    )
-
-    middleware, pg_backend, audit = await build_governance_stack(
-        agent_id=agent_id,
-        run_id=run_id,
-        enable_rogue_detection=True,
-    )
-
-    agent = Agent(
-        client=client,
-        instructions=SYSTEM_PROMPT,
-        name=AGENT_TYPE,
-        id=agent_id,
-        middleware=middleware,
-    )
-
-    logger.info(
-        "scanner.agent_built",
-        extra={
-            "run_id": run_id,
-            "agent_id": agent_id,
-            "nhi_id": identity.client_id,
-            "deployment": deployment,
-            "egress": egress,
-            "endpoint": endpoint,
-        },
-    )
-    return agent, pg_backend, audit
+    return await build_agent("scanner", run_id, token_provider=token_provider)
 
 
 # ── A2A dispatch: Scanner → ASTAnalyzer ───────────────────────────────────────

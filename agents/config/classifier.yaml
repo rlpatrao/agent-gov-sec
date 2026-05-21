@@ -1,0 +1,31 @@
+version: "1.0"
+name: classifier-agent-config
+description: >
+  Repo Classifier — deterministic-first codebase_type identification.
+  Runs the signal-based scorer (file presence, content patterns, infra markers)
+  first; invokes the LLM only when no type clears its confidence threshold.
+  The LLM sees the file tree, key config snippets, and the deterministic score
+  table so it can make an informed decision on ambiguous or novel layouts.
+
+agent:
+  type: Classifier
+  description: Deterministic-first repo classifier with LLM fallback
+  max_file_scan_bytes: 50000
+  prompt_file: prompts/classifier.md
+  max_output_tokens: 512
+
+a2a:
+  allowed_recipients: []
+  max_files_per_dispatch: 0
+  timeout_seconds: 60
+
+governance:
+  enable_rogue_detection: true
+  enable_prompt_injection_guard: true
+  enable_credential_redactor: true
+  credential_mode: redact
+  enable_context_budget: true
+  context_budget_tokens: 16000
+  prompt_injection_block_threshold: high
+  allowed_tools: []
+  denied_tools: []

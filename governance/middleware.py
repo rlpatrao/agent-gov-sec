@@ -22,6 +22,7 @@ from governance.adapters.otel_audit_backend import OtelAuditBackend
 from governance.adapters.postgres_audit_backend import PostgresHashChainBackend
 from governance.guards.context_budget import ContextBudgetGuardMiddleware
 from governance.guards.credential_redactor import CredentialRedactorGuardMiddleware
+from agent_os.prompt_injection import ThreatLevel
 from governance.guards.prompt_injection import PromptInjectionGuardMiddleware
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,13 @@ class _CompatAuditLogger(GovernanceAuditLogger):
         return entry
 
 
+_THRESHOLD_MAP: dict[str, ThreatLevel] = {
+    "medium":   ThreatLevel.MEDIUM,
+    "high":     ThreatLevel.HIGH,
+    "critical": ThreatLevel.CRITICAL,
+}
+
+
 async def build_governance_stack(
     agent_id: str,
     allowed_tools: Optional[list[str]] = None,
@@ -80,6 +88,7 @@ async def build_governance_stack(
     credential_mode: str = "redact",                # "redact" | "deny"
     enable_context_budget: bool = True,
     context_budget_total_tokens: int = 8000,
+    prompt_injection_block_threshold: str = "medium",
 ) -> tuple[list, PostgresHashChainBackend, GovernanceAuditLogger]:
     """Return (middleware_list, pg_backend, audit_logger).
 
@@ -111,6 +120,7 @@ async def build_governance_stack(
             agent_id=agent_id,
             audit_log=audit,
             config_path=_PROMPT_INJECTION_CONFIG if _PROMPT_INJECTION_CONFIG.exists() else None,
+            block_threshold=_THRESHOLD_MAP.get(prompt_injection_block_threshold, ThreatLevel.MEDIUM),
         ))
     if enable_credential_redactor:
         pre_middleware.append(CredentialRedactorGuardMiddleware(

@@ -8,6 +8,7 @@ agent:
   type: Scanner
   description: Repository scanner and discovery agent
   max_file_scan_bytes: 50000
+  prompt_file: prompts/scanner.md
 
 a2a:
   allowed_recipients:

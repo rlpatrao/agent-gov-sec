@@ -1,0 +1,30 @@
+version: "1.0"
+name: discovery-scanner-agent-config
+description: >
+  Discovery Scanner — walks a repo, identifies module boundaries, measures LOC,
+  and emits a structured Inventory. Deterministic file-tree walk runs first;
+  the LLM interprets ambiguous entry-points. Read-only (no write tools).
+  First stage of the Discovery pipeline (Scanner → Grapher → BRD → Architect → Stories).
+
+agent:
+  type: DiscoveryScanner
+  description: Repository scanner that produces a structured module Inventory
+  max_file_scan_bytes: 100000
+  prompt_file: prompts/discovery_scanner.md
+  max_output_tokens: 4000
+
+a2a:
+  allowed_recipients: []        # leaf: never dispatches outbound
+  max_files_per_dispatch: 0
+  timeout_seconds: 120
+
+governance:
+  enable_rogue_detection: true
+  enable_prompt_injection_guard: true
+  enable_credential_redactor: true
+  credential_mode: redact
+  enable_context_budget: true
+  context_budget_tokens: 24000
+  prompt_injection_block_threshold: high
+  allowed_tools: []
+  denied_tools: []

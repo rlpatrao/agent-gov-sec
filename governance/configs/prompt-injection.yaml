@@ -66,8 +66,15 @@ suspicious_decoded_keywords:
 sensitivity_min_threat:
   Scanner: low
   ASTAnalyzer: low
-  Coder: medium       # future agent — code-mod risk
-  Reviewer: medium
+  # Coder/Tester/Reviewer receive trusted pipeline content (previous agent outputs,
+  # original source). Using low here means false-positive pattern matches on LLM-
+  # generated markdown (### headings, code fences) are logged but not blocked.
+  # Blocking only kicks in when the detector itself scores the threat as medium+.
+  Coder: low
+  Tester: low
+  Reviewer: low
+  SecurityReviewer: low
+  Analyzer: low
 
 disclaimer: >
   Galaxy-tuned prompt-injection patterns. Kept narrow on purpose — false

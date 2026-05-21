@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from nhi_identity import AgentIdentity, NHIRegistry
-from token_provider import TokenProvider
+from core.nhi_identity import AgentIdentity, NHIRegistry
+from core.token_provider import TokenProvider
 
 
 # ── TokenProvider ─────────────────────────────────────────────────────────────
