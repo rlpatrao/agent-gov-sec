@@ -38,26 +38,26 @@ except ImportError:
 # In local dev: placeholder values are fine — no real auth happens
 _NHI_CLIENT_IDS: dict[str, str] = {
     # Shared / Step 0
-    "Classifier":           os.environ.get("NHI_CLIENT_ID_CLASSIFIER",          "local-classifier-nhi"),
+    "Classifier":           os.environ.get("NHI_CLIENT_ID_CLASSIFIER",          "c4be541a-a1f2-433c-8166-9ebcf2d87b78"),
     # Migration pipeline
-    "Scanner":              os.environ.get("NHI_CLIENT_ID_SCANNER",              "local-scanner-nhi"),
-    "ASTAnalyzer":          os.environ.get("NHI_CLIENT_ID_ASTANALYZER",          "local-astanalyzer-nhi"),
-    "Analyzer":             os.environ.get("NHI_CLIENT_ID_ANALYZER",             "local-analyzer-nhi"),
-    "LambdaAnalyzer":       os.environ.get("NHI_CLIENT_ID_LAMBDAANALYZER",       "local-lambdaanalyzer-nhi"),
-    "Architect":            os.environ.get("NHI_CLIENT_ID_ARCHITECT",            "local-architect-nhi"),
-    "Coder":                os.environ.get("NHI_CLIENT_ID_CODER",                "local-coder-nhi"),
-    "Reviewer":             os.environ.get("NHI_CLIENT_ID_REVIEWER",             "local-reviewer-nhi"),
-    "Security":             os.environ.get("NHI_CLIENT_ID_SECURITY",             "local-security-nhi"),
-    "SecurityReviewer":     os.environ.get("NHI_CLIENT_ID_SECURITYREVIEWER",     "local-securityreviewer-nhi"),
-    "Tester":               os.environ.get("NHI_CLIENT_ID_TESTER",               "local-tester-nhi"),
-    "IaCGen":               os.environ.get("NHI_CLIENT_ID_IACGEN",               "local-iacgen-nhi"),
-    "SLOWatcher":           os.environ.get("NHI_CLIENT_ID_SLOWATCHER",           "local-slowatcher-nhi"),
+    "Scanner":              os.environ.get("NHI_CLIENT_ID_SCANNER",              "e581d9ea-c4ca-411f-9946-2e784d9c4046"),
+    "ASTAnalyzer":          os.environ.get("NHI_CLIENT_ID_ASTANALYZER",          "7d22106a-5fe0-467c-98f4-1080d8bcea4d"),
+    "Analyzer":             os.environ.get("NHI_CLIENT_ID_ANALYZER",             "8cdc89ee-932e-4536-a563-434af7df3c9b"),
+    "LambdaAnalyzer":       os.environ.get("NHI_CLIENT_ID_LAMBDAANALYZER",       "17de927d-a8d7-447b-90b7-d1d649009179"),
+    "Architect":            os.environ.get("NHI_CLIENT_ID_ARCHITECT",            "7b2e5510-bbee-4da4-a99d-e60711fa0be7"),
+    "Coder":                os.environ.get("NHI_CLIENT_ID_CODER",                "f51216a1-0e67-43c9-acb8-149954e8d4e0"),
+    "Reviewer":             os.environ.get("NHI_CLIENT_ID_REVIEWER",             "b44d54a3-d329-49aa-89cb-ea35522768ba"),
+    "Security":             os.environ.get("NHI_CLIENT_ID_SECURITY",             "72f1b573-1796-474e-b961-390ae8ad33fe"),
+    "SecurityReviewer":     os.environ.get("NHI_CLIENT_ID_SECURITYREVIEWER",     "ae944f1a-1032-4cbb-ba53-8cb73a790043"),
+    "Tester":               os.environ.get("NHI_CLIENT_ID_TESTER",               "7eeb7e1a-b6f2-45d5-b721-2fa0b49da988"),
+    "IaCGen":               os.environ.get("NHI_CLIENT_ID_IACGEN",               "72728f28-0955-4378-8782-cde5fdc6dff3"),
+    "SLOWatcher":           os.environ.get("NHI_CLIENT_ID_SLOWATCHER",           "92f68691-ea09-4249-b9a1-221a5888c361"),
     # Discovery pipeline
-    "DiscoveryScanner":     os.environ.get("NHI_CLIENT_ID_DISCOVERYSCANNER",     "local-discoveryscanner-nhi"),
-    "DiscoveryGrapher":     os.environ.get("NHI_CLIENT_ID_DISCOVERYGRAPHER",     "local-discoverygrapher-nhi"),
-    "DiscoveryBRD":         os.environ.get("NHI_CLIENT_ID_DISCOVERYBRD",         "local-discoverybrd-nhi"),
-    "DiscoveryArchitect":   os.environ.get("NHI_CLIENT_ID_DISCOVERYARCHITECT",   "local-discoveryarchitect-nhi"),
-    "DiscoveryStories":     os.environ.get("NHI_CLIENT_ID_DISCOVERYSTORIES",     "local-discoverystories-nhi"),
+    "DiscoveryScanner":     os.environ.get("NHI_CLIENT_ID_DISCOVERYSCANNER",     "40d042bb-a23e-4158-92f8-70accc3023c7"),
+    "DiscoveryGrapher":     os.environ.get("NHI_CLIENT_ID_DISCOVERYGRAPHER",     "5a603c38-d178-4da4-94dd-85cedc9cd983"),
+    "DiscoveryBRD":         os.environ.get("NHI_CLIENT_ID_DISCOVERYBRD",         "333b400b-170a-4ed0-9fae-42866a93b84f"),
+    "DiscoveryArchitect":   os.environ.get("NHI_CLIENT_ID_DISCOVERYARCHITECT",   "cc0da4ab-22fa-4707-8184-4e33c5884c3e"),
+    "DiscoveryStories":     os.environ.get("NHI_CLIENT_ID_DISCOVERYSTORIES",     "26c11983-dad1-480e-bff8-09eb8f3ad7f0"),
 }
 
 
@@ -113,13 +113,17 @@ class NHIRegistry:
         Call at platform startup to verify all NHIs are configured.
         Fail fast before any agent runs.
         """
+        import re
+        _UUID_RE = re.compile(
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        )
         missing = [
             agent for agent, client_id in _NHI_CLIENT_IDS.items()
-            if client_id.startswith("local-")
+            if not _UUID_RE.match(client_id)
         ]
         if missing:
             logger.warning(
-                "nhi.local_placeholders_in_use",
+                "nhi.missing_real_entra_ids",
                 extra={"agents": missing},
             )
-            # Warning only — allows local dev. Raises in prod via a stricter check.
+            # Warning only in local dev. In ACA each job's MI injects the real UUID.
