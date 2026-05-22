@@ -147,7 +147,8 @@ Layer 3: Security & Control Plane   →   ★ PRIMARY FOCUS OF TODAY'S DEMO ★
                                         RogueDetectionMiddleware (behavioral drift)
 
 Layer 4: Runtime & Platform
-  Agent runtime & orchestration      →  Azure Container Apps Job
+  Agent runtime & orchestration      →  Azure Container Apps Job (1 job, all agents in-process)
+                                        Environment provisioned; job blocked on private-registry creds
                                         A2A typed envelopes (a2a/envelope.py)
   AI-SBOM & provenance               →  run_id ties all artifacts; SBOM on roadmap
 

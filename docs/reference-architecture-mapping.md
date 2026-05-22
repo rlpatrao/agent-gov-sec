@@ -210,11 +210,14 @@
     <tr>
       <td style="width:33%; vertical-align:top; padding:8px; border-right:1px solid #ddd;">
         <strong>Agent runtime &amp; orchestration</strong><br/>
-        ✅ <strong>Azure Container Apps</strong> Job<br/>
+        🔄 <strong>Azure Container Apps</strong> Job<br/>
+        <em>1 job · all agents in-process<br/>
+        env provisioned ✅<br/>
+        job blocked 🔴 (private-registry<br/>
+        creds → InternalServerError)</em><br/>
         ✅ <strong>MAF</strong> Agent runtime<br/>
         ✅ <strong>A2A protocol</strong><br/>
         <em>typed envelopes · OTel spans</em><br/>
-        ✅ mTLS via APIM (agent→LLM)<br/>
         ✅ Sandboxed tool execution<br/>
         <em>closure-bound · path-limited</em>
       </td>
@@ -253,11 +256,13 @@
     <tr>
       <td style="width:25%; vertical-align:top; padding:8px; border-right:1px solid #ddd;">
         <strong>Cloud &amp; Compute</strong><br/>
-        ✅ <strong>Azure Container Apps</strong><br/>
-        <em>Consumption tier · serverless</em><br/>
-        ✅ <strong>Azure Container Registry</strong><br/>
-        🔄 VNet integration<br/>
-        <em>APIM internal mode ready</em>
+        🔄 <strong>Azure Container Apps</strong><br/>
+        <em>Environment ✅ provisioned<br/>
+        Job 🔴 blocked (private ACR creds)<br/>
+        1 job · all agents in one container<br/>
+        runs locally today</em><br/>
+        🔄 <strong>Azure Container Registry</strong><br/>
+        <em>provisioned · image not yet pushed</em>
       </td>
       <td style="width:25%; vertical-align:top; padding:8px; border-right:1px solid #ddd;">
         <strong>Model access</strong><br/>
@@ -346,7 +351,7 @@
 | **Azure Entra ID** | 18 per-agent Non-Human Identities (Managed Identity + Workload Identity Federation) |
 | **Azure Key Vault** | All secrets — TokenProvider with 5-min TTL, APIM named values |
 | **Azure OpenAI** | LLM inference — `gpt-5-3-codex` deployment, accessed via APIM only |
-| **Azure Container Apps** | Agent runtime host (Consumption tier) |
+| **Azure Container Apps** | 1 Job runs the entire pipeline (all agents in-process) — environment provisioned, job blocked on private-registry creds issue; pipeline runs locally today |
 | **Azure Application Insights** | OTel span sink + governance audit event store + KQL dashboard |
 | **OpenTelemetry (OTel)** | Instrumentation standard — `pipeline.run` root span → `a2a.dispatch.*` children |
 | **Azure PostgreSQL Flex** | Hash-chained audit ledger (provisioned; stdout mode until DSN set) |
