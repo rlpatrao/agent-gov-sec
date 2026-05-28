@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galaxy SDLC Platform — Reference Architecture v1.2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f3f4f6;
+    color: #111827;
+    font-size: 12px;
+    min-width: 1100px;
+  }
+  .page-wrapper {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+
+  /* ── TITLE ── */
+  .page-title {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: #1e293b;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+
+  /* ── GOVERNANCE BAR ── */
+  .gov-bar {
+    background: #1e293b;
+    color: #f1f5f9;
+    border-radius: 6px 6px 0 0;
+    padding: 8px 12px;
+    margin-bottom: 0;
+    display: flex;
+    gap: 0;
+  }
+  .gov-bar-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: #94a3b8;
+    text-transform: uppercase;
+    white-space: nowrap;
+    padding-right: 10px;
+    border-right: 1px solid #334155;
+    margin-right: 10px;
+    flex-shrink: 0;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .gov-sections {
+    display: flex;
+    flex: 1;
+    gap: 8px;
+  }
+  .gov-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 4px 8px;
+    border-left: 1px solid #334155;
+  }
+  .gov-section:first-child {
+    border-left: none;
+  }
+  .gov-section-title {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 3px;
+  }
+  .gov-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  /* ── MAIN GRID ── */
+  .main-grid {
+    display: flex;
+    gap: 0;
+    background: #e5e7eb;
+    border: 1px solid #d1d5db;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+  }
+  .layers-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: #e5e7eb;
+  }
+  .observe-column {
+    width: 170px;
+    background: #faf5ff;
+    border-left: 2px solid #a78bfa;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    border-radius: 0 0 6px 0;
+  }
+  .observe-header {
+    background: #7c3aed;
+    color: white;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 8px 4px;
+    writing-mode: horizontal-tb;
+  }
+  .observe-body {
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+  }
+
+  /* ── LAYER ROW ── */
+  .layer-row {
+    display: flex;
+    background: white;
+    min-height: 120px;
+  }
+  .layer-label {
+    width: 90px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 4px;
+    text-align: center;
+    border-right: 3px solid currentColor;
+  }
+  .layer-num {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    opacity: 0.7;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .layer-name {
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.3;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .layer-content {
+    flex: 1;
+    display: flex;
+    gap: 1px;
+    background: #e5e7eb;
+  }
+  .sub-col {
+    flex: 1;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .sub-col-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chips-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  /* ── CHIP ── */
+  .chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 4px 0;
+    background: white;
+    border-radius: 20px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .chip-accent {
+    width: 4px;
+    align-self: stretch;
+    flex-shrink: 0;
+    border-radius: 20px 0 0 20px;
+  }
+  .chip-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .chip-text {
+    font-size: 11px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chip-prefix {
+    font-weight: 700;
+    color: #1e293b;
+  }
+  .chip-label {
+    color: #4b5563;
+    font-weight: 400;
+  }
+
+  /* gov chip shares most chip styles */
+  .gov-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 7px 3px 0;
+    background: #0f172a;
+    border-radius: 20px;
+    border: 1px solid #334155;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .gov-chip .chip-prefix {
+    color: #e2e8f0;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .gov-chip .chip-label {
+    color: #94a3b8;
+    font-size: 10px;
+  }
+
+  /* ── COLORS ── */
+  .l01 { color: #7c3aed; background-color: #faf5ff; }
+  .l01 .layer-label { background: #faf5ff; color: #7c3aed; border-color: #7c3aed; }
+  .l01 .sub-col { background: #faf5ff; }
+
+  .l02 { color: #1e40af; background-color: #eff6ff; }
+  .l02 .layer-label { background: #eff6ff; color: #1e40af; border-color: #1e40af; }
+  .l02 .sub-col { background: #eff6ff; }
+
+  .l03 { color: #92400e; background-color: #fffbeb; }
+  .l03 .layer-label { background: #fffbeb; color: #92400e; border-color: #92400e; }
+  .l03 .sub-col { background: #fffbeb; }
+
+  .l04 { color: #065f46; background-color: #ecfdf5; }
+  .l04 .layer-label { background: #ecfdf5; color: #065f46; border-color: #065f46; }
+  .l04 .sub-col { background: #ecfdf5; }
+
+  .l05 { color: #374151; background-color: #f9fafb; }
+  .l05 .layer-label { background: #f9fafb; color: #374151; border-color: #374151; }
+  .l05 .sub-col { background: #f9fafb; }
+
+  /* accent colors for chips */
+  .accent-green  { background: #22c55e; }
+  .accent-amber  { background: #f59e0b; }
+  .accent-red    { background: #ef4444; }
+  .accent-gray   { background: #9ca3af; }
+  .accent-lgray  { background: #e5e7eb; }
+
+  /* dot colors */
+  .dot-green { background: #22c55e; }
+  .dot-amber { background: #f59e0b; }
+  .dot-gray  { background: #9ca3af; }
+  .dot-lgray { background: #e5e7eb; border: 1px solid #d1d5db; }
+
+  /* ── FOOTER ── */
+  .footer {
+    text-align: center;
+    margin-top: 12px;
+    font-size: 10px;
+    color: #6b7280;
+    letter-spacing: 0.04em;
+  }
+</style>
+</head>
+<body>
+<div class="page-wrapper">
+
+  <div class="page-title">Galaxy SDLC Platform — Reference Architecture</div>
+
+  <!-- GOVERNANCE BAR -->
+  <div class="gov-bar">
+    <div class="gov-bar-label">Governance</div>
+    <div class="gov-sections">
+
+      <div class="gov-section">
+        <div class="gov-section-title">Risk Classification &amp; Red-teaming</div>
+        <div class="gov-chips">
+          <div class="gov-chip">
+            <div class="chip-accent accent-green" style="width:4px;align-self:stretch;border-radius:20px 0 0 20px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-green"></div>
+            <span class="chip-prefix">agent_os</span>&nbsp;<span class="chip-label">Prompt Injection Detector</span>
+          </div>
+          <div class="gov-chip">
+            <div class="chip-accent accent-green" style="width:4px;align-self:stretch;border-radius:20px 0 0 20px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-green"></div>
+            <span class="chip-prefix">agent_os</span>&nbsp;<span class="chip-label">Credential Redactor</span>
+          </div>
+          <div class="gov-chip">
+            <div class="chip-accent accent-gray" style="width:4px;align-self:stretch;border-radius:20px 0 0 20px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-gray"></div>
+            <span class="chip-prefix">agent_compliance</span>&nbsp;<span class="chip-label">Red-team eval harness</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="gov-section">
+        <div class="gov-section-title">Compliance · EU AI Act · ISO 42001 · NIST AI RMF</div>
+        <div class="gov-chips">
+          <div class="gov-chip">
+            <div class="chip-accent accent-green" style="width:4px;align-self:stretch;border-radius:20px 0 0 20px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-green"></div>
+            <span class="chip-prefix">agent_os</span>&nbsp;<span class="chip-label">Hash-chained Audit Logger</span>
+          </div>
+          <div class="gov-chip">
+            <div class="chip-accent accent-green" style="width:4px;align-self:stretch;border-radius:20px 0 0 20px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-green"></div>
+            <span class="chip-prefix">Azure</span>&nbsp;<span class="chip-label">Entra ID NHIs (18)</span>
+          </div>
+          <div class="gov-chip">
+            <div class="chip-accent accent-green" style="width:4px;align-self:stretch;border-radius:20px 0 0 20px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-green"></div>
+            <span class="chip-prefix">agent_os</span>&nbsp;<span class="chip-label">Context Budget Guard</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="gov-section">
+        <div class="gov-section-title">Policy Lifecycle &amp; Exception Management</div>
+        <div class="gov-chips">
+          <div class="gov-chip">
+            <div class="chip-accent accent-green" style="width:4px;align-self:stretch;border-radius:20px 0 0 20px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-green"></div>
+            <span class="chip-prefix">YAML</span>&nbsp;<span class="chip-label">Policy Engine (OPA-equiv)</span>
+          </div>
+          <div class="gov-chip">
+            <div class="chip-accent accent-green" style="width:4px;align-self:stretch;border-radius:20px 0 0 20px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-green"></div>
+            <span class="chip-prefix">agentmesh-platform</span>&nbsp;<span class="chip-label">Policy compose</span>
+          </div>
+          <div class="gov-chip">
+            <div class="chip-accent accent-gray" style="width:4px;align-self:stretch;border-radius:20px 0 0 20px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-gray"></div>
+            <span class="chip-prefix">Human-in-loop</span>&nbsp;<span class="chip-label">exception gate</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /gov-bar -->
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+    <div class="layers-column">
+
+      <!-- LAYER 01 -->
+      <div class="layer-row l01">
+        <div class="layer-label">
+          <div class="layer-num">Layer 01</div>
+          <div class="layer-name">Agent Application</div>
+        </div>
+        <div class="layer-content">
+
+          <div class="sub-col">
+            <div class="sub-col-title">Core platform agents</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">MAF</span> <span class="chip-label">Agent (core)</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">MAF</span> <span class="chip-label">agent-framework-core</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">Migration pipeline (5)</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-col">
+            <div class="sub-col-title">Custom &amp; Team agents</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-amber"></div>
+                <div class="chip-dot dot-amber"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">Discovery pipeline (5)</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">Coder variants ×10</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">LambdaAnalyzer</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LAYER 02 -->
+      <div class="layer-row l02">
+        <div class="layer-label">
+          <div class="layer-num">Layer 02</div>
+          <div class="layer-name">Agent Services</div>
+        </div>
+        <div class="layer-content">
+
+          <div class="sub-col">
+            <div class="sub-col-title">Harness &amp; Configurator</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">MAF</span> <span class="chip-label">AgentMiddleware chain</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">MAF</span> <span class="chip-label">Telemetry layers</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">YAML</span> <span class="chip-label">Agent config schema</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-col">
+            <div class="sub-col-title">Registries</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">agentmesh</span> <span class="chip-label">NHI registry (18)</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">agent_os</span> <span class="chip-label">CapabilityGuard</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Container Registry</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-col">
+            <div class="sub-col-title">Templates &amp; Utilities</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">Prompt library</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">YAML</span> <span class="chip-label">AWS→Azure mapping</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">A2A envelope schema</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-col">
+            <div class="sub-col-title">Memory Mgmt</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">MAF</span> <span class="chip-label">Per-run context isolation</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">Typed artifact handoff</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-lgray"></div>
+                <div class="chip-dot dot-lgray"></div>
+                <div class="chip-text"><span class="chip-prefix" style="color:#9ca3af;">Vector</span> <span class="chip-label" style="color:#9ca3af;">/ long-term memory</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LAYER 03 -->
+      <div class="layer-row l03">
+        <div class="layer-label">
+          <div class="layer-num">Layer 03</div>
+          <div class="layer-name">Security &amp; Control</div>
+        </div>
+        <div class="layer-content">
+
+          <div class="sub-col">
+            <div class="sub-col-title">Security Gateway &amp; LLM Router</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">APIM Consumption</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Sub-key + headers</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">100 RPM throttle</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-col">
+            <div class="sub-col-title">Guardrails &amp; Policy</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">agent_os</span> <span class="chip-label">PromptInjectionDetector</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">agent_os</span> <span class="chip-label">CredentialRedactor</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">YAML</span> <span class="chip-label">PolicyEvaluator</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-col">
+            <div class="sub-col-title">NHI &amp; Identity</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Entra ID (18 NHIs)</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Managed Identity</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">KV TokenProvider</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-col">
+            <div class="sub-col-title">Circuit Breakers</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">agent_os</span> <span class="chip-label">ContextBudgetGuard</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-amber"></div>
+                <div class="chip-dot dot-amber"></div>
+                <div class="chip-text"><span class="chip-prefix">agent_sre</span> <span class="chip-label">RogueAgentDetector</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">APIM</span> <span class="chip-label">100 RPM throttle</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-gray"></div>
+                <div class="chip-dot dot-gray"></div>
+                <div class="chip-text"><span class="chip-prefix">agent_sre</span> <span class="chip-label">CircuitBreaker</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LAYER 04 -->
+      <div class="layer-row l04">
+        <div class="layer-label">
+          <div class="layer-num">Layer 04</div>
+          <div class="layer-name">Runtime &amp; Platform</div>
+        </div>
+        <div class="layer-content">
+
+          <div class="sub-col">
+            <div class="sub-col-title">Agent Runtime &amp; Orchestration</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Container Apps Jobs (18)</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">MAF</span> <span class="chip-label">Agent runtime</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">A2A protocol</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-col">
+            <div class="sub-col-title">Deployment Pipeline</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Container Registry</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">Bicep IaC</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-gray"></div>
+                <div class="chip-dot dot-gray"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">GH Actions CI</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-col">
+            <div class="sub-col-title">AI-SBOM &amp; Provenance</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">OTel</span> <span class="chip-label">Trace correlation</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">Versioned migrated/vN</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">run-summary.json</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LAYER 05 -->
+      <div class="layer-row l05" style="border-radius: 0 0 0 6px;">
+        <div class="layer-label">
+          <div class="layer-num">Layer 05</div>
+          <div class="layer-name">Infrastructure</div>
+        </div>
+        <div class="layer-content">
+
+          <div class="sub-col">
+            <div class="sub-col-title">Cloud &amp; Compute</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Container Apps</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Log Analytics</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-amber"></div>
+                <div class="chip-dot dot-amber"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">VNet integration</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-col">
+            <div class="sub-col-title">Model Access</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Azure OpenAI</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">gpt-5-3-codex</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Responses API</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-col">
+            <div class="sub-col-title">Storage &amp; Persistence</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Files (galaxy-runs)</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">Filesystem migrated/</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-amber"></div>
+                <div class="chip-dot dot-amber"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Postgres Flex</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-lgray"></div>
+                <div class="chip-dot dot-lgray"></div>
+                <div class="chip-text"><span class="chip-prefix" style="color:#9ca3af;">Vector</span> <span class="chip-label" style="color:#9ca3af;">DB</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-col">
+            <div class="sub-col-title">Secret &amp; Key Mgmt</div>
+            <div class="chips-group">
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Key Vault</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Azure</span> <span class="chip-label">Managed Identity</span></div>
+              </div>
+              <div class="chip">
+                <div class="chip-accent accent-green"></div>
+                <div class="chip-dot dot-green"></div>
+                <div class="chip-text"><span class="chip-prefix">Galaxy</span> <span class="chip-label">TokenProvider 5min</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div><!-- /layers-column -->
+
+    <!-- OBSERVE COLUMN -->
+    <div class="observe-column">
+      <div class="observe-header">OBSERVE</div>
+      <div class="observe-body">
+
+        <div class="chip" style="flex-direction:column;align-items:flex-start;border-radius:8px;padding:0;">
+          <div style="display:flex;align-items:center;gap:5px;padding:4px 8px 4px 0;width:100%;">
+            <div class="chip-accent accent-green" style="width:4px;align-self:stretch;border-radius:8px 0 0 8px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-green" style="margin-left:4px;"></div>
+            <div class="chip-text" style="font-size:10px;"><span class="chip-prefix">OTel</span> <span class="chip-label">OTel SDK</span></div>
+          </div>
+        </div>
+
+        <div class="chip" style="flex-direction:column;align-items:flex-start;border-radius:8px;padding:0;">
+          <div style="display:flex;align-items:center;gap:5px;padding:4px 8px 4px 0;width:100%;">
+            <div class="chip-accent accent-green" style="width:4px;align-self:stretch;border-radius:8px 0 0 8px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-green" style="margin-left:4px;"></div>
+            <div class="chip-text" style="font-size:10px;"><span class="chip-prefix">Azure</span> <span class="chip-label">App Insights</span></div>
+          </div>
+        </div>
+
+        <div class="chip" style="flex-direction:column;align-items:flex-start;border-radius:8px;padding:0;">
+          <div style="display:flex;align-items:center;gap:5px;padding:4px 8px 4px 0;width:100%;">
+            <div class="chip-accent accent-green" style="width:4px;align-self:stretch;border-radius:8px 0 0 8px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-green" style="margin-left:4px;"></div>
+            <div class="chip-text" style="font-size:10px;"><span class="chip-prefix">Galaxy</span> <span class="chip-label">AuditLogger (SHA-256)</span></div>
+          </div>
+        </div>
+
+        <div class="chip" style="flex-direction:column;align-items:flex-start;border-radius:8px;padding:0;">
+          <div style="display:flex;align-items:center;gap:5px;padding:4px 8px 4px 0;width:100%;">
+            <div class="chip-accent accent-amber" style="width:4px;align-self:stretch;border-radius:8px 0 0 8px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-amber" style="margin-left:4px;"></div>
+            <div class="chip-text" style="font-size:10px;"><span class="chip-prefix">Azure</span> <span class="chip-label">Postgres ledger</span></div>
+          </div>
+        </div>
+
+        <div class="chip" style="flex-direction:column;align-items:flex-start;border-radius:8px;padding:0;">
+          <div style="display:flex;align-items:center;gap:5px;padding:4px 8px 4px 0;width:100%;">
+            <div class="chip-accent accent-amber" style="width:4px;align-self:stretch;border-radius:8px 0 0 8px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-amber" style="margin-left:4px;"></div>
+            <div class="chip-text" style="font-size:10px;"><span class="chip-prefix">agent_sre</span> <span class="chip-label">RogueAgentDetector</span></div>
+          </div>
+        </div>
+
+        <div class="chip" style="flex-direction:column;align-items:flex-start;border-radius:8px;padding:0;">
+          <div style="display:flex;align-items:center;gap:5px;padding:4px 8px 4px 0;width:100%;">
+            <div class="chip-accent accent-gray" style="width:4px;align-self:stretch;border-radius:8px 0 0 8px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-gray" style="margin-left:4px;"></div>
+            <div class="chip-text" style="font-size:10px;"><span class="chip-prefix">YAML</span> <span class="chip-label">Policy gap report</span></div>
+          </div>
+        </div>
+
+        <div class="chip" style="flex-direction:column;align-items:flex-start;border-radius:8px;padding:0;">
+          <div style="display:flex;align-items:center;gap:5px;padding:4px 8px 4px 0;width:100%;">
+            <div class="chip-accent accent-green" style="width:4px;align-self:stretch;border-radius:8px 0 0 8px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-green" style="margin-left:4px;"></div>
+            <div class="chip-text" style="font-size:10px;"><span class="chip-prefix">Azure</span> <span class="chip-label">Azure Monitor</span></div>
+          </div>
+        </div>
+
+        <div class="chip" style="flex-direction:column;align-items:flex-start;border-radius:8px;padding:0;">
+          <div style="display:flex;align-items:center;gap:5px;padding:4px 8px 4px 0;width:100%;">
+            <div class="chip-accent accent-green" style="width:4px;align-self:stretch;border-radius:8px 0 0 8px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-green" style="margin-left:4px;"></div>
+            <div class="chip-text" style="font-size:10px;"><span class="chip-prefix">Galaxy</span> <span class="chip-label">3-channel JSONL</span></div>
+          </div>
+        </div>
+
+        <div class="chip" style="flex-direction:column;align-items:flex-start;border-radius:8px;padding:0;">
+          <div style="display:flex;align-items:center;gap:5px;padding:4px 8px 4px 0;width:100%;">
+            <div class="chip-accent accent-amber" style="width:4px;align-self:stretch;border-radius:8px 0 0 8px;flex-shrink:0;"></div>
+            <div class="chip-dot dot-amber" style="margin-left:4px;"></div>
+            <div class="chip-text" style="font-size:10px;"><span class="chip-prefix">Azure</span> <span class="chip-label">Sentinel export</span></div>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div style="margin-top:auto;padding-top:12px;border-top:1px solid #e9d5ff;">
+          <div style="font-size:9px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Legend</div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:#374151;">
+              <div style="width:10px;height:10px;border-radius:50%;background:#22c55e;flex-shrink:0;"></div>
+              <span>Live / deployed</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:#374151;">
+              <div style="width:10px;height:10px;border-radius:50%;background:#f59e0b;flex-shrink:0;"></div>
+              <span>In progress</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:#374151;">
+              <div style="width:10px;height:10px;border-radius:50%;background:#9ca3af;flex-shrink:0;"></div>
+              <span>Planned / paused</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:#374151;">
+              <div style="width:10px;height:10px;border-radius:50%;background:#e5e7eb;border:1px solid #d1d5db;flex-shrink:0;"></div>
+              <span>N/A / future</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /observe-column -->
+
+  </div><!-- /main-grid -->
+
+  <div class="footer">
+    Galaxy SDLC Platform &mdash; Reference Architecture v1.2 &mdash; 2026-05-22 &nbsp;&middot;&nbsp; Virtusa
+  </div>
+
+</div><!-- /page-wrapper -->
+</body>
+</html>
