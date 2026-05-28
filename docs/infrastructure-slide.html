@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Galaxy SDLC — Azure Infrastructure</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    width: 1280px;
+    height: 720px;
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0f172a;
+    color: #f1f5f9;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: #1e293b;
+    border-bottom: 2px solid #7c3aed;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header h1 { font-size: 15px; font-weight: 700; color: #e2e8f0; letter-spacing: 0.5px; }
+  .header .sub { font-size: 11px; color: #94a3b8; }
+  .header .badge {
+    font-size: 10px; background: #7c3aed; color: #fff;
+    padding: 3px 10px; border-radius: 20px; font-weight: 600;
+  }
+
+  /* ── Layout ── */
+  .body { display: flex; height: calc(720px - 46px); gap: 0; }
+
+  /* ── Left panel (core services) ── */
+  .left { width: 420px; padding: 10px 12px; border-right: 1px solid #1e293b; display: flex; flex-direction: column; gap: 6px; }
+
+  /* ── Right panel (jobs + NHIs) ── */
+  .right { flex: 1; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+
+  /* ── Section label ── */
+  .section-label {
+    font-size: 9px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: #64748b; margin-bottom: 3px;
+  }
+
+  /* ── Service row ── */
+  .svc-row {
+    display: flex; align-items: center; gap: 8px;
+    background: #1e293b; border-radius: 6px; padding: 5px 10px;
+    border-left: 3px solid transparent;
+  }
+  .svc-row.green  { border-left-color: #22c55e; }
+  .svc-row.amber  { border-left-color: #f59e0b; }
+  .svc-row.gray   { border-left-color: #475569; }
+
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .dot.green  { background: #22c55e; }
+  .dot.amber  { background: #f59e0b; }
+  .dot.gray   { background: #475569; }
+
+  .svc-name { font-size: 11px; font-weight: 600; color: #e2e8f0; min-width: 160px; }
+  .svc-detail { font-size: 10px; color: #94a3b8; flex: 1; }
+  .svc-tag {
+    font-size: 9px; background: #0f172a; color: #7c3aed;
+    padding: 1px 6px; border-radius: 10px; border: 1px solid #312e81;
+    white-space: nowrap;
+  }
+
+  /* ── Jobs grid ── */
+  .jobs-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+  }
+  .job-chip {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 5px;
+    padding: 4px 6px;
+    font-size: 9px;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .job-chip .dot { width: 6px; height: 6px; }
+  .job-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ── NHI table ── */
+  .nhi-table { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+  .nhi-row {
+    background: #1e293b; border-radius: 4px; padding: 3px 8px;
+    font-size: 9px; color: #94a3b8; display: flex; align-items: center; gap: 5px;
+  }
+  .nhi-row strong { color: #e2e8f0; font-size: 9.5px; min-width: 90px; }
+  .nhi-row code { color: #7dd3fc; font-family: monospace; font-size: 8px; }
+
+  /* ── Constraints strip ── */
+  .constraints {
+    background: #1e293b; border-radius: 6px; padding: 5px 10px;
+    display: flex; gap: 16px; margin-top: auto;
+  }
+  .constraint { font-size: 9px; color: #64748b; }
+  .constraint strong { color: #f59e0b; }
+
+  /* ── Divider ── */
+  .divider { height: 1px; background: #1e293b; margin: 2px 0; }
+
+  /* ── Footer ── */
+  .footer {
+    position: absolute; bottom: 6px; right: 14px;
+    font-size: 9px; color: #334155;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div>
+    <h1>Galaxy SDLC — Azure Infrastructure</h1>
+    <div class="sub">Resource group: galaxyscanner-rg &nbsp;·&nbsp; Region: East US &nbsp;·&nbsp; Subscription: AI Labs</div>
+  </div>
+  <div class="badge">2026-05-22 · Verified</div>
+</div>
+
+<div class="body">
+
+  <!-- ── LEFT: Core services ─────────────────────────────────────── -->
+  <div class="left">
+    <div class="section-label">Core Platform Services</div>
+
+    <div class="svc-row green">
+      <div class="dot green"></div>
+      <div class="svc-name">Azure OpenAI</div>
+      <div class="svc-detail">gpt-5-3-codex · Responses API</div>
+      <div class="svc-tag">via APIM only</div>
+    </div>
+
+    <div class="svc-row green">
+      <div class="dot green"></div>
+      <div class="svc-name">Azure APIM</div>
+      <div class="svc-detail">Sub-key · headers · 100 RPM · AOAI key injection</div>
+      <div class="svc-tag">Consumption</div>
+    </div>
+
+    <div class="svc-row green">
+      <div class="dot green"></div>
+      <div class="svc-name">Azure Key Vault</div>
+      <div class="svc-detail">galaxyscanner-kv-d63cdd · secrets loaded</div>
+      <div class="svc-tag">access-policy</div>
+    </div>
+
+    <div class="svc-row green">
+      <div class="dot green"></div>
+      <div class="svc-name">Container Registry</div>
+      <div class="svc-detail">galaxyscannercrd63cdd.azurecr.io</div>
+      <div class="svc-tag">galaxy-scanner:0.2.1</div>
+    </div>
+
+    <div class="svc-row green">
+      <div class="dot green"></div>
+      <div class="svc-name">Application Insights</div>
+      <div class="svc-detail">OTel spans · governance events · KQL</div>
+      <div class="svc-tag">eastus-8</div>
+    </div>
+
+    <div class="svc-row green">
+      <div class="dot green"></div>
+      <div class="svc-name">Log Analytics</div>
+      <div class="svc-detail">galaxyscanner-law · linked to App Insights</div>
+    </div>
+
+    <div class="svc-row green">
+      <div class="dot green"></div>
+      <div class="svc-name">Storage Account</div>
+      <div class="svc-detail">galaxyscannersa · share: galaxy-runs</div>
+      <div class="svc-tag">artifact handoff</div>
+    </div>
+
+    <div class="svc-row green">
+      <div class="dot green"></div>
+      <div class="svc-name">ACA Environment</div>
+      <div class="svc-detail">galaxyscanner-aca-env · Azure Files mounted</div>
+    </div>
+
+    <div class="svc-row amber">
+      <div class="dot amber"></div>
+      <div class="svc-name">PostgreSQL Flex</div>
+      <div class="svc-detail">DDL ready · hash-chain wired · stdout mode</div>
+      <div class="svc-tag">not provisioned</div>
+    </div>
+
+    <div class="svc-row gray">
+      <div class="dot gray"></div>
+      <div class="svc-name">Microsoft Foundry</div>
+      <div class="svc-detail">ailab-solution-agentic-sdlc · idle</div>
+      <div class="svc-tag">roadmap</div>
+    </div>
+
+    <div class="constraints">
+      <div class="constraint"><strong>⚠ No RBAC write</strong> — ACR pull via admin creds · KV in access-policy mode</div>
+      <div class="constraint"><strong>⚠ APIM policy</strong> — portal-only, no IaC XML in repo</div>
+      <div class="constraint"><strong>⚠ ACA idles</strong> — ~5 min restart after inactivity</div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT: Jobs + NHIs ──────────────────────────────────────── -->
+  <div class="right">
+
+    <div class="section-label">Container App Jobs — 18 deployed · one per agent · own MI · Azure Files at /data</div>
+    <div class="jobs-grid">
+      <div class="job-chip"><div class="dot green"></div><span>Classifier</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>Scanner</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>ASTAnalyzer</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>Analyzer</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>LambdaAnalyzer</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>Architect</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>Coder</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>Reviewer</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>Security</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>SecurityReviewer</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>Tester</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>IaCGen</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>SLOWatcher</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>DiscoveryScanner</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>DiscoveryGrapher</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>DiscoveryBRD</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>DiscoveryArchitect</span></div>
+      <div class="job-chip"><div class="dot green"></div><span>DiscoveryStories</span></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section-label">Managed Identities (NHI) — 18 real Entra principals · client ID on every APIM request</div>
+    <div class="nhi-table">
+      <div class="nhi-row"><div class="dot green"></div><strong>Classifier</strong><code>c4be541a-a1f2-433c</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>Scanner</strong><code>e581d9ea-c4ca-411f</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>ASTAnalyzer</strong><code>7d22106a-5fe0-467c</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>Analyzer</strong><code>8cdc89ee-932e-4536</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>LambdaAnalyzer</strong><code>17de927d-a8d7-447b</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>Architect</strong><code>7b2e5510-bbee-4da4</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>Coder</strong><code>f51216a1-0e67-43c9</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>Reviewer</strong><code>b44d54a3-d329-49aa</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>Security</strong><code>72f1b573-1796-474e</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>SecurityReviewer</strong><code>ae944f1a-1032-4cbb</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>Tester</strong><code>7eeb7e1a-b6f2-45d5</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>IaCGen</strong><code>72728f28-0955-4378</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>SLOWatcher</strong><code>92f68691-ea09-4249</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>DiscoveryScanner</strong><code>40d042bb-a23e-4158</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>DiscoveryGrapher</strong><code>5a603c38-d178-4da4</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>DiscoveryBRD</strong><code>333b400b-170a-4ed0</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>DiscoveryArchitect</strong><code>cc0da4ab-22fa-4707</code></div>
+      <div class="nhi-row"><div class="dot green"></div><strong>DiscoveryStories</strong><code>26c11983-dad1-480e</code></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="footer">Galaxy SDLC Platform · Virtusa · galaxyscanner-rg · East US</div>
+
+</body>
+</html>
