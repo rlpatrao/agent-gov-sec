@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Galaxy SDLC — Infrastructure Connections</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1280px; height: 720px; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0f172a; color: #f1f5f9;
+    position: relative;
+  }
+
+  /* Header */
+  .hdr {
+    background: #1e293b; border-bottom: 2px solid #7c3aed;
+    padding: 9px 20px; display: flex; align-items: center;
+    justify-content: space-between; height: 44px;
+  }
+  .hdr h1 { font-size: 14px; font-weight: 700; color: #e2e8f0; letter-spacing: .4px; }
+  .hdr .pill { font-size: 10px; background: #7c3aed; color: #fff; padding: 2px 10px; border-radius: 20px; }
+
+  /* Box base */
+  .box {
+    position: absolute;
+    border-radius: 8px;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    text-align: center;
+    padding: 8px 10px;
+    line-height: 1.35;
+  }
+  .box .label  { font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; opacity: .7; margin-bottom: 3px; }
+  .box .name   { font-size: 12px; font-weight: 700; }
+  .box .detail { font-size: 10px; opacity: .7; margin-top: 2px; }
+
+  /* Colour variants */
+  .b-green  { background: #14532d; border: 1.5px solid #22c55e; color: #dcfce7; }
+  .b-blue   { background: #1e3a5f; border: 1.5px solid #60a5fa; color: #dbeafe; }
+  .b-amber  { background: #78350f; border: 1.5px solid #f59e0b; color: #fef3c7; }
+  .b-purple { background: #3b0764; border: 1.5px solid #a855f7; color: #f3e8ff; }
+  .b-gray   { background: #1e293b; border: 1.5px dashed #475569; color: #94a3b8; }
+  .b-teal   { background: #134e4a; border: 1.5px solid #2dd4bf; color: #ccfbf1; }
+
+  /* ACA wrapper */
+  .aca-wrap {
+    position: absolute;
+    left: 190px; top: 58px; width: 870px; height: 148px;
+    background: #0d2b1e; border: 2px solid #22c55e; border-radius: 10px;
+  }
+  .aca-title {
+    position: absolute; top: 6px; left: 12px;
+    font-size: 9px; font-weight: 700; letter-spacing: .8px;
+    text-transform: uppercase; color: #4ade80;
+  }
+  .aca-sub {
+    position: absolute; top: 6px; right: 12px;
+    font-size: 9px; color: #4ade80; opacity: .6;
+  }
+
+  /* Pipeline jobs inside ACA */
+  .pipe {
+    position: absolute; top: 30px; left: 12px; right: 12px;
+    display: flex; align-items: center; gap: 0;
+  }
+  .pjob {
+    flex: 1; background: #166534; border: 1px solid #22c55e;
+    border-radius: 6px; padding: 7px 4px;
+    text-align: center; color: #dcfce7; font-size: 10px; font-weight: 700;
+  }
+  .pjob .pname { font-size: 10px; }
+  .pjob .psub  { font-size: 8.5px; opacity: .65; margin-top: 2px; }
+  .arrow-r {
+    width: 24px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #4ade80; font-size: 14px;
+  }
+
+  /* SVG overlay */
+  svg.overlay {
+    position: absolute; left: 0; top: 0;
+    width: 1280px; height: 720px;
+    pointer-events: none;
+  }
+
+  /* Arrow labels */
+  .alabel {
+    position: absolute;
+    font-size: 9px; color: #94a3b8; text-align: center;
+    background: #0f172a; padding: 1px 4px; border-radius: 3px;
+    white-space: nowrap;
+  }
+  .alabel.green  { color: #4ade80; }
+  .alabel.blue   { color: #60a5fa; }
+  .alabel.amber  { color: #fbbf24; }
+  .alabel.purple { color: #c084fc; }
+  .alabel.teal   { color: #2dd4bf; }
+
+  /* Legend */
+  .legend {
+    position: absolute; bottom: 12px; left: 20px;
+    display: flex; gap: 18px; align-items: center;
+  }
+  .leg-item { display: flex; align-items: center; gap: 5px; font-size: 9px; color: #64748b; }
+  .leg-dot  { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="hdr">
+  <h1>Galaxy SDLC — Azure Infrastructure Connections</h1>
+  <div class="pill">galaxyscanner-rg · East US · Verified 2026-05-22</div>
+</div>
+
+<!-- ── Developer box ───────────────────────────────────── -->
+<div class="box b-blue" style="left:20px; top:78px; width:148px; height:90px;">
+  <div class="label">Trigger</div>
+  <div class="name">Developer</div>
+  <div class="detail">run_pipeline_aca.py</div>
+  <div class="detail" style="margin-top:4px; font-size:9px;">az containerapp job start</div>
+</div>
+
+<!-- ── ACA environment ────────────────────────────────── -->
+<div class="aca-wrap">
+  <div class="aca-title">Azure Container Apps — galaxyscanner-aca-env</div>
+  <div class="aca-sub">18 jobs · each has own Managed Identity · Azure Files at /data</div>
+  <div class="pipe">
+    <div class="pjob"><div class="pname">Classifier</div></div>
+    <div class="arrow-r">→</div>
+    <div class="pjob"><div class="pname">Analyzer</div></div>
+    <div class="arrow-r">→</div>
+    <div class="pjob"><div class="pname">Coder</div><div class="psub">×3 attempts</div></div>
+    <div class="arrow-r">→</div>
+    <div class="pjob"><div class="pname">Tester</div></div>
+    <div class="arrow-r">→</div>
+    <div class="pjob"><div class="pname">Reviewer</div></div>
+    <div class="arrow-r">→</div>
+    <div class="pjob"><div class="pname">Security</div><div class="psub">Reviewer</div></div>
+  </div>
+</div>
+
+<!-- ── Bottom service boxes ──────────────────────────── -->
+
+<!-- Azure Files -->
+<div class="box b-green" style="left:50px; top:390px; width:175px; height:80px;">
+  <div class="label">Artifact Store</div>
+  <div class="name">Azure Files</div>
+  <div class="detail">galaxyscannersa</div>
+  <div class="detail">galaxy-runs share</div>
+</div>
+
+<!-- ACR + Entra -->
+<div class="box b-blue" style="left:255px; top:390px; width:195px; height:80px;">
+  <div class="label">Image + Identity</div>
+  <div class="name">ACR &amp; Entra ID</div>
+  <div class="detail">galaxy-scanner:0.2.1</div>
+  <div class="detail">18 MI service principals</div>
+</div>
+
+<!-- Key Vault -->
+<div class="box b-amber" style="left:480px; top:390px; width:175px; height:80px;">
+  <div class="label">Secrets</div>
+  <div class="name">Azure Key Vault</div>
+  <div class="detail">APIM sub-key</div>
+  <div class="detail">AOAI key · conn strings</div>
+</div>
+
+<!-- APIM + OpenAI -->
+<div class="box b-purple" style="left:685px; top:390px; width:210px; height:80px;">
+  <div class="label">LLM Gateway</div>
+  <div class="name">APIM → Azure OpenAI</div>
+  <div class="detail">Sub-key · headers · 100 RPM</div>
+  <div class="detail">gpt-5-3-codex · Responses API</div>
+</div>
+
+<!-- Observability -->
+<div class="box b-teal" style="left:925px; top:390px; width:215px; height:80px;">
+  <div class="label">Observability</div>
+  <div class="name">App Insights → Log Analytics</div>
+  <div class="detail">OTel spans · governance events</div>
+  <div class="detail">KQL queries</div>
+</div>
+
+<!-- PostgreSQL (dashed / inactive) -->
+<div class="box b-gray" style="left:1165px; top:390px; width:100px; height:80px;">
+  <div class="label">Pending</div>
+  <div class="name">PostgreSQL</div>
+  <div class="detail">hash-chain</div>
+  <div class="detail">not provisioned</div>
+</div>
+
+
+<!-- ── SVG arrows ─────────────────────────────────────── -->
+<svg class="overlay">
+  <defs>
+    <marker id="arr-green"  markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+      <polygon points="0 0, 7 3.5, 0 7" fill="#22c55e"/>
+    </marker>
+    <marker id="arr-blue"   markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+      <polygon points="0 0, 7 3.5, 0 7" fill="#60a5fa"/>
+    </marker>
+    <marker id="arr-amber"  markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+      <polygon points="0 0, 7 3.5, 0 7" fill="#f59e0b"/>
+    </marker>
+    <marker id="arr-purple" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+      <polygon points="0 0, 7 3.5, 0 7" fill="#a855f7"/>
+    </marker>
+    <marker id="arr-teal"   markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+      <polygon points="0 0, 7 3.5, 0 7" fill="#2dd4bf"/>
+    </marker>
+    <marker id="arr-gray"   markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+      <polygon points="0 0, 7 3.5, 0 7" fill="#475569"/>
+    </marker>
+    <!-- reverse green for bidirectional -->
+    <marker id="arr-green-r" markerWidth="7" markerHeight="7" refX="2" refY="3.5" orient="auto">
+      <polygon points="7 0, 0 3.5, 7 7" fill="#22c55e"/>
+    </marker>
+  </defs>
+
+  <!-- 1. Developer → ACA (trigger) -->
+  <line x1="168" y1="123" x2="188" y2="123"
+        stroke="#60a5fa" stroke-width="1.8" marker-end="url(#arr-blue)"/>
+
+  <!-- 2. Developer → Azure Files (upload source, left side) -->
+  <polyline points="94,168 94,360 137,360 137,388"
+        fill="none" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arr-green)"/>
+
+  <!-- 3. Azure Files → Developer (download results) -->
+  <polyline points="63,388 63,360 80,360 80,168"
+        fill="none" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arr-green)"/>
+
+  <!-- 4. ACA ↔ Azure Files (artifact read/write) — bidirectional, center of Files -->
+  <line x1="260" y1="206" x2="215" y2="388"
+        stroke="#22c55e" stroke-width="1.8"
+        marker-start="url(#arr-green-r)" marker-end="url(#arr-green)"/>
+
+  <!-- 5. ACR+Entra → ACA (image pull + MI token) -->
+  <line x1="352" y1="388" x2="352" y2="208"
+        stroke="#60a5fa" stroke-width="1.8" marker-end="url(#arr-blue)"/>
+
+  <!-- 6. ACA → Key Vault (secret fetch) -->
+  <line x1="568" y1="208" x2="568" y2="388"
+        stroke="#f59e0b" stroke-width="1.8" marker-end="url(#arr-amber)"/>
+
+  <!-- 7. Key Vault → APIM (key injection, horizontal in bottom row) -->
+  <line x1="657" y1="430" x2="683" y2="430"
+        stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+
+  <!-- 8. ACA → APIM+OpenAI (LLM calls) -->
+  <line x1="790" y1="208" x2="790" y2="388"
+        stroke="#a855f7" stroke-width="1.8" marker-end="url(#arr-purple)"/>
+
+  <!-- 9. ACA → App Insights (OTel spans) -->
+  <line x1="1032" y1="208" x2="1032" y2="388"
+        stroke="#2dd4bf" stroke-width="1.8" marker-end="url(#arr-teal)"/>
+
+  <!-- 10. ACA → PostgreSQL (dashed, inactive) -->
+  <line x1="1215" y1="208" x2="1215" y2="388"
+        stroke="#475569" stroke-width="1.5" stroke-dasharray="5,4"
+        marker-end="url(#arr-gray)"/>
+</svg>
+
+
+<!-- ── Arrow labels ───────────────────────────────────── -->
+<div class="alabel blue"  style="left:176px; top:112px;">trigger jobs</div>
+
+<div class="alabel green" style="left:2px; top:275px; text-align:right; width:58px;">upload<br>source</div>
+<div class="alabel green" style="left:68px; top:275px;">download<br>results</div>
+
+<div class="alabel green" style="left:215px; top:295px;">artifacts<br>read/write</div>
+
+<div class="alabel blue"  style="left:332px; top:280px; text-align:center; width:62px;">image pull<br>MI token</div>
+
+<div class="alabel amber" style="left:538px; top:280px; text-align:center; width:66px;">secret<br>fetch</div>
+
+<div class="alabel amber" style="left:655px; top:417px;">key inject</div>
+
+<div class="alabel purple" style="left:754px; top:280px; text-align:center; width:78px;">LLM calls<br>x-nhi-id header</div>
+
+<div class="alabel teal"  style="left:1036px; top:280px; text-align:center; width:70px;">OTel spans<br>direct HTTPS</div>
+
+<div class="alabel" style="left:1182px; top:280px; text-align:center; width:66px;">hash-chain<br>(inactive)</div>
+
+
+<!-- ── Legend ─────────────────────────────────────────── -->
+<div class="legend">
+  <div class="leg-item"><div class="leg-dot" style="background:#22c55e;"></div>Active / Live</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#60a5fa;"></div>Identity &amp; Image</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#f59e0b;"></div>Secrets</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#a855f7;"></div>LLM Gateway</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#2dd4bf;"></div>Observability</div>
+  <div class="leg-item" style="margin-left:10px; color:#475569;">- - -  Not yet provisioned</div>
+  <div class="leg-item" style="margin-left:20px; color:#475569;">Note: OTel telemetry bypasses APIM by design — APIM only handles LLM traffic</div>
+</div>
+
+</body>
+</html>
