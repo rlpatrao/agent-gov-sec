@@ -37,13 +37,19 @@ logger = logging.getLogger("galaxy.aca-orchestrator")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-RG            = "galaxyscanner-rg"
-STORAGE_ACCT  = "galaxyscannersa"
-SHARE_NAME    = "galaxy-runs"
-JOB_PREFIX    = "galaxy"
+RG               = "galaxyscanner-rg"
+SUBSCRIPTION_ID  = "8aee075f-c478-4da6-872c-ebcfef7a11c6"
+STORAGE_ACCT     = "galaxyscannersa"
+SHARE_NAME       = "galaxy-runs"
+JOB_PREFIX       = "galaxy"
+ACR_SERVER       = "galaxyscannercrd63cdd.azurecr.io"
+DEFAULT_IMAGE_TAG = "0.2.1"
 MAX_CODER_ATTEMPTS = 3
 POLL_INTERVAL_SEC  = 15
 JOB_TIMEOUT_SEC    = 3600  # 1 hour max per job
+
+# Agents used by the migration pipeline (in dependency order)
+PIPELINE_AGENTS = ["classifier", "analyzer", "coder", "tester", "reviewer", "securityreviewer"]
 
 
 # ── Azure CLI helpers ─────────────────────────────────────────────────────────
@@ -112,17 +118,73 @@ def _run_agent(agent_name: str, run_id: str, module_id: str,
 
 # ── Azure Files upload / download ─────────────────────────────────────────────
 
+def _preflight_provision_jobs(image_tag: str) -> None:
+    """Delete stale portal-created shell jobs then redeploy via Bicep.
+
+    Portal-created jobs have a container named after the job (e.g.
+    'galaxy-classifier-job') with no image. Bicep adds a second container
+    named 'agent' but cannot remove the stale one — ACA requires ALL
+    containers to have images. Deleting first lets Bicep create clean jobs.
+    """
+    repo_root = Path(__file__).resolve().parent.parent
+    script = repo_root / "scripts" / "provision_aca_jobs.sh"
+
+    # ── Delete existing pipeline jobs ─────────────────────────────────────────
+    logger.info("==> Preflight: deleting existing pipeline jobs for clean redeploy...")
+    for agent in PIPELINE_AGENTS:
+        job_name = f"{JOB_PREFIX}-{agent}-job"
+        logger.info("    Deleting %s...", job_name)
+        _az("containerapp", "job", "delete",
+            "--name", job_name, "--resource-group", RG,
+            "--yes", check=False)
+
+    # Poll until all are gone (ARM delete is async)
+    logger.info("    Waiting for deletions to complete...")
+    for _ in range(40):  # up to ~2 min
+        remaining = []
+        for agent in PIPELINE_AGENTS:
+            job_name = f"{JOB_PREFIX}-{agent}-job"
+            r = _az("containerapp", "job", "show",
+                    "--name", job_name, "--resource-group", RG, check=False)
+            if r:
+                remaining.append(job_name)
+        if not remaining:
+            break
+        logger.info("    Still deleting: %s", remaining)
+        time.sleep(3)
+
+    # ── Redeploy via Bicep ────────────────────────────────────────────────────
+    logger.info("    Deploying jobs via Bicep (image tag: %s)...", image_tag)
+    result = subprocess.run(
+        ["bash", str(script), "--image-tag", image_tag],
+        cwd=str(repo_root),
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"provision_aca_jobs.sh failed (exit {result.returncode}). "
+            "Check az login and that the image exists in ACR."
+        )
+    logger.info("    Preflight complete — all jobs configured")
+
+
+def _mkdir_azure(path: str) -> None:
+    """Create a directory on Azure Files, creating each parent level first."""
+    parts = path.strip("/").split("/")
+    for i in range(1, len(parts) + 1):
+        _az(
+            "storage", "directory", "create",
+            "--account-name", STORAGE_ACCT,
+            "--share-name", SHARE_NAME,
+            "--name", "/".join(parts[:i]),
+            check=False,
+        )
+
+
 def _upload_source(source_dir: Path, run_id: str, module_id: str) -> None:
     """Copy source repo into the Azure Files share under runs/<run_id>/source/."""
     dest_path = f"runs/{run_id}/source"
     logger.info("Uploading source → azure-files://%s/%s/%s", SHARE_NAME, STORAGE_ACCT, dest_path)
-    _az(
-        "storage", "directory", "create",
-        "--account-name", STORAGE_ACCT,
-        "--share-name", SHARE_NAME,
-        "--name", dest_path,
-        check=False,
-    )
+    _mkdir_azure(dest_path)
     _az(
         "storage", "file", "upload-batch",
         "--account-name", STORAGE_ACCT,
@@ -148,7 +210,12 @@ def _download_results(run_id: str, local_out: Path) -> None:
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
 def run_pipeline(source_dir: Path, run_id: str, module_id: str,
-                 output_dir: Path, skip_upload: bool = False) -> None:
+                 output_dir: Path, skip_upload: bool = False,
+                 provision: bool = False,
+                 image_tag: str = DEFAULT_IMAGE_TAG) -> None:
+    if provision:
+        _preflight_provision_jobs(image_tag)
+
     if not skip_upload:
         _upload_source(source_dir, run_id, module_id)
 
@@ -210,6 +277,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--output-dir", default="migrated_aca", help="Local dir to download results into")
     p.add_argument("--skip-upload", action="store_true",
                    help="Skip source upload (already in Azure Files)")
+    p.add_argument("--provision", action="store_true",
+                   help="Delete and redeploy all pipeline jobs via Bicep before running "
+                        "(required first time or after image tag change)")
+    p.add_argument("--image-tag", default=DEFAULT_IMAGE_TAG,
+                   help=f"Container image tag to deploy (default: {DEFAULT_IMAGE_TAG})")
     return p.parse_args()
 
 
@@ -221,4 +293,6 @@ if __name__ == "__main__":
         module_id=args.module_id,
         output_dir=Path(args.output_dir) / args.run_id,
         skip_upload=args.skip_upload,
+        provision=args.provision,
+        image_tag=args.image_tag,
     )
