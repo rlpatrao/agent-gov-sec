@@ -20,6 +20,14 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
+# Pipeline output dirs (contain local paths, not source)
+migrated/
+migrated_aca/
+
+# Presentation files — keep in local only
+*.pptx
+*.docx
+
 # macOS
 .DS_Store
 
