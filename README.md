@@ -91,6 +91,37 @@ uv run python scripts/run_migration.py --source-dir legacy/aws_legacy --run-id r
 
 Output lands in `migrated/<repo>/vN/` (auto-versioned — previous runs are never overwritten).
 
+### Run via Azure Container Apps (cloud)
+
+Runs each agent in its own ACA Job with its own Managed Identity. Artifacts flow through the shared Azure Files mount.
+
+**Prerequisites:** `az login`, 18 ACA jobs deployed (see `scripts/provision_aca_jobs.sh`), and `.env` uploaded to Azure Files.
+
+```bash
+# Upload .env to Azure Files (shared by all 18 jobs)
+az storage file upload \
+  --account-name galaxyscannersa \
+  --share-name galaxy-runs \
+  --source .env --path .env
+
+# First run — provision clean jobs then execute pipeline
+python scripts/run_pipeline_aca.py \
+  --source-dir legacy/aws_legacy \
+  --run-id run-$(date +%Y%m%d-%H%M%S) \
+  --module-id aws_legacy \
+  --provision
+
+# Subsequent runs — jobs already deployed, skip provision
+python scripts/run_pipeline_aca.py \
+  --source-dir legacy/aws_legacy \
+  --run-id run-$(date +%Y%m%d-%H%M%S) \
+  --module-id aws_legacy
+```
+
+Results download automatically to `migrated_aca/<run-id>/` when the SecurityReviewer finishes.
+
+---
+
 ### Run the scanner pipeline
 
 ```bash
