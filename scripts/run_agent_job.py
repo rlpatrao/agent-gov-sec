@@ -78,7 +78,7 @@ set_run_logger(_rl)
 
 # ── A2A helpers ───────────────────────────────────────────────────────────────
 
-from a2a.envelope import A2ARequest, A2AResponse, A2AStatus  # noqa: E402
+from a2a.envelope import A2ARequest  # noqa: E402
 
 
 def _req(sender, recipient, intent, schema, payload) -> A2ARequest:
@@ -101,15 +101,26 @@ def _write_json(path: pathlib.Path, data: dict) -> None:
     logger.info("wrote %s", path)
 
 
+async def _flush_bundle(bundle) -> None:
+    try:
+        await bundle.pg_backend.flush_async()
+        await bundle.pg_backend.verify_chain()
+        bundle.audit_logger.flush()
+        await bundle.pg_backend.close()
+    except Exception as exc:
+        logger.warning("bundle.flush_error: %s", exc)
+
+
 # ── Per-agent run functions ───────────────────────────────────────────────────
 
 async def run_classifier() -> None:
     from agents.classifier_agent import ClassifierHandler, build_classifier_agent
-    handler = ClassifierHandler(build_classifier_agent())
-    source_dir = str(RUN_DIR / "source")
+    bundle = await build_classifier_agent(RUN_ID)
+    handler = ClassifierHandler(bundle.agent, nhi_id=bundle.nhi_id)
     req = _req("Orchestrator", "Classifier", "classify_repo",
-               "ClassificationRequest/v1", {"source_dir": source_dir})
+               "ClassifyRepoRequest/v1", {"repo_path": str(RUN_DIR / "source")})
     resp = await handler.handle(req)
+    await _flush_bundle(bundle)
     if not resp.is_ok:
         raise RuntimeError(f"Classifier failed: {resp.error}")
     _write_json(RUN_DIR / "classifier.json", resp.payload)
@@ -120,6 +131,8 @@ async def run_analyzer() -> None:
     clf = _read_json(RUN_DIR / "classifier.json")
     source_dir = str(RUN_DIR / "source")
     source_paths = [str(p) for p in pathlib.Path(source_dir).rglob("*") if p.is_file()]
+    bundle = await build_analyzer_agent(RUN_ID)
+    handler = AnalyzerHandler(bundle.agent, nhi_id=bundle.nhi_id)
     req = _req("Orchestrator", "Analyzer", "analyze_module",
                "AnalysisRequest/v1", {
                    "module": MODULE_ID,
@@ -127,9 +140,10 @@ async def run_analyzer() -> None:
                    "codebase_type": clf.get("codebase_type", "generic"),
                    "source_dir": source_dir,
                    "source_paths": source_paths,
+                   "output_dir": str(RUN_DIR / "analysis"),
                })
-    handler = AnalyzerHandler(build_analyzer_agent())
     resp = await handler.handle(req)
+    await _flush_bundle(bundle)
     if not resp.is_ok:
         raise RuntimeError(f"Analyzer failed: {resp.error}")
     _write_json(RUN_DIR / "analysis.json", resp.payload)
@@ -137,25 +151,34 @@ async def run_analyzer() -> None:
 
 async def run_coder() -> None:
     from agents.coder_agent import CoderHandler, build_coder_agent
-    clf = _read_json(RUN_DIR / "classifier.json")
+    clf      = _read_json(RUN_DIR / "classifier.json")
     analysis = _read_json(RUN_DIR / "analysis.json")
-    source_dir = str(RUN_DIR / "source")
-    output_root = str(RUN_DIR / "code")
-    attempt = int(os.environ.get("CODER_ATTEMPT", "1"))
-    previous_failures = os.environ.get("CODER_PREVIOUS_FAILURES")
+    source_dir   = str(RUN_DIR / "source")
+    output_root  = RUN_DIR / "code"
+    infra_root   = RUN_DIR / "infrastructure"
+    attempt      = int(os.environ.get("CODER_ATTEMPT", "1"))
+    prev_failures = os.environ.get("CODER_PREVIOUS_FAILURES")
 
-    req = _req("Orchestrator", "Coder", "generate_migration",
+    bundle = await build_coder_agent(
+        RUN_ID,
+        sandbox_root=output_root,
+        codebase_type=clf.get("codebase_type"),
+    )
+    handler = CoderHandler(bundle.agent, nhi_id=bundle.nhi_id)
+    req = _req("Orchestrator", "Coder", "migrate_module",
                "CodingRequest/v1", {
                    "module": MODULE_ID,
+                   "language": clf.get("language", "python"),
                    "codebase_type": clf.get("codebase_type", "generic"),
-                   "source_dir": source_dir,
-                   "output_root": output_root,
-                   "analysis_report_json": json.dumps(analysis),
                    "attempt": attempt,
-                   "previous_failures_json": previous_failures,
+                   "output_root": str(output_root),
+                   "infra_root": str(infra_root),
+                   "source_dir": source_dir,
+                   "analysis_markdown": analysis.get("analysis_markdown", ""),
+                   "previous_failures_json": prev_failures,
                })
-    handler = CoderHandler(build_coder_agent(codebase_type=clf.get("codebase_type")))
     resp = await handler.handle(req)
+    await _flush_bundle(bundle)
     if not resp.is_ok:
         raise RuntimeError(f"Coder failed: {resp.error}")
     _write_json(RUN_DIR / "code_report.json", resp.payload)
@@ -163,19 +186,23 @@ async def run_coder() -> None:
 
 async def run_tester() -> None:
     from agents.tester_agent import TesterHandler, build_tester_agent
-    code_report = _read_json(RUN_DIR / "code_report.json")
-    output_root = str(RUN_DIR / "code")
-    attempt = int(os.environ.get("TESTER_ATTEMPT", "1"))
+    output_root  = RUN_DIR / "code"
+    attempt      = int(os.environ.get("TESTER_ATTEMPT", "1"))
+    prev_failures = os.environ.get("TESTER_PREVIOUS_FAILURES")
 
-    req = _req("Orchestrator", "Tester", "evaluate_migration",
+    bundle = await build_tester_agent(RUN_ID, sandbox_root=output_root)
+    handler = TesterHandler(bundle.agent, nhi_id=bundle.nhi_id)
+    req = _req("Orchestrator", "Tester", "evaluate_module",
                "TestRequest/v1", {
                    "module": MODULE_ID,
-                   "output_root": output_root,
-                   "code_report_json": json.dumps(code_report),
                    "attempt": attempt,
+                   "migrated_source_dir": str(output_root),
+                   "test_dir": str(output_root / "tests"),
+                   "output_dir": str(output_root / "eval"),
+                   "previous_failures_json": prev_failures,
                })
-    handler = TesterHandler(build_tester_agent())
     resp = await handler.handle(req)
+    await _flush_bundle(bundle)
     if not resp.is_ok:
         raise RuntimeError(f"Tester failed: {resp.error}")
     _write_json(RUN_DIR / "test_report.json", resp.payload)
@@ -183,19 +210,22 @@ async def run_tester() -> None:
 
 async def run_reviewer() -> None:
     from agents.reviewer_agent import ReviewerHandler, build_reviewer_agent
-    analysis = _read_json(RUN_DIR / "analysis.json")
-    code_report = _read_json(RUN_DIR / "code_report.json")
-    output_root = str(RUN_DIR / "code")
+    analysis     = _read_json(RUN_DIR / "analysis.json")
+    test_report  = _read_json(RUN_DIR / "test_report.json") if (RUN_DIR / "test_report.json").exists() else {}
+    output_root  = RUN_DIR / "code"
 
-    req = _req("Orchestrator", "Reviewer", "review_migration",
+    bundle = await build_reviewer_agent(RUN_ID)
+    handler = ReviewerHandler(bundle.agent, nhi_id=bundle.nhi_id)
+    req = _req("Orchestrator", "Reviewer", "review_module",
                "ReviewRequest/v1", {
                    "module": MODULE_ID,
-                   "output_root": output_root,
-                   "analysis_report_json": json.dumps(analysis),
-                   "code_report_json": json.dumps(code_report),
+                   "language": analysis.get("language", "python"),
+                   "migrated_source_dir": str(output_root),
+                   "analysis_markdown": analysis.get("analysis_markdown", ""),
+                   "test_results_markdown": test_report.get("test_results_markdown", ""),
                })
-    handler = ReviewerHandler(build_reviewer_agent())
     resp = await handler.handle(req)
+    await _flush_bundle(bundle)
     if not resp.is_ok:
         raise RuntimeError(f"Reviewer failed: {resp.error}")
     _write_json(RUN_DIR / "review.json", resp.payload)
@@ -203,36 +233,23 @@ async def run_reviewer() -> None:
 
 async def run_security_reviewer() -> None:
     from agents.security_reviewer_agent import SecurityReviewerHandler, build_security_reviewer_agent
-    code_report = _read_json(RUN_DIR / "code_report.json")
-    output_root = str(RUN_DIR / "code")
+    analysis    = _read_json(RUN_DIR / "analysis.json")
+    output_root = RUN_DIR / "code"
 
-    req = _req("Orchestrator", "SecurityReviewer", "security_review",
+    bundle = await build_security_reviewer_agent(RUN_ID)
+    handler = SecurityReviewerHandler(bundle.agent, nhi_id=bundle.nhi_id)
+    req = _req("Orchestrator", "SecurityReviewer", "security_review_module",
                "SecurityReviewRequest/v1", {
                    "module": MODULE_ID,
-                   "output_root": output_root,
-                   "code_report_json": json.dumps(code_report),
+                   "language": analysis.get("language", "python"),
+                   "migrated_source_dir": str(output_root),
                })
-    handler = SecurityReviewerHandler(build_security_reviewer_agent())
     resp = await handler.handle(req)
+    await _flush_bundle(bundle)
     _write_json(RUN_DIR / "security_report.json", resp.payload)
-    if resp.payload.get("verdict") == "BLOCKED":
+    if resp.is_ok and resp.payload.get("recommendation") == "BLOCKED":
         logger.error("SecurityReviewer BLOCKED the migration")
         sys.exit(2)
-
-
-async def run_scanner() -> None:
-    from agents.scanner_agent import ScannerHandler, build_scanner_agent
-    source_dir = str(RUN_DIR / "source")
-    req = _req("Orchestrator", "Scanner", "scan_repo",
-               "ScanRequest/v1", {
-                   "source_dir": source_dir,
-                   "module_id": MODULE_ID,
-               })
-    handler = ScannerHandler(build_scanner_agent())
-    resp = await handler.handle(req)
-    if not resp.is_ok:
-        raise RuntimeError(f"Scanner failed: {resp.error}")
-    _write_json(RUN_DIR / "scan_report.json", resp.payload)
 
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
@@ -244,7 +261,6 @@ _HANDLERS: dict[str, object] = {
     "Tester":           run_tester,
     "Reviewer":         run_reviewer,
     "SecurityReviewer": run_security_reviewer,
-    "Scanner":          run_scanner,
 }
 
 

@@ -19,7 +19,7 @@ The Container App Job (`galaxyscanner-job`) that would host this in Azure is **b
 
 ## 2. Azure infrastructure — actual state
 
-Resource group: **`galaxyscanner-rg`** · Subscription: **AI Labs** · Region: **East US**
+Resource group: **`galaxyscanner-rg`** · Subscription: <your-subscription-name> · Region: **East US**
 
 | Resource | Name | Actual state | Gap / caveat |
 |---|---|---|---|

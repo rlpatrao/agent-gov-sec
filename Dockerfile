@@ -1,5 +1,6 @@
-# Galaxy Scanner — Container App Job image
-# Base is imported to our ACR from MCR (Docker Hub blocked by corporate proxy).
+# Galaxy SDLC — Container App Job image
+# All 18 agents share this image; AGENT_TYPE env var selects the handler at runtime.
+# Base is imported to ACR from MCR (Docker Hub blocked by corporate proxy).
 
 FROM galaxyscannercrd63cdd.azurecr.io/devcontainers-python:3.13 AS base
 
@@ -16,16 +17,16 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copy only the source files the scanner needs.
-COPY nhi_identity.py  run_tracer.py  token_provider.py  trace_ledger.py  run_scanner.py  ./
-COPY agents/            ./agents/
-COPY governance/        ./governance/
-COPY infra/             ./infra/
+COPY core/        ./core/
+COPY agents/      ./agents/
+COPY governance/  ./governance/
+COPY a2a/         ./a2a/
+COPY scripts/     ./scripts/
+COPY infra/       ./infra/
 
 # Devcontainers base ships with non-root user `vscode` (UID 1000).
 RUN chown -R vscode:vscode /app
 USER vscode
 
-# Default entrypoint: self-scan. Override --repo / --run-id / --module-id at job start.
-ENTRYPOINT ["python", "run_scanner.py"]
-CMD ["--repo", "/app", "--run-id", "run-azure-smoke-001", "--module-id", "self-scan"]
+# Entry point reads AGENT_TYPE env var to select which agent to run.
+ENTRYPOINT ["python", "scripts/run_agent_job.py"]

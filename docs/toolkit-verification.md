@@ -95,7 +95,7 @@ Net custom code: **governance/policies/*.yaml** + one `AuditBackend` impl + a th
 `az provider list --query "[?namespace=='Microsoft.Purview']"` → `NotRegistered`
 `az purview account list` → `[]`
 
-Subscription `AI Labs (801758)` has no Purview. Registering the provider + creating a Purview account is possible but brings its own licensing / governance onboarding. Out of scope for this phase. The `PurviewPolicyMiddleware` path is shelved; the `agent_os.GovernancePolicyMiddleware` path is used instead.
+Subscription `<your-subscription-name>` has no Purview. Registering the provider + creating a Purview account is possible but brings its own licensing / governance onboarding. Out of scope for this phase. The `PurviewPolicyMiddleware` path is shelved; the `agent_os.GovernancePolicyMiddleware` path is used instead.
 
 ## CI compliance (opportunistic, not in original plan)
 

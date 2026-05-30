@@ -29,7 +29,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full system design or
 
 - Python 3.13 or 3.14
 - `uv` (or `pip`)
-- `az` CLI logged into your Azure tenant and AI Labs subscription
+- `az` CLI logged into your Azure tenant and <your-subscription-name>
 
 ### Install
 

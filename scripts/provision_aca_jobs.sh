@@ -10,7 +10,7 @@
 #
 # Prerequisites:
 #   az login
-#   az account set --subscription 8aee075f-c478-4da6-872c-ebcfef7a11c6
+#   az account set --subscription <your-subscription-id>
 
 set -euo pipefail
 

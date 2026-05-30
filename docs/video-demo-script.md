@@ -319,7 +319,7 @@ Legacy Source (AWS Lambda, Spring Boot, ECS, Terraform…)
 `[ON SCREEN]` Show the Azure resource map from [docs/architecture.md](architecture.md) §1.7:
 
 ```
-Subscription: AI Labs
+Subscription: <your-subscription-name>
   Resource Group: galaxyscanner-rg
     ┌────────────────────────────────────────────────┐
     │  Key Vault          ← AOAI key + App Insights   │

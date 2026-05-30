@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -37,13 +38,13 @@ logger = logging.getLogger("galaxy.aca-orchestrator")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-RG               = "galaxyscanner-rg"
-SUBSCRIPTION_ID  = "8aee075f-c478-4da6-872c-ebcfef7a11c6"
+RG               = os.environ.get("AZURE_RESOURCE_GROUP", "galaxyscanner-rg")
+SUBSCRIPTION_ID  = os.environ.get("AZURE_SUBSCRIPTION_ID", "")
 STORAGE_ACCT     = "galaxyscannersa"
 SHARE_NAME       = "galaxy-runs"
 JOB_PREFIX       = "galaxy"
 ACR_SERVER       = "galaxyscannercrd63cdd.azurecr.io"
-DEFAULT_IMAGE_TAG = "0.2.1"
+DEFAULT_IMAGE_TAG = "0.3.1"
 MAX_CODER_ATTEMPTS = 3
 POLL_INTERVAL_SEC  = 15
 JOB_TIMEOUT_SEC    = 3600  # 1 hour max per job
@@ -66,17 +67,29 @@ def _az(*args: str, check: bool = True) -> dict | str:
 
 
 def _start_job(agent_name: str, run_id: str, module_id: str,
-               extra_env: dict[str, str] | None = None) -> str:
-    """Trigger a Container App Job and return the execution name."""
-    env_vars = [f"RUN_ID={run_id}", f"MODULE_ID={module_id}"]
-    if extra_env:
-        env_vars += [f"{k}={v}" for k, v in extra_env.items()]
+               extra_env: dict[str, str] | None = None,
+               image_tag: str = DEFAULT_IMAGE_TAG) -> str:
+    """Update job env vars then trigger a Container App Job execution."""
+    job_name = f"{JOB_PREFIX}-{agent_name}-job"
 
+    # Build the env-var update: set run-specific vars while keeping AGENT_TYPE/NHI_CLIENT_ID
+    set_env_vars = [f"RUN_ID={run_id}", f"MODULE_ID={module_id}"]
+    if extra_env:
+        set_env_vars += [f"{k}={v}" for k, v in extra_env.items()]
+
+    # Update the job definition to inject run-specific env vars into the template
+    _az(
+        "containerapp", "job", "update",
+        "--name", job_name,
+        "--resource-group", RG,
+        "--set-env-vars", *set_env_vars,
+    )
+
+    # Start without env-var overrides so the full job template (volumes, AGENT_TYPE, MI) applies
     result = _az(
         "containerapp", "job", "start",
-        "--name", f"{JOB_PREFIX}-{agent_name}-job",
+        "--name", job_name,
         "--resource-group", RG,
-        "--env-vars", *env_vars,
     )
     execution_name = result.get("name", result) if isinstance(result, dict) else result
     logger.info("Started %s — execution: %s", agent_name, execution_name)
@@ -106,10 +119,11 @@ def _wait_for_job(agent_name: str, execution_name: str) -> str:
 
 
 def _run_agent(agent_name: str, run_id: str, module_id: str,
-               extra_env: dict[str, str] | None = None) -> None:
+               extra_env: dict[str, str] | None = None,
+               image_tag: str = DEFAULT_IMAGE_TAG) -> None:
     """Start a job, wait for it to finish, raise on failure."""
     logger.info("==> %s", agent_name.upper())
-    execution = _start_job(agent_name, run_id, module_id, extra_env)
+    execution = _start_job(agent_name, run_id, module_id, extra_env, image_tag=image_tag)
     status = _wait_for_job(agent_name, execution)
     if status != "Succeeded":
         raise RuntimeError(f"{agent_name} job {execution} ended with status: {status}")
@@ -220,10 +234,10 @@ def run_pipeline(source_dir: Path, run_id: str, module_id: str,
         _upload_source(source_dir, run_id, module_id)
 
     # Phase 0: Classifier
-    _run_agent("classifier", run_id, module_id)
+    _run_agent("classifier", run_id, module_id, image_tag=image_tag)
 
     # Phase 1: Analyzer
-    _run_agent("analyzer", run_id, module_id)
+    _run_agent("analyzer", run_id, module_id, image_tag=image_tag)
 
     # Phase 2+3: Coder → Tester (up to MAX_CODER_ATTEMPTS)
     tester_passed = False
@@ -231,7 +245,8 @@ def run_pipeline(source_dir: Path, run_id: str, module_id: str,
         logger.info("==> CODER attempt %d/%d", attempt, MAX_CODER_ATTEMPTS)
         try:
             _run_agent("coder", run_id, module_id,
-                       extra_env={"CODER_ATTEMPT": str(attempt)})
+                       extra_env={"CODER_ATTEMPT": str(attempt)},
+                       image_tag=image_tag)
         except RuntimeError as e:
             logger.warning("Coder attempt %d failed: %s", attempt, e)
             if attempt == MAX_CODER_ATTEMPTS:
@@ -241,7 +256,8 @@ def run_pipeline(source_dir: Path, run_id: str, module_id: str,
 
         try:
             _run_agent("tester", run_id, module_id,
-                       extra_env={"TESTER_ATTEMPT": str(attempt)})
+                       extra_env={"TESTER_ATTEMPT": str(attempt)},
+                       image_tag=image_tag)
             tester_passed = True
             break
         except RuntimeError as e:
@@ -250,11 +266,11 @@ def run_pipeline(source_dir: Path, run_id: str, module_id: str,
                 logger.warning("Tests never passed — continuing to review with caveat")
 
     # Phase 4: Reviewer
-    _run_agent("reviewer", run_id, module_id)
+    _run_agent("reviewer", run_id, module_id, image_tag=image_tag)
 
     # Phase 5: SecurityReviewer (exit 2 if BLOCKED — see run_agent_job.py)
     try:
-        _run_agent("securityreviewer", run_id, module_id)
+        _run_agent("securityreviewer", run_id, module_id, image_tag=image_tag)
     except RuntimeError as e:
         if "status: Failed" in str(e):
             logger.error("SecurityReviewer BLOCKED the migration — pipeline aborted")

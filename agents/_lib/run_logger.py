@@ -53,10 +53,15 @@ def set_run_logger(rl: "RunLogger") -> None:
 class RunLogger:
     """Thread-safe JSONL writer for the three structured log channels."""
 
-    def __init__(self, run_id: str, *, logs_root: str | Path | None = None) -> None:
+    def __init__(self, run_id: str, *,
+                 logs_root: str | Path | None = None,
+                 log_dir: str | Path | None = None) -> None:
         self.run_id = run_id
-        base = Path(logs_root) if logs_root else Path("logs")
-        self._dir = base / run_id
+        if log_dir is not None:
+            self._dir = Path(log_dir)
+        else:
+            base = Path(logs_root) if logs_root else Path("logs")
+            self._dir = base / run_id
         self._dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._paths: dict[str, Path] = {

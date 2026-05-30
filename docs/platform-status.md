@@ -9,7 +9,7 @@
 
 | Resource | Name | Status | Notes |
 |---|---|---|---|
-| Resource Group | `galaxyscanner-rg` | ✅ Live | East US · AI Labs subscription |
+| Resource Group | `galaxyscanner-rg` | ✅ Live | East US · <your-subscription-name> |
 | Key Vault | `galaxyscanner-kv-d63cdd` | ✅ Live | Access-policy mode · secrets loaded |
 | Azure Container Registry | `galaxyscannercrd63cdd` | ✅ Live | Image `galaxy-scanner:0.2.1` pushed · admin creds enabled |
 | Azure OpenAI | `galaxyscanner-openai` | ✅ Live | `gpt-5-3-codex` · Responses API only (not Chat Completions) |
@@ -31,7 +31,7 @@
 |---|---|---|---|
 | Migration (local) | `scripts/run_migration.py` | ✅ Working | Classifier → Analyzer → Coder (×3) → Tester → Reviewer → SecurityReviewer |
 | Scanner (local) | `scripts/run_scanner.py` | ✅ Working | End-to-end confirmed |
-| Migration (ACA) | `scripts/run_pipeline_aca.py` | 🔶 Untested | Infrastructure deployed · needs `.env` on Azure Files share + first trigger |
+| Migration (ACA) | `scripts/run_pipeline_aca.py` | ✅ Verified | First end-to-end run completed 2026-05-29 (run-20260529-001705) · SecurityReviewer correctly BLOCKED on SAS key in local.settings.json |
 | Discovery | `scripts/run_discovery.py` | ❌ Stub | 5 agents built and unit-tested · orchestrator not wired |
 
 ---
@@ -72,37 +72,30 @@
 
 | Agent | MI Name | Client ID | Real Entra? |
 |---|---|---|---|
-| Classifier | `galaxy-classifier-mi` | `c4be541a-a1f2-433c-8166-9ebcf2d87b78` | ✅ |
-| Scanner | `galaxyscanner-mi` | `e581d9ea-c4ca-411f-9946-2e784d9c4046` | ✅ |
-| ASTAnalyzer | `galaxy-astanalyzer-mi` | `7d22106a-5fe0-467c-98f4-1080d8bcea4d` | ✅ |
-| Analyzer | `galaxy-analyzer-mi` | `8cdc89ee-932e-4536-a563-434af7df3c9b` | ✅ |
-| LambdaAnalyzer | `galaxy-lambdaanalyzer-mi` | `17de927d-a8d7-447b-90b7-d1d649009179` | ✅ |
-| Architect | `galaxy-architect-mi` | `7b2e5510-bbee-4da4-a99d-e60711fa0be7` | ✅ |
-| Coder | `galaxy-coder-mi` | `f51216a1-0e67-43c9-acb8-149954e8d4e0` | ✅ |
-| Reviewer | `galaxy-reviewer-mi` | `b44d54a3-d329-49aa-89cb-ea35522768ba` | ✅ |
-| Security | `galaxy-security-mi` | `72f1b573-1796-474e-b961-390ae8ad33fe` | ✅ |
-| SecurityReviewer | `galaxy-securityreviewer-mi` | `ae944f1a-1032-4cbb-ba53-8cb73a790043` | ✅ |
-| Tester | `galaxy-tester-mi` | `7eeb7e1a-b6f2-45d5-b721-2fa0b49da988` | ✅ |
-| IaCGen | `galaxy-iacgen-mi` | `72728f28-0955-4378-8782-cde5fdc6dff3` | ✅ |
-| SLOWatcher | `galaxy-slowatcher-mi` | `92f68691-ea09-4249-b9a1-221a5888c361` | ✅ |
-| DiscoveryScanner | `galaxy-discoveryscanner-mi` | `40d042bb-a23e-4158-92f8-70accc3023c7` | ✅ |
-| DiscoveryGrapher | `galaxy-discoverygrapher-mi` | `5a603c38-d178-4da4-94dd-85cedc9cd983` | ✅ |
-| DiscoveryBRD | `galaxy-discoverybrd-mi` | `333b400b-170a-4ed0-9fae-42866a93b84f` | ✅ |
-| DiscoveryArchitect | `galaxy-discoveryarchitect-mi` | `cc0da4ab-22fa-4707-8184-4e33c5884c3e` | ✅ |
-| DiscoveryStories | `galaxy-discoverystories-mi` | `26c11983-dad1-480e-bff8-09eb8f3ad7f0` | ✅ |
+| Classifier | `galaxy-classifier-mi` | `<your-client-id>` | ✅ |
+| Scanner | `galaxyscanner-mi` | `<your-client-id>` | ✅ |
+| ASTAnalyzer | `galaxy-astanalyzer-mi` | `<your-client-id>` | ✅ |
+| Analyzer | `galaxy-analyzer-mi` | `<your-client-id>` | ✅ |
+| LambdaAnalyzer | `galaxy-lambdaanalyzer-mi` | `<your-client-id>` | ✅ |
+| Architect | `galaxy-architect-mi` | `<your-client-id>` | ✅ |
+| Coder | `galaxy-coder-mi` | `<your-client-id>` | ✅ |
+| Reviewer | `galaxy-reviewer-mi` | `<your-client-id>` | ✅ |
+| Security | `galaxy-security-mi` | `<your-client-id>` | ✅ |
+| SecurityReviewer | `galaxy-securityreviewer-mi` | `<your-client-id>` | ✅ |
+| Tester | `galaxy-tester-mi` | `<your-client-id>` | ✅ |
+| IaCGen | `galaxy-iacgen-mi` | `<your-client-id>` | ✅ |
+| SLOWatcher | `galaxy-slowatcher-mi` | `<your-client-id>` | ✅ |
+| DiscoveryScanner | `galaxy-discoveryscanner-mi` | `<your-client-id>` | ✅ |
+| DiscoveryGrapher | `galaxy-discoverygrapher-mi` | `<your-client-id>` | ✅ |
+| DiscoveryBRD | `galaxy-discoverybrd-mi` | `<your-client-id>` | ✅ |
+| DiscoveryArchitect | `galaxy-discoveryarchitect-mi` | `<your-client-id>` | ✅ |
+| DiscoveryStories | `galaxy-discoverystories-mi` | `<your-client-id>` | ✅ |
 
 > Entra audit logs per agent only appear once a job actually runs and the MI token is exercised.
 
 ---
 
 ## Pending / Next Steps
-
-### High priority — unblocks cloud validation
-
-- [ ] **First ACA end-to-end run**
-  1. `az keyvault secret show --vault-name galaxyscanner-kv-d63cdd --name appinsights-connection-string --query value -o tsv` → paste into `.env`
-  2. `az storage file upload --account-name galaxyscannersa --share-name galaxy-runs --source .env --path .env`
-  3. `python scripts/run_pipeline_aca.py --source-dir legacy/aws_legacy --run-id run-$(date +%Y%m%d-%H%M%S) --module-id aws_legacy`
 
 ### Medium priority — platform completeness
 
@@ -135,8 +128,8 @@
 
 | Variable | Value |
 |---|---|
-| Subscription | `8aee075f-c478-4da6-872c-ebcfef7a11c6` (AI Labs) |
-| Tenant | `0d85160c-5899-44ca-acc8-db1501b993b6` |
+| Subscription | `<your-subscription-id>` (<your-subscription-name>) |
+| Tenant | `<your-tenant-id>` |
 | Resource group | `galaxyscanner-rg` · East US |
 | ACR | `galaxyscannercrd63cdd.azurecr.io` |
 | APIM gateway | `https://galaxyscanner-apim.azure-api.net/openai` |

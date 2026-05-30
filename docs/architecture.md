@@ -358,7 +358,7 @@ Schema: [`infra/ledger_schema.sql`](../infra/ledger_schema.sql)
 
 ```mermaid
 flowchart LR
-  subgraph Sub["Subscription: AI Labs · 8aee075f"]
+  subgraph Sub["Subscription: <your-subscription-name> · <your-subscription-id>"]
     subgraph RG["Resource Group: galaxyscanner-rg · East US"]
       KV["Key Vault\ngalaxyscanner-kv-d63cdd\nazure-openai-key · ai-conn-string"]
       ACR["Container Registry\ngalaxyscannercrd63cdd\ngalaxy-scanner:0.2.1"]
