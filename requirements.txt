@@ -62,13 +62,11 @@ PyYAML>=6.0.1
 fastapi>=0.115.0
 uvicorn>=0.32.0
 
-# ── LangGraph framework axis (adapters/langgraph/) ──────────────────────────
-# The non-MAF agent framework the governance stack also wraps (demo payload:
-# FinOps / Auditor / Rogue). create_agent + AgentMiddleware come from langchain>=1.0;
-# langchain-openai is only needed for live model runs (the demo uses a fake model).
-langchain>=1.0
-langgraph>=1.0
-langchain-openai>=1.0
+# ── LangGraph framework axis (demo only — NOT a base dependency) ────────────
+# The LangGraph demo payload's deps are opt-in via the `.[langgraph]` extra
+# (langchain>=1.0, langgraph>=1.0, langchain-openai>=1.0) — see pyproject.toml.
+# Base installs of the governance platform don't need them; the langgraph tests
+# skip cleanly when absent. Install with:  pip install '.[langgraph]'
 
 # ── Dev / test ──────────────────────────────────────────────────────────────
 pytest>=8.0.0
