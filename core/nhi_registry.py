@@ -14,6 +14,12 @@ Federation), obtained via ``core.provider_factory.get_provider()``.
 CLIENT_IDs are not secrets — they are identity references. Store them in env
 vars or config, not a secret store.
 
+Extensibility (open/closed): the registry resolves an agent type from the
+static map **or** an ``NHI_CLIENT_ID_<AGENT_TYPE>`` env var, so payload/demo
+agent types register by setting their env var — **without editing this core
+file**. Keep new-agent registration out of ``core/`` and in env/config (a
+payload package can set import-time defaults; see ``payload_agents``).
+
 Significance:
   - Every action in the trace ledger has an nhi_id attached
   - The cloud's audit log shows per-agent activity independently
@@ -54,12 +60,9 @@ _NHI_CLIENT_IDS: dict[str, str] = {
     "DiscoveryBRD":         os.environ.get("NHI_CLIENT_ID_DISCOVERYBRD",         ""),
     "DiscoveryArchitect":   os.environ.get("NHI_CLIENT_ID_DISCOVERYARCHITECT",   ""),
     "DiscoveryStories":     os.environ.get("NHI_CLIENT_ID_DISCOVERYSTORIES",     ""),
-    # LangGraph demo payload (finops/auditor/rogue). Local-dev defaults are
-    # non-empty so the offline demo runs with no env config; in a real tenant
-    # each maps to its own Entra App / IAM role / GCP SA via NHI_CLIENT_ID_*.
-    "FinOps":               os.environ.get("NHI_CLIENT_ID_FINOPS",               "local-finops-nhi"),
-    "Auditor":              os.environ.get("NHI_CLIENT_ID_AUDITOR",              "local-auditor-nhi"),
-    "Rogue":                os.environ.get("NHI_CLIENT_ID_ROGUE",                "local-rogue-nhi"),
+    # Demo/payload agent types are NOT hardcoded here — they register via
+    # NHI_CLIENT_ID_<AGENT_TYPE> env (see NHIRegistry.get extensibility below),
+    # so core stays free of any specific payload's agent names.
 }
 
 
@@ -103,7 +106,15 @@ class NHIRegistry:
 
     @staticmethod
     def get(agent_type: str) -> AgentIdentity:
-        client_id = _NHI_CLIENT_IDS.get(agent_type)
+        # Resolution: the static map first, then an `NHI_CLIENT_ID_<AGENT_TYPE>`
+        # env var. The env fallback makes the registry **open for extension** —
+        # payload/demo agent types (e.g. a LangGraph demo's FinOps/Auditor/Rogue)
+        # register purely by setting their env var, with **no edit to this core
+        # file**. Resolved at call time so late-set env (or a payload package's
+        # import-time defaults) works.
+        client_id = _NHI_CLIENT_IDS.get(agent_type) or os.environ.get(
+            f"NHI_CLIENT_ID_{agent_type.upper()}", ""
+        )
         if not client_id:
             raise ValueError(
                 f"No NHI registered for agent type '{agent_type}'. "

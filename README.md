@@ -51,10 +51,9 @@ uv run python scripts/demo_governance.py     # minimal guard/redaction/ledger wa
 uv run python scripts/demo_two_agents.py      # full feature × agent matrix (3 LangGraph agents)
 ```
 
-`demo_two_agents.py` builds the three LangGraph agents (FinOpsAnalyst / Auditor / Rogue) with a
-fake chat model and drives the success **and** failure path of every control, printing a
-feature × agent results matrix and verifying the hash-chained ledger (incl. a tamper demo) —
-fully offline. The LangGraph axis needs `pip install '.[langgraph]'` (langchain≥1.0 + langgraph).
+`demo_two_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`) and drives every
+control on both its success and failure path across the three agents. Full walkthrough:
+[`docs/langgraph-demo.md`](docs/langgraph-demo.md).
 
 ### Run the tests
 
