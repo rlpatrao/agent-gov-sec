@@ -31,7 +31,6 @@ from langchain.agents import create_agent
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from adapters.langgraph.governance import build_langgraph_governance
-from adapters.azure.audit import PostgresHashChainBackend
 from agent_os.audit_logger import GovernanceAuditLogger
 from core.interfaces import SecretProvider
 from core.nhi_registry import NHIRegistry
@@ -48,7 +47,7 @@ class LangGraphAgentBundle:
     at end of run, ``await pg_backend.flush_async()`` / ``verify_chain()`` /
     ``close()``."""
     agent: Any                       # the compiled LangGraph (create_agent return)
-    pg_backend: PostgresHashChainBackend
+    pg_backend: Any                  # the provider's hash-chain AuditBackend (azure/aws/gcp/local)
     audit_logger: GovernanceAuditLogger
     mediator: Optional[DataAccessMediator]
     config: AgentConfigModel

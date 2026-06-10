@@ -14,8 +14,8 @@ from core import provider_factory
 from core.provider_factory import available_providers, get_provider
 
 
-def test_lists_all_three_providers():
-    assert set(available_providers()) == {"azure", "aws", "gcp"}
+def test_lists_all_providers():
+    assert set(available_providers()) == {"azure", "aws", "gcp", "local"}
 
 
 def test_default_is_azure(monkeypatch):

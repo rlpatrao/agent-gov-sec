@@ -45,7 +45,6 @@ from agent_os.context_budget import BudgetExceeded, ContextPriority, ContextSche
 from agent_os.credential_redactor import CredentialRedactor
 from agent_os.prompt_injection import PromptInjectionDetector, ThreatLevel, load_prompt_injection_config
 
-from adapters.azure.audit import PostgresHashChainBackend
 from governance.adapters.otel_audit_backend import OtelAuditBackend
 from governance.extensions.data_classification import DataClassificationCatalog
 from governance.extensions.data_drift import DataAccessDriftDetector, JsonFileBaselineStore
@@ -172,6 +171,11 @@ class GalaxyGuardMiddleware(AgentMiddleware):
     # ── per-model-call governance ──────────────────────────────────────────
     def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         text = _model_input_text(request)
+        # Show the prompt the guards see (redacted + truncated) at DEBUG, so a
+        # `--log-level DEBUG` run reads as: prompt → which guard fired → verdict.
+        if logger.isEnabledFor(logging.DEBUG):
+            safe = (self._redactor.redact(text) if self._redactor else text) or ""
+            logger.debug("guard.prompt   agent=%s nhi=%s :: %r", self._agent_type, self._nhi_id, safe[:240])
 
         # 1. Prompt injection (B4)
         if self._enable_pi and self._detector and text:
@@ -277,6 +281,11 @@ class GalaxyGuardMiddleware(AgentMiddleware):
 
     # ── audit helper ────────────────────────────────────────────────────────
     def _log(self, event_type: str, action: str, decision: str, reason: str, meta: dict) -> None:
+        # Readable verdict line (DEBUG) — INTERCEPTED on a block, else the decision.
+        if logger.isEnabledFor(logging.DEBUG):
+            tag = "INTERCEPTED" if decision in ("deny", "block") else decision.upper()
+            logger.debug("guard.verdict  agent=%s %-11s %-22s :: %s",
+                         self._agent_type, tag, event_type, reason)
         self._audit.log(AuditEntry(
             event_type=event_type, agent_id=self._agent_id, action=action,
             decision=decision, reason=reason,
@@ -315,7 +324,7 @@ async def build_langgraph_governance(
     enable_reasoning_trace: bool = False,
     catalog: Optional[DataClassificationCatalog] = None,
     mediator: Optional[DataAccessMediator] = None,
-) -> tuple[list, PostgresHashChainBackend, GovernanceAuditLogger, DataAccessMediator | None]:
+) -> tuple[list, Any, GovernanceAuditLogger, DataAccessMediator | None]:
     """Assemble the governance middleware for a LangGraph agent.
 
     Returns ``(middleware_list, pg_backend, audit_logger, mediator)``. The
@@ -333,8 +342,12 @@ async def build_langgraph_governance(
     audit.add_backend(InMemoryBackend())        # introspection (demo/tests)
     audit.add_backend(LoggingBackend())          # stdout
     audit.add_backend(OtelAuditBackend())        # App Insights / CloudWatch
-    pg_backend = await PostgresHashChainBackend.create(run_id=run_id)
-    audit.add_backend(pg_backend)                # hash-chained compliance archive
+    # Hash-chained compliance ledger — resolved via the selected cloud provider
+    # (azure → Postgres, aws → DynamoDB, gcp → BigQuery, local → in-memory), so
+    # CLOUD_PROVIDER picks the backend. No cloud is hardcoded here.
+    from core.provider_factory import get_provider
+    ledger = await get_provider().audit_backend(run_id=run_id)
+    audit.add_backend(ledger)
 
     drift = DataAccessDriftDetector(store=JsonFileBaselineStore()) if enable_data_drift else None
     if enable_data_fgac and mediator is None:
@@ -347,7 +360,7 @@ async def build_langgraph_governance(
     reasoning_validator = (
         ReasoningStepValidator(mediator=mediator) if enable_reasoning_guard else None
     )
-    reasoning_trace = ReasoningTraceLogger(audit_backend=pg_backend) if enable_reasoning_trace else None
+    reasoning_trace = ReasoningTraceLogger(audit_backend=ledger) if enable_reasoning_trace else None
 
     guard = GalaxyGuardMiddleware(
         agent_id=agent_id, agent_type=agent_type, nhi_id=nhi_id, run_id=run_id, audit_log=audit,
@@ -362,4 +375,4 @@ async def build_langgraph_governance(
     logger.info("langgraph.governance.stack_built",
                 extra={"agent_id": agent_id, "fgac": enable_data_fgac, "drift": enable_data_drift,
                        "reasoning_guard": enable_reasoning_guard, "reasoning_trace": enable_reasoning_trace})
-    return [guard], pg_backend, audit, mediator
+    return [guard], ledger, audit, mediator

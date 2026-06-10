@@ -148,6 +148,11 @@ class DynamoDbHashChainBackend(AuditBackend):
             prev = row["entry_hash"]
         return True
 
+    async def close(self) -> None:
+        # boto3 resource/clients need no explicit close; symmetric with the
+        # Postgres backend's close() so callers can await it uniformly.
+        pass
+
     # ── Helpers (shared shape with the Postgres backend) ──────────────────
 
     @staticmethod

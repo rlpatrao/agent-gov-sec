@@ -1,0 +1,11 @@
+# Egress allow-list (local/offline) — loaded by governance.guards.egress.
+# Cloud-neutral: only loopback is allowed (the offline demo makes no real egress).
+rules:
+  - domain: localhost
+    ports: [443]
+    protocol: tcp
+    action: allow
+  - domain: 127.0.0.1
+    ports: [443]
+    protocol: tcp
+    action: allow

@@ -11,9 +11,16 @@ env-extensible lookup) and its deps are the opt-in `.[langgraph]` extra.
 
 ```bash
 pip install '.[langgraph]'           # langchain>=1.0, langgraph>=1.0, langchain-openai>=1.0
-uv run python scripts/demo_two_agents.py            # results matrix only
+uv run python scripts/demo_two_agents.py            # results matrix only (azure adapters by default)
+uv run python scripts/demo_two_agents.py --aws      # run against the AWS adapter set
 uv run python scripts/demo_two_agents.py --verbose  # + the governance log stream
 ```
+
+**Cloud adapter set.** `--azure` (default) / `--aws` / `--gcp` / `--local` (or `--cloud X`)
+selects which provider's identity / egress / audit bindings the demo exercises — all
+offline. `--aws` resolves IAM identities, the Bedrock egress allow-list, and a DynamoDB
+(stdout-mode) hash-chain ledger; `--local` is fully cloud-neutral (env identity, in-memory
+ledger, no cloud SDK). `--gcp` is a WS6 skeleton and exits with a notice.
 
 No Azure credentials, no database, no live LLM — a `FakeToolCallingModel` stands in
 for the model, the audit ledger runs in stdout mode, and OTel no-ops.
