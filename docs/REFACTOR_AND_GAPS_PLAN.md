@@ -165,16 +165,20 @@ adapters/
 
 ---
 
-## WS3 — Sync base with MSGK (latest)
+## WS3 — Sync base with MSGK (latest) ✅ DONE (2026-06-09)
 
-- [ ] **3.1** Confirm v4 package names + module paths (does `agent_os.*` / `agentmesh.*` / `agent_sre.*` still import, or rename?). Gates everything below.
-- [ ] **3.2** Snapshot current pins: `agent-framework-core>=1.2.0,<2`, `agent-framework-foundry`, `agent-os-kernel>=3.2.2`, `agent-sre==3.2.2`, `agentmesh-platform>=3.2.2`.
-- [ ] **3.3** Read changelogs for the seams we depend on: `audit_logger.AuditBackend`, `egress_policy`, `credential_redactor`, `prompt_injection`, `context_budget`, `escalation`, `integrations.maf_adapter`, `RogueAgentDetector` (gap 3), and the **policy engine** (gap 2 = adopt).
-- [ ] **3.4** Bump in a branch. Verify the load-bearing exact pin `agent-sre==3.2.2` (pinned because `maf_adapter` imports a specific symbol) still resolves before unpinning.
-- [ ] **3.5** Fix adapter/middleware breakage; run tests.
-- [ ] **3.6** Update `docs/toolkit-verification.md` + `docs/maf-verification.md` with verified versions.
+> **Correction to the draft assumption:** there is **no "v4 umbrella package" rename.** The real toolkit packages keep their split names (`agent-framework-core`, `agent-framework-foundry`, `agent-framework-openai`, `agent-os-kernel`, `agent-sre`, `agentmesh-platform`) — the earlier WebFetch describing a 45→5 consolidation was unreliable. The env is `uv`-managed (no `pip` in the venv); versions were verified from dist-info + `uv pip list`.
 
-**Acceptance:** On latest compatible MSGK, tests green, verification docs updated, exact-pin question resolved.
+- [x] **3.1** Confirmed package names/imports unchanged: `agent_os.*`, `agentmesh.*`, `agent_sre.*`, `agent_framework.*`, `agent_framework_openai` all import. **No rename.**
+- [x] **3.2** Snapshotted prior pins (`agent-framework-core>=1.2.0,<2`, `agent-os-kernel>=3.2.2`, `agent-sre==3.2.2`, `agentmesh-platform>=3.2.2`) → `/tmp/ws3_env_before.txt` (full `uv pip freeze`).
+- [x] **3.3** Verified the seams resolve at the new versions (imported `audit_logger.AuditBackend/AuditEntry/GovernanceAuditLogger`, `egress_policy`, `credential_redactor`, `context_budget`, `prompt_injection`, `integrations.maf_adapter.create_governance_middleware`, plus `agent_framework.Agent` / `_middleware.AgentMiddleware` / `OpenAIChatClient`) — all OK.
+- [x] **3.4** Bumped to latest available: **agent-framework-core/foundry/openai 1.4.0 → 1.8.1**, **agent-sre 3.2.2 → 3.7.0**; `agent-os-kernel` and `agentmesh-platform` were already at **3.7.0** (latest). The load-bearing `agent-sre==3.2.2` exact pin is **released** — kernel was already 3.7.0 and 3.7.0 keeps `agent_sre.anomaly.RogueAgentDetector`; verified before relaxing. Controlled install changed only 5 packages (4 toolkit + `azure-ai-projects`).
+- [x] **3.5** No adapter/middleware breakage — **full suite 76 passed** at the new versions.
+- [x] **3.6** Verification record updated in **`docs/services-and-tech.md` §3** (the draft's `toolkit-verification.md` / `maf-verification.md` were archived in WS2) and `requirements.txt` floors bumped to `>=1.8.1,<2` / `>=3.7.0`.
+
+**Acceptance:** ✅ On latest compatible MSGK (toolkit at 3.7.0 / framework at 1.8.1), tests green, version table updated, exact-pin question resolved (released).
+
+> **Note (env vs lockfile):** the upgrade is applied to the live venv and reflected in `requirements.txt`. `uv.lock` and `pyproject.toml`'s optional-deps groups were not regenerated in this pass — regenerate the lock (`uv lock`) before a clean reinstall.
 
 ---
 

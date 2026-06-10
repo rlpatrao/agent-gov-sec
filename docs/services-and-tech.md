@@ -55,7 +55,7 @@ Live IDs / connection strings are kept out of the repo (scrubbed). Fill them int
 
 | Package | Version | Role |
 |---|---|---|
-| `agent-framework-core` | `>=1.2.0,<2` | Core `Agent`, `AgentMiddleware`, `ChatMiddleware`, observability layers, GenAI semantic conventions. We pin **core directly** (not the `agent-framework` meta) because the meta pulls `agent-framework-azure-ai-search`, which ships an empty `agent_framework/__init__.py` that clobbers the real one. |
+| `agent-framework-core` | `>=1.8.1,<2` (verified **1.8.1**) | Core `Agent`, `AgentMiddleware`, `ChatMiddleware`, observability layers, GenAI semantic conventions. We pin **core directly** (not the `agent-framework` meta) because the meta pulls `agent-framework-azure-ai-search`, which ships an empty `agent_framework/__init__.py` that clobbers the real one. |
 | `agent-framework-foundry` | latest | The Microsoft Foundry chat client — installed for completeness even though the OpenAI variant is used today. |
 | `agent_framework_openai` (transitive) | bundled w/ core | Provides `OpenAIChatClient` (speaks Azure OpenAI Responses API natively when `azure_endpoint=…` is passed). |
 
@@ -63,9 +63,9 @@ Live IDs / connection strings are kept out of the repo (scrubbed). Fill them int
 
 | Package | Version | Role |
 |---|---|---|
-| `agent-os-kernel` | `>=3.2.2` | The runtime governance engine. Provides `agent_os.policies.PolicyEvaluator`, `agent_os.audit_logger.GovernanceAuditLogger`, `agent_os.circuit_breaker.CircuitBreaker`, `agent_os.prompt_injection.PromptInjectionDetector`, and `agent_os.integrations.maf_adapter` (the MAF middleware this repo wraps). |
-| `agent-sre` | `==3.2.2` (exact) | Pinned exact because `agent_os.integrations.maf_adapter` imports `agent_sre.anomaly.RogueAgentDetector`, which only exists in 3.2.2 (renamed/removed in 1.1.2). |
-| `agentmesh-platform` | `>=3.2.2` | Required transitively by `agent_os.integrations.maf_adapter` (`from agentmesh.governance import AuditEntry, AuditLog`). Without it, imports fail. |
+| `agent-os-kernel` | `>=3.7.0` (verified **3.7.0**) | The runtime governance engine. Provides `agent_os.policies.PolicyEvaluator`, `agent_os.audit_logger.GovernanceAuditLogger`, `agent_os.circuit_breaker.CircuitBreaker`, `agent_os.prompt_injection.PromptInjectionDetector`, and `agent_os.integrations.maf_adapter` (the MAF middleware this repo wraps). |
+| `agent-sre` | `>=3.7.0` (verified **3.7.0**) | Provides `agent_sre.anomaly.RogueAgentDetector`, imported by `agent_os.integrations.maf_adapter`. **WS3:** the former `==3.2.2` exact pin was released — kernel was already 3.7.0, and 3.7.0 keeps the same symbol; the maf_adapter import + full suite verified green, so all three governance packages now align at 3.7.0. |
+| `agentmesh-platform` | `>=3.7.0` (verified **3.7.0**) | Required transitively by `agent_os.integrations.maf_adapter` (`from agentmesh.governance import AuditEntry, AuditLog`). Without it, imports fail. |
 
 ### 3.3 Azure SDK — identity + secrets
 
