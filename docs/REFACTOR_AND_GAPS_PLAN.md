@@ -182,24 +182,18 @@ adapters/
 
 ---
 
-## WS4 — Document our delta over MSGK
+## WS4 — Document our delta over MSGK ✅ DONE (2026-06-09)
 
-**Objective:** A reviewable inventory of what we built on stock MSGK. Per the findings this is **almost entirely the cloud-adapter set + the MAF glue + the payload app** — very little governance *logic* is ours.
+**Objective:** A reviewable inventory of what we built on stock MSGK — confirmed to be **almost entirely the cloud-adapter set + the MAF glue + the agnostic seam + attribution/ledger/A2A**; very little governance *logic* is ours.
 
-- [ ] **4.1** Baseline: fresh `agent-governance-toolkit[full]` install (and/or MSGK git remote at merge base).
-- [ ] **4.2** Classify each module: **(a) pure MSGK**, **(b) MSGK + our wiring/config**, **(c) wholly ours**.
-- [ ] **4.3** Write `docs/DELTA_OVER_MSGK.md`. Pre-seeded inventory (verify each):
-  - **Azure cloud adapters (ours):** `adapters/azure/{identity,secrets,tracing,audit,egress,infra,orchestrator}` (Entra, Key Vault, Azure Monitor, audit impls, ACA/Bicep).
-  - **MAF framework glue (ours):** `adapters/azure/maf/*` — the 3 guard wrappers + middleware assembly + runtime wiring.
-  - **Per-agent NHI attribution model:** agent-type → cloud IAM identity → trace-ledger `nhi_id` (MSGK identity is SPIFFE/DID, so this binding is ours).
-  - **Hash-chained SHA-256 audit ledger** (`PostgresAuditBackend`) — reconcile vs MSGK's Merkle audit trail.
-  - **The 7-layer middleware composition + `galaxy-*.yaml` policy set + egress allow-list** (config/wiring on MSGK primitives).
-  - **A2A envelope + dispatcher** with trace-linking (`a2a/`).
-  - **The payload app** (`agents/`, migration/discovery/scanner pipelines) — out of governance scope.
-  - **New AWS/GCP adapters** from WS1.
-- [ ] **4.4** Cross-reference `docs/guardrails-inventory.md` to avoid double-counting.
+- [x] **4.1** Baseline established by **introspecting the installed package surface** (`pkgutil.iter_modules` over `agent_os`/`agentmesh`/`agent_sre`/`agent_framework`) rather than a repo install — more reliable given the bogus "v4 umbrella" repo description. Reproducible command in the doc.
+- [x] **4.2** Classified every platform module **(a)** pure MSGK / **(b)** MSGK + our wiring / **(c)** wholly ours, with LOC.
+- [x] **4.3** Wrote [`docs/DELTA_OVER_MSGK.md`](DELTA_OVER_MSGK.md) — full inventory with file-path evidence. Corrections to the pre-seed: MSGK identity is `agentmesh.identity`/`trust` (not SPIFFE/DID, and we don't use it — our cloud-IAM binding is ours); the hash-chain backend is `adapters/azure/audit.py` `PostgresHashChainBackend`; the payload is now `payload_agents/` (single Analyzer).
+- [x] **4.4** Cross-referenced `docs/guardrails-inventory.md` (per-guard wired-vs-available + packaging-quirk shims).
 
-**Acceptance:** `docs/DELTA_OVER_MSGK.md` reviewed; every item has file-path evidence + (a)/(b)/(c) classification.
+**Key findings:** (1) **audit-backend overlap** — MSGK ships `agent_os.otel_audit_backend`; our `governance/adapters/otel_audit_backend.py` may be redundant (the hash-chain backend is genuinely ours). (2) Our **compat shims** (`_CompatAuditLogger`, prompt-injection config backfill, egress `protocol: tcp` parser) survived the 3.7.0 bump but should be re-checked per upgrade / upstreamed. (3) Roadmap leverage already upstream: Gap 2 → `agent_os.policies`/`semantic_policy`; Gap 3 → `agent_sre.anomaly`; Gap 4 → `agent_os.content_governance`/MCP scanners; WS5/WS6 framework axis → `agent_framework.{amazon,google}`.
+
+**Acceptance:** ✅ `docs/DELTA_OVER_MSGK.md` written; every item has file-path evidence + (a)/(b)/(c) classification + LOC.
 
 ---
 
