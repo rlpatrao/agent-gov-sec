@@ -1,8 +1,10 @@
 # Galaxy Agentic Governance Platform
 
-A runtime governance & security platform for multi-agent systems, built on the **Microsoft Agent Governance Toolkit (MSGK / `agent_os`)** and the Microsoft Agent Framework (MAF). It provides per-agent identity, a layered guard middleware stack, A2A governance, OTel tracing, and a hash-chained audit ledger — independent of the agents it governs.
+A runtime governance & security platform for multi-agent systems, built on the **Microsoft Agent Governance Toolkit (MSGK / `agent_os`)**. It provides per-agent identity, a layered guard middleware stack, A2A governance, OTel tracing, and a hash-chained audit ledger — independent of the agents it governs.
 
-> **Repo focus.** This repository is the **governance platform**. The agents are a **minimal demonstration payload** (`payload_agents/`) — just enough to show the governance stack wrapping a real MAF agent. The full multi-agent AWS→Azure migration product (migration / discovery / scanner pipelines, 18 agents, ACA deployment) has been moved to a local-only `archive/` and is not part of this repo. See [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) for the cloud-agnostic refactor roadmap.
+The core (`core/`, `governance/`, `a2a/`) is **framework- and cloud-agnostic** — it imports no agent framework and no cloud SDK. Both axes are pluggable behind `adapters/`: the **framework** axis binds the core to a specific agent runtime (`adapters/azure/maf/` for the Microsoft Agent Framework, `adapters/langgraph/` for LangGraph), and the **cloud** axis binds identity/secrets/tracing/audit/egress to a provider (`adapters/azure/`, `adapters/aws/`, `adapters/gcp/`). MAF is therefore one framework adapter among several, not a foundation.
+
+> **Repo focus.** This repository is the **governance platform**. The agents are a **minimal demonstration payload** (`payload_agents/`) — just enough to show the governance stack wrapping real agents (today: three LangGraph agents). The full multi-agent AWS→Azure migration product (migration / discovery / scanner pipelines, 18 agents, ACA deployment) has been moved to a local-only `archive/` and is not part of this repo. See [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) for the cloud-agnostic refactor roadmap.
 
 ## What this platform does
 
@@ -119,9 +121,10 @@ agentic-sdlc/
 │   ├── trace_ledger.py             Hash-chained audit ledger schema
 │   └── discovery_artifacts.py      Pydantic models
 │
-├── governance/                     Security & compliance layer
-│   ├── middleware.py               build_governance_stack() — the guard factory
-│   ├── guards/                     Guard implementations (MAF middleware wrapping MSGK primitives)
+├── governance/                     Security & compliance layer (framework-neutral)
+│   ├── guards/                     Framework-neutral guards (egress, escalation) — MAF/LangGraph
+│   │                               middleware wrappers live under adapters/<axis>/
+│   ├── extensions/                 WS7 gap modules (FGAC, data-access drift, reasoning guard/trace)
 │   ├── adapters/                   Audit backends (OTel, Postgres hash-chain)
 │   ├── policies/                   YAML declarative rules (galaxy-*.yaml)
 │   ├── configs/                    Guard configs (prompt-injection.yaml, egress.yaml)
