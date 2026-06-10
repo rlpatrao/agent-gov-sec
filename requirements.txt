@@ -19,6 +19,11 @@ agent-sre>=3.7.0
 # because we don't use the [full] extra (it drags the broken azure-ai-search).
 agentmesh-platform>=3.7.0
 
+# ── Standards-based policy engine (Cedar) for the WS7 gap modules ────────────
+# Evaluated via cedarpy directly: MSGK 3.7.0's CedarBackend targets the cedarpy
+# 3.x API and fails open; see governance/extensions/policy_engine.py.
+cedarpy>=4,<5
+
 # ── Azure identity + secrets (Workload Identity + Key Vault) ───────────────
 azure-identity>=1.19.0
 azure-keyvault-secrets>=4.8.0

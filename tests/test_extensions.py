@@ -223,14 +223,23 @@ def test_reasoning_guard_uses_cedar_when_wired():
 
 
 def test_cedar_conditional_abac_full_engine():
-    # Conditional ABAC (when {...}) needs the real Cedar engine; skip if absent.
-    pytest.importorskip("cedarpy")
+    # cedarpy is a base dependency — conditional ABAC (when {...}) evaluates for real.
     from governance.extensions.policy_engine import CedarAuthorizer
     from governance.extensions.data_classification import DataClassification, DataLabel
     auth = CedarAuthorizer()  # bundled authz.cedar
-    # RESTRICTED (>=3) denied for non-Auditor
-    assert auth.authorize_data(agent_type="FinOps", dataset="finops", table="billing", column="tax_id",
-                               label=DataLabel(classification=DataClassification.RESTRICTED, categories=["PII"])) is False
+
+    def data(agent, cls):
+        return auth.authorize_data(agent_type=agent, dataset="finops", table="billing", column="c",
+                                   label=DataLabel(classification=cls, categories=["PII"]))
+
+    # Data authz: classification floor + Auditor exception
+    assert data("FinOps", DataClassification.INTERNAL) is True       # <= CONFIDENTIAL → allow
+    assert data("FinOps", DataClassification.RESTRICTED) is False    # >= RESTRICTED, not Auditor → forbid
+    assert data("Auditor", DataClassification.RESTRICTED) is True    # Auditor exception
+    # Tool authz: per-agent capability allow-list expressed in Cedar
+    assert auth.authorize_action(principal="Coder", action="use_tool", resource="read_file") is True
+    assert auth.authorize_action(principal="Coder", action="use_tool", resource="shell_exec") is False
+    assert auth.authorize_action(principal="Analyzer", action="use_tool", resource="read_file") is False
 
 
 # ── Gap 4+: CoT/CoVe trace logging (mandatory redaction) ──────────────────────

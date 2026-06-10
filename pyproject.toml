@@ -15,6 +15,11 @@ dependencies = [
     "opentelemetry-api>=1.27.0",
     "pydantic>=2.0.0,<3",
     "PyYAML>=6.0.1",
+    # Standards-based policy engine (Cedar) for the WS7 gap modules — built in so
+    # GALAXY_POLICY_ENGINE=cedar works out of the box. Evaluated via cedarpy
+    # directly (MSGK 3.7.0's CedarBackend targets the cedarpy 3.x API and fails
+    # open; see governance/extensions/policy_engine.py).
+    "cedarpy>=4,<5",
 ]
 
 # Cloud adapters are opt-in. Install the one you target:
@@ -39,12 +44,6 @@ aws = [
 ]
 # WS6: google-auth, google-cloud-secret-manager, Cloud Trace exporter, BigQuery.
 gcp = []
-# Standards-based policy engine (Cedar) for the WS7 gap modules. MSGK ships the
-# Cedar backend; this brings the engine that evaluates conditional `when {}` rules.
-# Without it, MSGK's built-in matcher only handles coarse permit/forbid.
-cedar = [
-    "cedarpy>=3.2.0",
-]
 
 [tool.pytest.ini_options]
 # The repo's tests only — never recurse into the local-only archive/.

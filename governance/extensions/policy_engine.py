@@ -1,25 +1,28 @@
 """
-governance.extensions.policy_engine — standards-based authz via MSGK's Cedar backend.
+governance.extensions.policy_engine — standards-based authz via **Cedar**.
 
-Wires **Cedar** (AWS's authorization policy language) as the single, standards-based
-decision point for both **agent/tool authz** and **data authz**, through MSGK's
-``agent_os.policies.PolicyEvaluator.load_cedar`` + ``CedarBackend``. This is the
-answer to "RBAC/ABAC engine?": rather than add Casbin (a third engine), we use the
-Cedar backend MSGK already ships — it aligns with the AWS/Lake-Formation direction
-and is formally specified.
+Wires Cedar (AWS's authorization policy language) as the single, standards-based
+decision point for both **agent/tool authz** and **data authz**. This is the
+answer to "RBAC/ABAC engine?": rather than add Casbin (a redundant third engine),
+we use Cedar — it aligns with the AWS/Lake-Formation direction and is formally
+specified.
 
-``CedarAuthorizer`` exposes two entry points that the rest of the platform calls:
+``CedarAuthorizer`` exposes two entry points the platform calls:
   - ``authorize_action`` — agent/tool authz (principal · action · resource)
-  - ``authorize_data``   — data authz (resource carries classification/category/geo)
+  - ``authorize_data``   — data authz (ABAC over the MSGK ``DataLabel``: classification…)
 
-Both build a context dict and call ``PolicyEvaluator.evaluate`` (Cedar evaluates
-it). **Fail-closed:** any error → deny.
+Both build a Cedar request and evaluate it **fail-closed** (any error → deny).
 
-⚠️ Full Cedar evaluation requires the Cedar engine — ``cedarpy`` (Rust bindings)
-or the ``cedar`` CLI (``pip install '.[cedar]'``). Without it MSGK falls back to a
-built-in matcher that only handles coarse permit/forbid (no ``when`` conditions),
-so conditional ABAC policies will deny-by-default. The authorizer logs a clear
-warning in that case. Disabled by default; enable with ``GALAXY_POLICY_ENGINE=cedar``.
+> **Why cedarpy directly, not MSGK's ``CedarBackend``?** MSGK 3.7.0's Cedar
+> backend targets the cedarpy **3.x** API (``cedarpy.AuthorizationRequest``), but
+> only cedarpy **4.x** ships a wheel for this Python, and — worse — MSGK's backend
+> **fails open** (returns *allow*) when the cedarpy call errors. So we evaluate
+> against ``cedarpy.is_authorized`` (4.x) directly, fail-closed. The Cedar policy
+> set and the ABAC intent are unchanged; only the evaluation call differs. (MSGK
+> incompatibility + fail-open is worth reporting upstream.)
+
+``cedarpy`` is a base dependency, so the engine is available out of the box.
+Disabled by default; enable with ``GALAXY_POLICY_ENGINE=cedar``.
 """
 
 from __future__ import annotations
@@ -37,42 +40,45 @@ _DEFAULT_CEDAR = Path(__file__).parent / "configs" / "authz.cedar"
 
 
 class CedarAuthorizer:
-    """Cedar-backed authorizer for agent + data authz (via MSGK's PolicyEvaluator)."""
+    """Cedar-backed authorizer for agent + data authz (evaluated via cedarpy)."""
 
     def __init__(self, policy_path: Optional[Path] = None, policy_content: Optional[str] = None) -> None:
-        from agent_os.policies import PolicyEvaluator
-
-        self._evaluator = PolicyEvaluator()
+        import cedarpy  # base dependency; required for the standards-based engine
+        self._cedarpy = cedarpy
         if policy_content is None:
-            p = policy_path or (Path(os.environ.get(CEDAR_POLICY_PATH_ENV, "")) if os.environ.get(CEDAR_POLICY_PATH_ENV) else _DEFAULT_CEDAR)
+            env = os.environ.get(CEDAR_POLICY_PATH_ENV)
+            p = policy_path or (Path(env) if env else _DEFAULT_CEDAR)
             policy_content = p.read_text("utf-8") if p and p.exists() else None
         if policy_content is None:
             raise FileNotFoundError("no Cedar policy found (set GALAXY_CEDAR_POLICY_PATH or pass policy_content)")
-        self._evaluator.load_cedar(policy_content=policy_content)
+        self._policies = policy_content
 
     # ── agent / tool authz ────────────────────────────────────────────────
-    def authorize_action(self, *, principal: str, action: str, resource: str, **attrs: Any) -> bool:
-        ctx = {"principal": principal, "action": action, "resource": resource, **attrs}
-        return self._allow(ctx)
+    def authorize_action(self, *, principal: str, action: str, resource: str, **context: Any) -> bool:
+        rtype = "Tool" if action == "use_tool" else "Resource"
+        return self._decide(principal, action, rtype, resource, context)
 
-    # ── data authz ────────────────────────────────────────────────────────
+    # ── data authz (ABAC over the data label) ─────────────────────────────
     def authorize_data(self, *, agent_type: str, dataset: str, table: str, column: str, label: Any) -> bool:
-        ctx = {
-            "principal": agent_type,
-            "action": "read",
-            "resource": f"{dataset}.{table}.{column}",
+        context = {
             "classification": int(getattr(label, "classification", 0)),
             "categories": list(getattr(label, "categories", []) or []),
             "geography": getattr(label, "geography", "") or "",
         }
-        return self._allow(ctx)
+        return self._decide(agent_type, "read", "Resource", f"{dataset}.{table}.{column}", context)
 
-    def _allow(self, context: dict) -> bool:
+    def _decide(self, principal: str, action: str, rtype: str, resource: str, context: dict) -> bool:
+        request = {
+            "principal": f'Agent::"{principal}"',
+            "action": f'Action::"{action}"',
+            "resource": f'{rtype}::"{resource}"',
+            "context": context,
+        }
         try:
-            decision = self._evaluator.evaluate(context)
-            return bool(getattr(decision, "allowed", False))
+            result = self._cedarpy.is_authorized(request, self._policies, entities=[])
+            return result.decision == self._cedarpy.Decision.Allow
         except Exception as e:  # fail-closed
-            logger.warning("policy_engine.cedar_eval_failed", extra={"error": str(e)})
+            logger.warning("policy_engine.cedar_eval_failed", extra={"error": str(e), "principal": principal})
             return False
 
 
