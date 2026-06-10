@@ -6,7 +6,7 @@
 For the system design + sequence diagrams, see [architecture.md](architecture.md).
 For the cloud-agnostic refactor roadmap, see [REFACTOR_AND_GAPS_PLAN.md](REFACTOR_AND_GAPS_PLAN.md).
 
-> **Repo scope.** This repository is the **Galaxy Agentic Governance Platform** — a runtime governance & security layer (`core/`, `governance/`, `a2a/`) built on the Microsoft Agent Governance Toolkit (MSGK / `agent_os`) and the Microsoft Agent Framework (MAF), plus a **single `Analyzer` demonstration payload** (`payload_agents/`). The full multi-agent AWS→Azure migration product (~18 agents, the migration/discovery/scanner pipelines, ACA job deployment, the `Dockerfile`, the `legacy/` sample) has been moved to a **local-only, gitignored `archive/`** and is **not part of this repo**. Where this doc describes that product, it is labeled **(archived)** for context.
+> **Repo scope.** This repository is the **Galaxy Agentic Governance Platform** — a runtime governance & security layer (`core/`, `governance/`, `a2a/`) built on the `agent_os` / `agent_sre` / `agentmesh` packages and the `agent-framework` runtime, plus a **single `Analyzer` demonstration payload** (`payload_agents/`). The full multi-agent AWS→Azure migration product (~18 agents, the migration/discovery/scanner pipelines, ACA job deployment, the `Dockerfile`, the `legacy/` sample) has been moved to a **local-only, gitignored `archive/`** and is **not part of this repo**. Where this doc describes that product, it is labeled **(archived)** for context.
 >
 > **Azure coupling is current.** APIM egress and the Azure SDK bindings in `core/` are live today. The cloud-/framework-agnostic adapter restructure (`adapters/azure|aws|gcp/`) is **planned**, not done — see [REFACTOR_AND_GAPS_PLAN.md](REFACTOR_AND_GAPS_PLAN.md).
 
@@ -59,7 +59,7 @@ Live IDs / connection strings are kept out of the repo (scrubbed). Fill them int
 | `agent-framework-foundry` | latest | The Microsoft Foundry chat client — installed for completeness even though the OpenAI variant is used today. |
 | `agent_framework_openai` (transitive) | bundled w/ core | Provides `OpenAIChatClient` (speaks Azure OpenAI Responses API natively when `azure_endpoint=…` is passed). |
 
-### 3.2 Microsoft Agent Governance Toolkit (policies + audit + circuit breaker)
+### 3.2 Governance packages — `agent_os` / `agent_sre` / `agentmesh` (policies + audit + circuit breaker)
 
 | Package | Version | Role |
 |---|---|---|
