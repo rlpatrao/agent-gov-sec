@@ -66,9 +66,13 @@ class ReasoningStepValidator:
     """Validates planned reasoning steps against capability + data-scope policy
     before any of them execute."""
 
-    def __init__(self, mediator: Optional[Any] = None) -> None:
-        # mediator: governance.extensions.data_fgac.DataAccessMediator (for data_access steps)
+    def __init__(self, mediator: Optional[Any] = None, authorizer: Optional[Any] = None) -> None:
+        # mediator:   governance.extensions.data_fgac.DataAccessMediator (data_access steps)
+        # authorizer: governance.extensions.policy_engine.CedarAuthorizer (standards-based
+        #             agent/tool authz). When present, the Cedar engine is the tool-authz
+        #             decision point; otherwise the capability allow-list is used.
         self._mediator = mediator
+        self._authorizer = authorizer
 
     def validate_step(
         self,
@@ -78,6 +82,12 @@ class ReasoningStepValidator:
         allowed_tools: set[str],
     ) -> StepVerdict:
         if step.kind == "tool_call":
+            if self._authorizer is not None:
+                if step.tool and self._authorizer.authorize_action(
+                    principal=agent_type, action="use_tool", resource=step.tool,
+                ):
+                    return StepVerdict(step, True, "tool permitted by Cedar policy")
+                return StepVerdict(step, False, f"tool '{step.tool}' denied by Cedar policy", ["capability_violation"])
             if step.tool and step.tool in allowed_tools:
                 return StepVerdict(step, True, "tool in allow-list")
             return StepVerdict(

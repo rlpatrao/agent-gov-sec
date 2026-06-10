@@ -39,6 +39,12 @@ aws = [
 ]
 # WS6: google-auth, google-cloud-secret-manager, Cloud Trace exporter, BigQuery.
 gcp = []
+# Standards-based policy engine (Cedar) for the WS7 gap modules. MSGK ships the
+# Cedar backend; this brings the engine that evaluates conditional `when {}` rules.
+# Without it, MSGK's built-in matcher only handles coarse permit/forbid.
+cedar = [
+    "cedarpy>=3.2.0",
+]
 
 [tool.pytest.ini_options]
 # The repo's tests only — never recurse into the local-only archive/.

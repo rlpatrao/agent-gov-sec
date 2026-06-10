@@ -39,14 +39,18 @@ def _catalog():
     return DataClassificationCatalog.load(_CATALOG)
 
 
-def test_catalog_loads_from_env(monkeypatch):
-    from governance.extensions.data_classification import DataClassificationCatalog, Sensitivity
+def test_catalog_loads_msgk_types_from_env(monkeypatch):
+    from governance.extensions.data_classification import (
+        DataClassificationCatalog, DataClassification, DataLabel, ABACPolicy)
     monkeypatch.setenv("GALAXY_DATA_CLASSIFICATION_PATH", str(_CATALOG))
     cat = DataClassificationCatalog.load()  # no arg → resolves via env
-    assert cat.sensitivity_of("finops", "billing", "tax_id") == Sensitivity.RESTRICTED
-    assert cat.sensitivity_of("finops", "billing", "account_id") == Sensitivity.INTERNAL
+    lbl = cat.label_for("finops", "billing", "tax_id")
+    assert isinstance(lbl, DataLabel) and lbl.classification == DataClassification.RESTRICTED
     # unclassified column fails closed to RESTRICTED
-    assert cat.sensitivity_of("finops", "billing", "nope") == Sensitivity.RESTRICTED
+    assert cat.label_for("finops", "billing", "nope").classification == DataClassification.RESTRICTED
+    pols = cat.policies_for("FinOps")
+    assert len(pols) == 1 and isinstance(pols[0], ABACPolicy)
+    assert pols[0].max_classification == DataClassification.CONFIDENTIAL
 
 
 def test_fgac_masks_and_filters_for_finops():
@@ -71,12 +75,14 @@ def test_fgac_masks_and_filters_for_finops():
     assert out[0]["account_id"] == "a1"          # allowed, passes through
 
 
-def test_fgac_denies_out_of_scope_dataset():
+def test_fgac_finops_reading_hr_masks_by_category():
+    # FinOps HAS a policy, but HR-category columns aren't in its allowed categories
+    # → MSGK's evaluator denies them → masked (not a whole-request deny).
     from governance.extensions.data_fgac import DataAccessMediator
     med = DataAccessMediator(catalog=_catalog())
-    decision = med.authorize(agent_type="FinOps", dataset="hr", table="employees", columns=["salary"])
-    assert decision.denied
-    assert "not in agent scope" in decision.reason
+    d = med.authorize(agent_type="FinOps", dataset="hr", table="employees", columns=["employee_id", "salary"])
+    assert d.permitted
+    assert "salary" in d.masked_columns        # CONFIDENTIAL HR-category → not in FinOps scope → masked
 
 
 def test_fgac_unknown_agent_is_deny_all():
@@ -174,12 +180,57 @@ def test_reasoning_guard_denies_out_of_scope_data_access():
     from governance.extensions.reasoning_guard import ReasoningStepValidator, ReasoningStep
     v = ReasoningStepValidator(mediator=DataAccessMediator(catalog=_catalog()))
     plan = v.validate_plan(
-        agent_type="FinOps",
-        steps=[ReasoningStep(kind="data_access", dataset="hr", table="employees", columns=("salary",))],
+        agent_type="Intruder",   # no ABAC policy → mediator denies the whole request
+        steps=[ReasoningStep(kind="data_access", dataset="finops", table="billing", columns=("tax_id",))],
         allowed_tools=set(),
     )
     assert plan.allowed is False
     assert "data_out_of_scope" in plan.first_denial.signals
+
+
+# ── Cedar standards-based authz (policy_engine) ───────────────────────────────
+
+def test_cedar_authorizer_permit_all():
+    from governance.extensions.policy_engine import CedarAuthorizer
+    auth = CedarAuthorizer(policy_content="permit(principal, action, resource);")
+    assert auth.authorize_action(principal="FinOps", action="use_tool", resource="read_file") is True
+
+
+def test_cedar_authorizer_fail_closed():
+    from governance.extensions.policy_engine import CedarAuthorizer
+    auth = CedarAuthorizer(policy_content="forbid(principal, action, resource);")
+    assert auth.authorize_action(principal="FinOps", action="use_tool", resource="rm_rf") is False
+
+
+def test_build_authorizer_flag_gated(monkeypatch):
+    from governance.extensions import policy_engine as pe
+    monkeypatch.delenv(pe.POLICY_ENGINE_ENV, raising=False)
+    assert pe.build_authorizer() is None              # off by default
+    monkeypatch.setenv(pe.POLICY_ENGINE_ENV, "cedar")
+    assert pe.build_authorizer() is not None           # loads the bundled authz.cedar
+
+
+def test_reasoning_guard_uses_cedar_when_wired():
+    from governance.extensions.policy_engine import CedarAuthorizer
+    from governance.extensions.reasoning_guard import ReasoningStepValidator, ReasoningStep
+    # With Cedar wired, the engine is the tool-authz decision point (overrides the allow-list).
+    permit = ReasoningStepValidator(authorizer=CedarAuthorizer(policy_content="permit(principal, action, resource);"))
+    assert permit.validate_plan(agent_type="X", steps=[ReasoningStep(kind="tool_call", tool="anything")],
+                                allowed_tools=set()).allowed is True
+    forbid = ReasoningStepValidator(authorizer=CedarAuthorizer(policy_content="forbid(principal, action, resource);"))
+    assert forbid.validate_plan(agent_type="X", steps=[ReasoningStep(kind="tool_call", tool="anything")],
+                                allowed_tools={"anything"}).allowed is False
+
+
+def test_cedar_conditional_abac_full_engine():
+    # Conditional ABAC (when {...}) needs the real Cedar engine; skip if absent.
+    pytest.importorskip("cedarpy")
+    from governance.extensions.policy_engine import CedarAuthorizer
+    from governance.extensions.data_classification import DataClassification, DataLabel
+    auth = CedarAuthorizer()  # bundled authz.cedar
+    # RESTRICTED (>=3) denied for non-Auditor
+    assert auth.authorize_data(agent_type="FinOps", dataset="finops", table="billing", column="tax_id",
+                               label=DataLabel(classification=DataClassification.RESTRICTED, categories=["PII"])) is False
 
 
 # ── Gap 4+: CoT/CoVe trace logging (mandatory redaction) ──────────────────────

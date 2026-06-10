@@ -1,105 +1,124 @@
 """
-governance.extensions.data_classification — the data-classification catalog
-and per-agent data scope (Gap 1 support).
+governance.extensions.data_classification — schema classification catalog +
+per-agent ABAC policies, built on **MSGK's** ``agent_os.policies.data_classification``.
 
-Two declarative inputs, loaded from one YAML file:
+We do **not** re-implement classification or the ABAC decision — those are MSGK's
+``DataClassification`` (PUBLIC<INTERNAL<CONFIDENTIAL<RESTRICTED<TOP_SECRET),
+``DataLabel``, ``ABACPolicy`` and ``DataAccessEvaluator`` (most-restrictive-wins,
+with ``classify_text`` / ``detect_pii/phi/pci`` for unstructured content). This
+module is just the **deployment config**: a YAML map of which schema column
+carries which label, and each agent's ABAC policy — turned into MSGK objects.
 
-  classification:  source → dataset → table → column → sensitivity label
-  agent_scopes:    agent-type → {allowed_datasets, max_sensitivity, masked_columns,
-                                  row_filter}
-
-Sensitivity is ordered (PUBLIC < INTERNAL < CONFIDENTIAL < RESTRICTED) so the
-mediator can compare a column's label against an agent's clearance. This module
-is pure data + lookups — no cloud SDK, no enforcement; the mediator
-(``data_fgac``) turns it into allow/mask/deny decisions.
+The decision is MSGK's; the *enforcement* (row/column masking, cloud pushdown)
+lives in ``data_fgac`` and ``adapters/<cloud>/data_fgac`` and is genuinely ours.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
-from enum import IntEnum
 from pathlib import Path
 from typing import Optional
 
 import yaml
 
+# MSGK ABAC primitives — the classification + decision logic is upstream.
+from agent_os.policies.data_classification import (  # noqa: F401  (re-export)
+    ABACPolicy,
+    DataAccessEvaluator,
+    DataClassification,
+    DataLabel,
+    classify_text,
+    detect_pii,
+)
+
 logger = logging.getLogger(__name__)
 
 
-class Sensitivity(IntEnum):
-    PUBLIC = 0
-    INTERNAL = 1
-    CONFIDENTIAL = 2
-    RESTRICTED = 3
-
-    @classmethod
-    def parse(cls, value: str) -> "Sensitivity":
-        try:
-            return cls[str(value).strip().upper()]
-        except KeyError:
-            logger.warning("classification.unknown_sensitivity", extra={"value": value})
-            return cls.RESTRICTED  # fail-closed: unknown labels are treated as most sensitive
+def _parse_classification(value) -> DataClassification:
+    try:
+        return DataClassification[str(value).strip().upper()]
+    except KeyError:
+        logger.warning("classification.unknown_label", extra={"value": value})
+        return DataClassification.RESTRICTED  # fail-closed
 
 
 @dataclass(frozen=True)
-class AgentDataScope:
-    """What one agent type may read."""
-    allowed_datasets: frozenset[str] = frozenset()
-    max_sensitivity: Sensitivity = Sensitivity.PUBLIC
+class EnforcementScope:
+    """Enforcement-only directives (ours, not MSGK's decision): always-mask
+    overrides + row filter. MSGK decides *whether* an agent may read a label;
+    these say *how* to enforce on the rows/columns it gets back."""
     masked_columns: frozenset[str] = frozenset()
-    row_filter: dict[str, list] = field(default_factory=dict)   # column -> allowed values
+    row_filter: dict[str, list] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class DataClassificationCatalog:
-    """Column-level sensitivity labels + per-agent scopes."""
-    # dataset -> table -> column -> Sensitivity
-    _labels: dict[str, dict[str, dict[str, Sensitivity]]] = field(default_factory=dict)
-    _scopes: dict[str, AgentDataScope] = field(default_factory=dict)
+    """Schema column → MSGK ``DataLabel`` + agent → MSGK ``ABACPolicy``."""
+    _labels: dict[str, dict[str, dict[str, DataLabel]]] = field(default_factory=dict)
+    _policies: dict[str, ABACPolicy] = field(default_factory=dict)
+    _enforcement: dict[str, EnforcementScope] = field(default_factory=dict)
 
     # ── lookups ───────────────────────────────────────────────────────────
-    def sensitivity_of(self, dataset: str, table: str, column: str) -> Sensitivity:
-        """Label for a column; unclassified columns fail-closed to RESTRICTED."""
+    def label_for(self, dataset: str, table: str, column: str) -> DataLabel:
+        """MSGK ``DataLabel`` for a column; unclassified columns fail-closed to
+        a RESTRICTED label."""
         try:
             return self._labels[dataset][table][column]
         except KeyError:
-            return Sensitivity.RESTRICTED
+            return DataLabel(classification=DataClassification.RESTRICTED, categories=[])
 
-    def scope_for(self, agent_type: str) -> AgentDataScope:
-        """Scope for an agent; unknown agents get the empty (deny-all) scope."""
-        return self._scopes.get(agent_type, AgentDataScope())
+    def policies_for(self, agent_type: str) -> list[ABACPolicy]:
+        """MSGK ``ABACPolicy`` list for an agent (empty → no access)."""
+        p = self._policies.get(agent_type)
+        return [p] if p else []
 
-    def has_scope(self, agent_type: str) -> bool:
-        return agent_type in self._scopes
+    def enforcement_for(self, agent_type: str) -> EnforcementScope:
+        return self._enforcement.get(agent_type, EnforcementScope())
+
+    def has_agent(self, agent_type: str) -> bool:
+        return agent_type in self._policies
 
     # ── loading ───────────────────────────────────────────────────────────
     @classmethod
     def from_dict(cls, data: dict) -> "DataClassificationCatalog":
-        labels: dict[str, dict[str, dict[str, Sensitivity]]] = {}
+        labels: dict[str, dict[str, dict[str, DataLabel]]] = {}
         for ds, dsv in (data.get("classification", {}).get("datasets", {}) or {}).items():
             labels[ds] = {}
             for tbl, tblv in (dsv.get("tables", {}) or {}).items():
-                labels[ds][tbl] = {
-                    col: Sensitivity.parse(lbl)
-                    for col, lbl in (tblv.get("columns", {}) or {}).items()
-                }
-        scopes: dict[str, AgentDataScope] = {}
-        for agent, sv in (data.get("agent_scopes", {}) or {}).items():
-            scopes[agent] = AgentDataScope(
-                allowed_datasets=frozenset(sv.get("allowed_datasets", []) or []),
-                max_sensitivity=Sensitivity.parse(sv.get("max_sensitivity", "PUBLIC")),
-                masked_columns=frozenset(sv.get("masked_columns", []) or []),
-                row_filter=dict(sv.get("row_filter", {}) or {}),
+                labels[ds][tbl] = {}
+                for col, spec in (tblv.get("columns", {}) or {}).items():
+                    spec = spec or {}
+                    labels[ds][tbl][col] = DataLabel(
+                        classification=_parse_classification(spec.get("classification", "RESTRICTED")),
+                        categories=list(spec.get("categories", []) or []),
+                        geography=spec.get("geography", "") or "",
+                    )
+        policies: dict[str, ABACPolicy] = {}
+        for agent, sv in (data.get("agent_policies", {}) or {}).items():
+            sv = sv or {}
+            policies[agent] = ABACPolicy(
+                agent_id=agent,
+                allowed_classifications=[_parse_classification(c) for c in (sv.get("allowed_classifications", []) or [])],
+                allowed_categories=list(sv.get("allowed_categories", []) or []),
+                denied_categories=list(sv.get("denied_categories", []) or []),
+                required_geography=sv.get("required_geography") or None,
+                max_classification=_parse_classification(sv.get("max_classification", "PUBLIC")),
             )
-        return cls(_labels=labels, _scopes=scopes)
+        enforcement: dict[str, EnforcementScope] = {}
+        for agent, ev in (data.get("enforcement", {}) or {}).items():
+            ev = ev or {}
+            enforcement[agent] = EnforcementScope(
+                masked_columns=frozenset(ev.get("masked_columns", []) or []),
+                row_filter=dict(ev.get("row_filter", {}) or {}),
+            )
+        return cls(_labels=labels, _policies=policies, _enforcement=enforcement)
 
     @classmethod
     def load(cls, path: Optional[Path] = None) -> "DataClassificationCatalog":
-        """Resolution order: explicit ``path`` arg → ``GALAXY_DATA_CLASSIFICATION_PATH``
-        env var (the ops-supplied catalog) → the bundled example. Ops point the
-        env var at their own catalog; no code change needed."""
-        import os
+        """Resolution: explicit ``path`` → ``GALAXY_DATA_CLASSIFICATION_PATH`` env
+        (ops-supplied catalog) → bundled example."""
         if path is None:
             env_path = os.environ.get("GALAXY_DATA_CLASSIFICATION_PATH")
             path = Path(env_path) if env_path else (Path(__file__).parent / "configs" / "data-classification.example.yaml")
