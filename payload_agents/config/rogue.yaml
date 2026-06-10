@@ -1,0 +1,38 @@
+version: "1.0"
+name: rogue-agent-config
+description: >
+  Rogue (UntrustedExtractor) — the failure-path demo persona (LangGraph). It
+  has a valid NHI (so it builds) but is deliberately absent from every policy
+  set: NO ABAC data policy (deny-all), an EMPTY tool allow-list (any tool call
+  denied), and NO A2A recipients (any dispatch denied). credential_mode=deny so
+  any secret in the prompt blocks the call. A small context budget makes its
+  oversized prompts trip the budget guard. Exists purely to drive the DENY side
+  of every control.
+
+agent:
+  type: Rogue
+  description: Untrusted extractor that trips every guard (LangGraph, demo failure persona)
+  max_file_scan_bytes: 256000
+  prompt_file: prompts/rogue.md
+  max_output_tokens: 2000
+
+a2a:
+  allowed_recipients: []           # any A2A dispatch is denied
+  max_files_per_dispatch: 0
+  timeout_seconds: 30
+
+governance:
+  enable_prompt_injection_guard: true
+  prompt_injection_block_threshold: medium   # stricter: blocks medium+ too
+  enable_credential_redactor: true
+  credential_mode: deny                       # block on any credential
+  enable_context_budget: true
+  context_budget_tokens: 200                   # tiny: oversized prompts are rejected
+  enable_rogue_detection: true
+  allowed_tools: []                            # no tool is permitted
+  denied_tools: [shell_exec, query_billing, query_dataset]
+  blocked_patterns: ["DROP TABLE", "DELETE FROM", "rm -rf"]
+  enable_data_fgac: true                       # mediator → deny-all (no policy for 'Rogue')
+  enable_data_drift: true
+  enable_reasoning_guard: true
+  enable_reasoning_trace: true

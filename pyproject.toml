@@ -39,6 +39,14 @@ aws = [
 ]
 # WS6: google-auth, google-cloud-secret-manager, Cloud Trace exporter, BigQuery.
 gcp = []
+# Framework axis: govern LangGraph agents (the non-MAF counterpart to the
+# Microsoft Agent Framework glue). Cloud-orthogonal — combine with [azure]/[aws].
+#   pip install '.[langgraph]'
+langgraph = [
+    "langchain>=1.0",
+    "langgraph>=1.0",
+    "langchain-openai>=1.0",
+]
 
 [tool.pytest.ini_options]
 # The repo's tests only — never recurse into the local-only archive/.

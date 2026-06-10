@@ -54,6 +54,12 @@ _NHI_CLIENT_IDS: dict[str, str] = {
     "DiscoveryBRD":         os.environ.get("NHI_CLIENT_ID_DISCOVERYBRD",         ""),
     "DiscoveryArchitect":   os.environ.get("NHI_CLIENT_ID_DISCOVERYARCHITECT",   ""),
     "DiscoveryStories":     os.environ.get("NHI_CLIENT_ID_DISCOVERYSTORIES",     ""),
+    # LangGraph demo payload (finops/auditor/rogue). Local-dev defaults are
+    # non-empty so the offline demo runs with no env config; in a real tenant
+    # each maps to its own Entra App / IAM role / GCP SA via NHI_CLIENT_ID_*.
+    "FinOps":               os.environ.get("NHI_CLIENT_ID_FINOPS",               "local-finops-nhi"),
+    "Auditor":              os.environ.get("NHI_CLIENT_ID_AUDITOR",              "local-auditor-nhi"),
+    "Rogue":                os.environ.get("NHI_CLIENT_ID_ROGUE",                "local-rogue-nhi"),
 }
 
 

@@ -19,17 +19,20 @@ from payload_agents.config import (
 
 
 class TestLoadConfig:
-    def test_load_analyzer(self):
-        cfg = load_agent_config("analyzer")
-        assert cfg.agent_type == "Analyzer"
+    def test_load_finops(self):
+        cfg = load_agent_config("finops")
+        assert cfg.agent_type == "FinOps"
         assert cfg.max_file_scan_bytes == 256_000
-        assert cfg.a2a.max_files_per_dispatch == 60
-        assert cfg.a2a.timeout_seconds == 120
+        assert cfg.a2a.max_files_per_dispatch == 10
+        assert cfg.a2a.timeout_seconds == 60
         assert cfg.governance.enable_rogue_detection is True
+        # WS7 toggles surface through the schema (extra="forbid" would reject them otherwise).
+        assert cfg.governance.enable_data_fgac is True
+        assert cfg.governance.allowed_tools == ["query_billing", "summarize_costs"]
 
-    def test_load_analyzer_leaf(self):
-        cfg = load_agent_config("analyzer")
-        assert cfg.agent_type == "Analyzer"
+    def test_load_auditor_leaf(self):
+        cfg = load_agent_config("auditor")
+        assert cfg.agent_type == "Auditor"
         # Leaf agents legitimately have an empty allowed_recipients list —
         # the schema must permit it (not require min_length >= 1).
         assert cfg.a2a.allowed_recipients == []
@@ -40,8 +43,8 @@ class TestLoadConfig:
 
     def test_caching_returns_same_instance(self):
         clear_config_cache()
-        a = load_agent_config_cached("analyzer")
-        b = load_agent_config_cached("analyzer")
+        a = load_agent_config_cached("finops")
+        b = load_agent_config_cached("finops")
         assert a is b
 
     def test_invalid_yaml_raises_config_error(self, tmp_path: Path):
