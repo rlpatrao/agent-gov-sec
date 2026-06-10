@@ -79,6 +79,22 @@ def test_aws_identity_degrades_without_sdk(monkeypatch):
     assert prov.get_credential(client_id="", agent_type="Analyzer") is None
 
 
+def test_aws_resolve_client_id_env_then_convention(monkeypatch):
+    from adapters.aws.identity import AwsIdentityProvider
+    prov = AwsIdentityProvider()
+    # 1) env (IaC-provisioned role ARN) wins
+    monkeypatch.setenv("NHI_CLIENT_ID_FINOPS", "arn:aws:iam::999:role/explicit")
+    assert prov.resolve_client_id(agent_type="FinOps") == "arn:aws:iam::999:role/explicit"
+    # 2) no env → galaxy-<agent> role-name convention from AWS_ACCOUNT_ID
+    monkeypatch.delenv("NHI_CLIENT_ID_CODER", raising=False)
+    monkeypatch.setenv("AWS_ACCOUNT_ID", "111122223333")
+    assert prov.resolve_client_id(agent_type="Coder") == "arn:aws:iam::111122223333:role/galaxy-coder"
+    # 3) neither → None
+    monkeypatch.delenv("AWS_ACCOUNT_ID", raising=False)
+    monkeypatch.delenv("NHI_CLIENT_ID_NOBODY", raising=False)
+    assert prov.resolve_client_id(agent_type="Nobody") is None
+
+
 # ── Gateway: API Gateway vs direct-Bedrock egress contract ────────────────────
 
 class _FakeSecret:

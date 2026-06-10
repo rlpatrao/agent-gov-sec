@@ -46,11 +46,21 @@ class SecretProvider(Protocol):
 
 @runtime_checkable
 class IdentityProvider(Protocol):
-    """Resolves a cloud credential for an agent's Non-Human Identity.
-    Azure → ManagedIdentityCredential; AWS → STS AssumeRole/IRSA; GCP →
-    Workload Identity Federation. Returns ``None`` when no cloud identity is
-    available (local dev)."""
+    """Resolves an agent's Non-Human Identity against the cloud's identity system.
 
+    Two responsibilities:
+      - ``resolve_client_id`` — map an agent *type* to its cloud **principal id**,
+        sourced from the cloud directory: Azure → Entra (App Registration /
+        User-Assigned Managed Identity ``clientId``); AWS → IAM (role ARN);
+        GCP → the Service Account email. The standard bridge is an
+        ``NHI_CLIENT_ID_<AGENT_TYPE>`` env var that IaC populates from the
+        directory; adapters may also resolve live. Returns ``None`` if unknown.
+      - ``get_credential`` — exchange that principal id for a usable credential
+        (Azure ManagedIdentityCredential, AWS STS AssumeRole, GCP WIF). ``None``
+        in local dev where no cloud identity is available.
+    """
+
+    def resolve_client_id(self, *, agent_type: str) -> Optional[str]: ...
     def get_credential(self, *, client_id: str, agent_type: str) -> Optional[Any]: ...
 
 
