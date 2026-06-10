@@ -2,11 +2,11 @@
 
 **Last updated:** 2026-06-09
 
-**What this repo is.** A **cloud- and framework-agnostic runtime governance & security platform** for multi-agent systems, built on the **Microsoft Agent Governance Toolkit (MSGK / `agent_os`)**. It provides per-agent identity, a layered guard middleware stack, A2A governance, OpenTelemetry tracing, and a hash-chained audit ledger — independent of the agents it governs *and* independent of any single cloud or agent framework. The repo's value is the **interface seam + cloud/framework adapters + composition** on top of MSGK primitives, not the governance logic itself.
+**What this repo is.** A **cloud- and framework-agnostic runtime governance & security platform** for multi-agent systems, built on the **`agent_os` / `agent_sre` / `agentmesh` packages**. It provides per-agent identity, a layered guard middleware stack, A2A governance, OpenTelemetry tracing, and a hash-chained audit ledger — independent of the agents it governs *and* independent of any single cloud or agent framework. The repo's value is the **interface seam + cloud/framework adapters + composition** on top of `agent_os` primitives, not the governance logic itself.
 
 **The agnostic-core + adapter split (WS1 — done).** Everything cloud- or framework-specific lives behind an interface under `adapters/<cloud>/`. The agnostic core (`core/`, `governance/`, `a2a/`) imports **no** cloud SDK and **no** agent framework — this is enforced as an invariant.
 
-Azure is the one fully-implemented provider today (and ships the Azure framework glue). AWS and GCP are interface-complete **skeletons** (`NotImplementedError` until WS5/WS6). What remains roadmap is the *fill-in* of those clouds, the MSGK v4 re-baseline (WS3), and the gap modules (WS7) — **not** the adapter structure itself, which is real and verified.
+Azure is the one fully-implemented provider today (and ships the Azure framework glue). AWS and GCP are interface-complete **skeletons** (`NotImplementedError` until WS5/WS6). What remains roadmap is the *fill-in* of those clouds, the `agent_os` / `agent_sre` / `agentmesh` v4 re-baseline (WS3), and the gap modules (WS7) — **not** the adapter structure itself, which is real and verified.
 
 **Repo focus / payload.** The agents shipped here are a **minimal demonstration payload** (`payload_agents/`) — a single agent-framework `Analyzer` agent and its closure, just enough to prove the governance stack wraps a real agent end-to-end. The full multi-agent AWS→Azure migration product has been moved to a **local-only, gitignored `archive/`** and is **not part of this repo**. Where this doc describes that product, it is labeled **(archived)**.
 
@@ -18,7 +18,7 @@ Azure is the one fully-implemented provider today (and ships the Azure framework
 - ✅ Single demonstration payload agent (`payload_agents/analyzer_agent.py`)
 - ✅ OTel tracing: agnostic SDK setup in core; Azure Monitor exporter behind the adapter
 - 🔶 Postgres ledger: stdout mode by default (set `POSTGRES_DSN` to persist)
-- 🛣️ AWS / GCP adapter fill-in (WS5/WS6), MSGK v4 re-baseline (WS3), gap modules (WS7) — see [`docs/REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md)
+- 🛣️ AWS / GCP adapter fill-in (WS5/WS6), `agent_os` / `agent_sre` / `agentmesh` v4 re-baseline (WS3), gap modules (WS7) — see [`docs/REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md)
 
 ---
 
@@ -67,7 +67,7 @@ flowchart TB
 
 ### The interface seam — `core/interfaces.py`
 
-Every cloud/framework touchpoint is one of these Protocols. `AuditBackend` is re-exported from MSGK so adapters implement the upstream contract directly.
+Every cloud/framework touchpoint is one of these Protocols. `AuditBackend` is re-exported from `agent_os` so adapters implement the upstream contract directly.
 
 | Interface | Azure impl (`adapters/azure/`) | AWS (WS5) | GCP (WS6) |
 |---|---|---|---|
@@ -76,7 +76,7 @@ Every cloud/framework touchpoint is one of these Protocols. `AuditBackend` is re
 | `TraceExporterFactory` | `tracing.AzureTraceExporterFactory` — Azure Monitor | X-Ray / ADOT | Cloud Trace |
 | `LLMGateway` | `gateway.AzureLLMGateway` — APIM → AOAI (direct fallback) | API Gateway → Bedrock | Apigee → Vertex AI |
 | `AgentRuntimeAdapter` | `framework/runtime.AzureRuntimeAdapter` — framework OTel wiring | LangGraph / Bedrock Agents | Google ADK |
-| `AuditBackend` (MSGK) | `audit.PostgresHashChainBackend` | DynamoDB / QLDB | BigQuery / Spanner |
+| `AuditBackend` (`agent_os`) | `audit.PostgresHashChainBackend` | DynamoDB / QLDB | BigQuery / Spanner |
 | egress allow-list | `egress.yaml` | `egress.yaml` (WS5) | `egress.yaml` (WS6) |
 
 The agnostic default `SecretProvider` (`core/secrets.EnvVarSecretProvider`) is env-var only — no cloud needed.
@@ -115,7 +115,7 @@ adapters/
 │   └── framework/        # agent framework glue (the framework axis)
 │       ├── runtime.py     #   AgentRuntimeAdapter — framework OTel wiring
 │       ├── middleware.py  #   build_governance_stack() — the governance-middleware assembly
-│       └── guards/        #   3 framework middleware wrappers around MSGK primitives
+│       └── guards/        #   3 framework middleware wrappers around agent_os primitives
 │           ├── prompt_injection.py  credential_redactor.py  context_budget.py
 ├── aws/                   # WS5 skeleton — NotImplementedError stubs
 └── gcp/                   # WS6 skeleton — NotImplementedError stubs
@@ -141,7 +141,7 @@ Every agent that runs on the platform — regardless of payload — goes through
 - **Hash-chained audit ledger:** append-only compliance archive (SHA-256 chained)
 - **Managed LLM-egress gateway:** the only path to the model; the real key never sits in agent code
 
-Every guard *logic* primitive comes from MSGK (`agent_os`); this repo supplies the agnostic composition, the cloud bindings, and (for the Azure provider) the framework-middleware wrappers.
+Every guard *logic* primitive comes from `agent_os` (anomaly/drift from `agent_sre`, identity/trust from `agentmesh`); this repo supplies the agnostic composition, the cloud bindings, and (for the Azure provider) the framework-middleware wrappers.
 
 ### 1.2 Non-Human Identity (NHI)
 
@@ -174,7 +174,7 @@ flowchart LR
 
 Source: [`adapters/azure/maf/middleware.py`](../adapters/azure/maf/middleware.py) — `build_governance_stack()`
 
-`build_governance_stack()` returns `(middleware_list, pg_backend, audit_logger)` and is the **governance-middleware assembly** — the framework axis of the Azure bundle. It composes MSGK `agent_os` primitives into a framework middleware list. Guards 1–3 are framework wrappers (`adapters/azure/maf/guards/`) around MSGK detectors; guards 4–7 come from MSGK's framework-integration adapter (`agent_os.integrations`). The agnostic pieces it draws on stay in `governance/`: the policy YAML packs, the prompt-injection config, and `OtelAuditBackend`.
+`build_governance_stack()` returns `(middleware_list, pg_backend, audit_logger)` and is the **governance-middleware assembly** — the framework axis of the Azure bundle. It composes `agent_os` primitives into a framework middleware list. Guards 1–3 are framework wrappers (`adapters/azure/maf/guards/`) around `agent_os` detectors; guards 4–7 come from the `agent_os.integrations` framework-integration adapter. The agnostic pieces it draws on stay in `governance/`: the policy YAML packs, the prompt-injection config, and `OtelAuditBackend`.
 
 **Execution order — guards 1–3 run before any toolkit middleware fires:**
 
@@ -233,7 +233,7 @@ Guards 1–3 call `audit_log.log(...)` directly on block/redact, so all governan
 | Guard | Module | Agnostic? |
 |---|---|---|
 | ① PromptInjection / ② CredentialRedactor / ③ ContextBudget | `adapters/azure/maf/guards/` | No — framework middleware wrappers |
-| ④–⑦ (Audit, Policy, Capability, Rogue) | MSGK's framework-integration adapter (`agent_os.integrations`) | No — framework adapter |
+| ④–⑦ (Audit, Policy, Capability, Rogue) | `agent_os.integrations` framework-integration adapter (Rogue via `agent_sre.anomaly`) | No — framework adapter |
 | egress / escalation guards | `governance/guards/` | **Yes** — pure `agent_os`, framework-free |
 | policy packs `galaxy-*.yaml` | `governance/policies/` | **Yes** |
 | `OtelAuditBackend` | `governance/adapters/otel_audit_backend.py` | **Yes** — pure OTel |
@@ -349,7 +349,7 @@ erDiagram
   }
 ```
 
-`PostgresHashChainBackend` implements MSGK's `AuditBackend`; AWS (DynamoDB/QLDB) and GCP (BigQuery/Spanner) ship sibling backends under their adapters. **Current state:** `POSTGRES_DSN` unset → stdout mode (in-memory chain). The offline demo reproduces this chain logic in-process and verifies it. Schema DDL: [`adapters/azure/infra/ledger_schema.sql`](../adapters/azure/infra/ledger_schema.sql).
+`PostgresHashChainBackend` implements `agent_os`'s `AuditBackend`; AWS (DynamoDB/QLDB) and GCP (BigQuery/Spanner) ship sibling backends under their adapters. **Current state:** `POSTGRES_DSN` unset → stdout mode (in-memory chain). The offline demo reproduces this chain logic in-process and verifies it. Schema DDL: [`adapters/azure/infra/ledger_schema.sql`](../adapters/azure/infra/ledger_schema.sql).
 
 ### 1.7 Azure resource map — (archived full-product deployment topology)
 
@@ -396,7 +396,7 @@ The five layers, top → bottom:
 | Layer | AWS realization |
 |---|---|
 | **Agent application** (`galaxy-agent:latest`) | `payload_agents/` — the `Analyzer` demo agent (scales to N agents) |
-| **Security, governance & orchestration** | MSGK governance adapter (7-guard stack) · framework runtime + A2A dispatcher (Bedrock Agents / LangGraph, STS auth) · YAML policy engine |
+| **Security, governance & orchestration** | `agent_os` governance adapter (7-guard stack) · framework runtime + A2A dispatcher (Bedrock Agents / LangGraph, STS auth) · YAML policy engine |
 | **Runtime & compute** | Bedrock Agents runtime · ECS Fargate / AWS Batch jobs · A2A Gateway (API Gateway, SigV4) |
 | **AWS platform services** | Amazon Bedrock · Secrets Manager / SSM · IAM Roles / IRSA / STS (per-agent NHI) · S3 + DynamoDB/QLDB ledger |
 | **Observability** | AWS X-Ray (ADOT) — OTel `gen_ai.*` + audit span events · CloudWatch Logs + Metrics |
@@ -516,7 +516,7 @@ The repo was built as an AWS→Azure migration platform: a 5-stage migration pip
 
 ## Appendix A — Architectural rules
 
-1. **The agnostic core imports no cloud SDK and no agent framework.** `core/`, `governance/`, `a2a/` depend only on `core.interfaces` + MSGK (`agent_os`). Reach the Azure framework adapter only through `core.provider_factory.get_provider()`. This import invariant is the CI-able invariant.
+1. **The agnostic core imports no cloud SDK and no agent framework.** `core/`, `governance/`, `a2a/` depend only on `core.interfaces` + the `agent_os` / `agent_sre` / `agentmesh` packages. Reach the Azure framework adapter only through `core.provider_factory.get_provider()`. This import invariant is the CI-able invariant.
 2. **One interface per cloud touchpoint.** New cloud capability = a new Protocol in `core/interfaces.py` + an impl under each `adapters/<cloud>/`. Never branch on `CLOUD_PROVIDER` in the core.
 3. **Adapters are lazy.** Importing `core.provider_factory` or an `adapters/<cloud>/` package must not import that cloud's SDK at module load — keep SDK imports inside methods, so a wrong-cloud install never breaks startup.
 4. **Single LLM-egress per agent.** Every LLM call goes through `agent.run()` and the resolved `LLMGateway`. Never construct a chat client outside the `build_agent()` factory.
@@ -524,7 +524,7 @@ The repo was built as an AWS→Azure migration platform: a 5-stage migration pip
 6. **Tunables in YAML, code in Python.** Per-agent toggles live in `payload_agents/config/<agent>.yaml`; the factory never branches on agent name.
 7. **Hash-chain integrity per agent.** Each NHI has its own ledger chain; cross-agent correlation is by `run_id` + `conversation_id`.
 8. **Loud over silent.** Pydantic `extra="forbid"`; missing required env vars fail at startup; provider-resolution errors are explicit.
-9. **Use the framework.** No custom governance primitives when MSGK provides them. This repo's job is the seam + adapters + composition.
+9. **Use the framework.** No custom governance primitives when the `agent_os` / `agent_sre` / `agentmesh` packages provide them. This repo's job is the seam + adapters + composition.
 
 ---
 
@@ -546,7 +546,7 @@ The repo was built as an AWS→Azure migration platform: a 5-stage migration pip
 | Persistent Postgres ledger | 🔶 Opt-in | set `POSTGRES_DSN`; apply [`adapters/azure/infra/ledger_schema.sql`](../adapters/azure/infra/ledger_schema.sql) |
 | Full multi-agent product | 🗄️ Archived | local-only `archive/` |
 | AWS adapters (WS5) / GCP adapters (WS6) | 🛣️ Roadmap | [`docs/REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md) |
-| MSGK v4 re-baseline (WS3) / gap modules (WS7) | 🛣️ Roadmap | REFACTOR_AND_GAPS_PLAN.md |
+| `agent_os` / `agent_sre` / `agentmesh` v4 re-baseline (WS3) / gap modules (WS7) | 🛣️ Roadmap | REFACTOR_AND_GAPS_PLAN.md |
 
 ---
 

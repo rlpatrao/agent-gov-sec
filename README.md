@@ -1,12 +1,12 @@
 # Galaxy Agentic Governance Platform
 
-A runtime governance & security platform for multi-agent systems, built on the **Microsoft Agent Governance Toolkit (MSGK / `agent_os`)** and the Microsoft Agent Framework (MAF). It provides per-agent identity, a layered guard middleware stack, A2A governance, OTel tracing, and a hash-chained audit ledger — independent of the agents it governs.
+A runtime governance & security platform for multi-agent systems, built on the **Microsoft Agent Governance Toolkit** — the open-source `agent_os`, `agent_sre`, and `agentmesh` packages — and the Microsoft Agent Framework (MAF). It provides per-agent identity, a layered guard middleware stack, A2A governance, OTel tracing, and a hash-chained audit ledger — independent of the agents it governs.
 
 > **Repo focus.** This repository is the **governance platform**. The agents are a **minimal demonstration payload** (`payload_agents/`) — just enough to show the governance stack wrapping a real MAF agent. The full multi-agent AWS→Azure migration product (migration / discovery / scanner pipelines, 18 agents, ACA deployment) has been moved to a local-only `archive/` and is not part of this repo. See [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) for the cloud-agnostic refactor roadmap.
 
 ## What this platform does
 
-**Governance platform** (`core/`, `governance/`, `a2a/`): per-agent Non-Human Identity (Entra), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → Application Insights tracing, a hash-chained Postgres audit ledger, and APIM as the sole egress path to the LLM. Every guard logic primitive comes from MSGK; this repo's value is the **bindings** (cloud + framework) and **composition**.
+**Governance platform** (`core/`, `governance/`, `a2a/`): per-agent Non-Human Identity (Entra), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → Application Insights tracing, a hash-chained Postgres audit ledger, and APIM as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
 
 **Demonstration payload** (`payload_agents/`): a single MAF `Analyzer` agent and its dependencies, wired through the full governance stack via `build_agent()`. It exists to prove the platform governs a real agent end-to-end — not as a product.
 
@@ -109,7 +109,7 @@ agentic-sdlc/
 │
 ├── governance/                     Security & compliance layer
 │   ├── middleware.py               build_governance_stack() — the guard factory
-│   ├── guards/                     Guard implementations (MAF middleware wrapping MSGK primitives)
+│   ├── guards/                     Guard implementations (MAF middleware wrapping `agent_os` primitives)
 │   ├── adapters/                   Audit backends (OTel, Postgres hash-chain)
 │   ├── policies/                   YAML declarative rules (galaxy-*.yaml)
 │   ├── configs/                    Guard configs (prompt-injection.yaml, egress.yaml)
@@ -176,8 +176,8 @@ Without `POSTGRES_DSN`, the hash chain runs in stdout mode — full chain logic 
 
 | Doc | What it covers |
 |---|---|
-| [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) | Cloud-agnostic refactor, MSGK re-baseline, AWS/GCP adapters, and gap-closing modules |
-| [`docs/DELTA_OVER_MSGK.md`](docs/DELTA_OVER_MSGK.md) | What this repo adds over the stock Microsoft Agent Governance Toolkit — module-by-module (a)/(b)/(c) classification |
+| [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) | Cloud-agnostic refactor, `agent_os` re-baseline, AWS/GCP adapters, and gap-closing modules |
+| [`docs/DELTA_OVER_AGENT_OS.md`](docs/DELTA_OVER_AGENT_OS.md) | What this repo adds over the stock `agent_os` / `agent_sre` / `agentmesh` packages — module-by-module (a)/(b)/(c) classification |
 | [`docs/architecture.md`](docs/architecture.md) | Full system design — governance platform + payload, Mermaid diagrams |
 | [`docs/user-guide.md`](docs/user-guide.md) | How-to guide — running the platform, adding agents, debugging |
 | [`docs/services-and-tech.md`](docs/services-and-tech.md) | Azure resource inventory, package versions, env var reference |

@@ -1,28 +1,28 @@
-# Cloud-Agnostic Refactor, MSGK Re-baseline & Gap-Closure Plan
+# Cloud-Agnostic Refactor, Package Re-baseline & Gap-Closure Plan
 
 **Status:** WS1 (adapter isolation) ✅ done & verified · WS2 (doc/asset cleanup) ✅ done · WS3–WS7 not started
 **Owner:** _(assign)_
 **Created:** 2026-06-09
-**Goal:** Make the governance platform **cloud- and framework-agnostic** by isolating *everything Microsoft-specific* (Azure cloud services **and** the Microsoft Agent Framework / MAF) into a self-contained `adapters/azure/` folder, re-baseline on the upstream **Microsoft Agent Governance Toolkit (MSGK)**, document our delta over it, and build the gap-closing modules that are **not** already provided upstream.
+**Goal:** Make the governance platform **cloud- and framework-agnostic** by isolating *everything Microsoft-specific* (Azure cloud services **and** the Microsoft Agent Framework / MAF) into a self-contained `adapters/azure/` folder, re-baseline on the upstream `agent_os` / `agent_sre` / `agentmesh` packages, document our delta over them, and build the gap-closing modules that are **not** already provided upstream.
 
 ---
 
 ## 0. Findings that shape this plan
 
-**MSGK = `github.com/microsoft/agent-governance-toolkit`.** It is **already cloud-agnostic** and ships the *interfaces* and *governance logic* we depend on:
+The `agent_os` package is **already cloud-agnostic** and ships the *interfaces* and *governance logic* we depend on:
 - `agent_os.audit_logger.AuditBackend` (audit backend interface)
 - `agent_os.egress_policy` (egress allow-list interface)
 - `agent_os.credential_redactor`, `prompt_injection`, `context_budget`, `escalation` (governance primitives)
 - A **policy engine supporting YAML / OPA / Cedar** (stateless, fail-closed) — **this is the unified engine of old "Gap 2"** → see WS5.
-- Identity via SPIFFE / DID / mTLS (NOT cloud-IAM bound)
+- Identity via SPIFFE / DID / mTLS (NOT cloud-IAM bound) — `agentmesh.identity` / `trust`
 - Framework adapters (OpenAI SDK, LangGraph, CrewAI, AutoGen, Semantic Kernel, Google ADK, **MAF** via `agent_os.integrations.maf_adapter`)
-- As of **v4.0.0** the ~45 packages consolidated into umbrella installs: `agent-governance-toolkit-core / -runtime / -sre / -cli / [full]`. We currently pin the **older** split names: `agent-os-kernel`, `agent-sre==3.2.2`, `agentmesh-platform>=3.2.2`, `agent-framework-core`.
+- The split package names we pin: `agent-os-kernel`, `agent-sre==3.2.2`, `agentmesh-platform>=3.2.2`, `agent-framework-core`.
 
-> ⚠️ Verify the exact v4 package names / module paths against the live repo before acting on WS3.
+> ⚠️ Verify the exact package names / module paths against the live packages before acting on WS3.
 
-**Our entire delta over MSGK is bindings, not governance logic.** Confirmed by reading the code:
-- `OtelAuditBackend` / `PostgresAuditBackend` *implement* MSGK's `AuditBackend`.
-- `CredentialRedactorGuardMiddleware` *wraps* MSGK's `CredentialRedactor` as MAF middleware.
+**Our entire delta over `agent_os` is bindings, not governance logic.** Confirmed by reading the code:
+- `OtelAuditBackend` / `PostgresAuditBackend` *implement* `agent_os`'s `AuditBackend`.
+- `CredentialRedactorGuardMiddleware` *wraps* `agent_os`'s `CredentialRedactor` as MAF middleware.
 - `nhi_identity.py` already abstracts identity (`AgentIdentity` registry + env-var fallback) with Azure behind an `_AZURE_AVAILABLE` guard.
 
 ### The isolation decision (this revision)
@@ -36,17 +36,17 @@ We treat **Azure + MAF as one Microsoft bundle** and move **both** behind the ad
 **MAF inventory outside `agents/`** (all relocating to `adapters/azure/maf/`):
 - `core/run_tracer.py:79` — `agent_framework.observability.configure_otel_providers`
 - `governance/guards/credential_redactor.py:21`, `context_budget.py:20`, `prompt_injection.py:24` — subclass MAF middleware
-- `governance/middleware.py:19` — `agent_os.integrations.maf_adapter.create_governance_middleware` (MSGK's MAF adapter; the *assembly* that calls it is ours and MAF-specific)
+- `governance/middleware.py:19` — `agent_os.integrations.maf_adapter.create_governance_middleware` (`agent_os`'s MAF adapter; the *assembly* that calls it is ours and MAF-specific)
 - Guards `escalation.py` / `egress.py` are **MAF-free** (pure `agent_os`) → stay in cloud-agnostic `governance/`.
 - `agents/` MAF usage stays put — it's test payload, untouched.
 
-> **Consequence to accept:** once MAF glue lives in `adapters/azure/maf/`, the cloud-agnostic core has **no working agent-framework binding for AWS/GCP** until an equivalent framework adapter is written (e.g. LangGraph / Bedrock Agents / Google ADK, all of which MSGK already supports upstream). WS1 ships the Azure/MAF binding fully; AWS/GCP framework bindings are stubbed/follow-on.
+> **Consequence to accept:** once MAF glue lives in `adapters/azure/maf/`, the cloud-agnostic core has **no working agent-framework binding for AWS/GCP** until an equivalent framework adapter is written (e.g. LangGraph / Bedrock Agents / Google ADK, all of which `agent_os` already supports upstream). WS1 ships the Azure/MAF binding fully; AWS/GCP framework bindings are stubbed/follow-on.
 
 **No GCP/AWS runtime code exists today** (only test fixtures + the `legacy/aws_legacy` migration *input* sample).
 
 ### Decisions to confirm before WS3
-- v4 umbrella package names + whether `agent_os.*` / `agentmesh.*` / `agent_sre.*` still import or were renamed.
-- Diff strategy for WS4: MSGK git remote vs fresh `[full]` install.
+- Latest package names + whether `agent_os.*` / `agentmesh.*` / `agent_sre.*` still import or were renamed.
+- Diff strategy for WS4: package git remote vs fresh `[full]` install.
 
 ---
 
@@ -56,8 +56,8 @@ We treat **Azure + MAF as one Microsoft bundle** and move **both** behind the ad
 |----|------|-----------|
 | **WS1** | Isolate Azure **+ MAF** into `adapters/azure/`; agnostic core + interfaces + factory | — |
 | **WS2** | Remove stale docs, large binaries, dead assets | — |
-| **WS3** | Sync to latest MSGK (v4 packages + reference patterns) | WS1, WS2 |
-| **WS4** | Document our delta over MSGK | WS3 |
+| **WS3** | Sync to latest `agent_os` / `agent_sre` / `agentmesh` packages (+ reference patterns) | WS1, WS2 |
+| **WS4** | Document our delta over `agent_os` | WS3 |
 | **WS5** | **AWS adapters** (full `adapters/aws/` against WS1 interfaces) | WS1 |
 | **WS6** | **GCP adapters** (full `adapters/gcp/` against WS1 interfaces) | WS1 |
 | **WS7** | Gap-closing modules **for the gaps not already upstream** (Gaps 1, 3, 4 — **not** Gap 2) | WS1, WS4 |
@@ -77,7 +77,7 @@ We treat **Azure + MAF as one Microsoft bundle** and move **both** behind the ad
 core/
 ├── interfaces.py          # IdentityProvider, SecretProvider, TraceExporterFactory,
 │                          #   EgressConfigSource, LLMGateway, AgentRuntimeAdapter
-│                          #   (+ re-export MSGK AuditBackend)
+│                          #   (+ re-export agent_os AuditBackend)
 ├── provider_factory.py    # binds interfaces -> adapters by CLOUD_PROVIDER env/config
 ├── nhi_registry.py        # AgentIdentity + registry (agnostic; from nhi_identity.py)
 ├── trace_ledger.py        # (unchanged, agnostic)
@@ -106,7 +106,7 @@ adapters/
 │   └── maf/               # === Microsoft Agent Framework glue (the framework sub-axis) ===
 │       ├── runtime.py     # configure_otel_providers wiring            (from core/run_tracer.py, MAF parts)
 │       ├── middleware.py  # MAF governance-middleware assembly         (from governance/middleware.py)
-│       └── guards/        # MAF AgentMiddleware wrappers around MSGK primitives
+│       └── guards/        # MAF AgentMiddleware wrappers around agent_os primitives
 │           ├── credential_redactor.py   (from governance/guards/)
 │           ├── context_budget.py        (from governance/guards/)
 │           └── prompt_injection.py      (from governance/guards/)
@@ -117,7 +117,7 @@ adapters/
 ```
 
 ### Tasks — agnostic core
-- [x] **1.1** `core/interfaces.py`: `SecretProvider`, `IdentityProvider`, `TraceExporterFactory`, `LLMGateway`, `AgentRuntimeAdapter`, `CloudProvider` + re-exported MSGK `AuditBackend`. (Egress config is exposed via `CloudProvider.egress_config_path()` rather than a standalone `EgressConfigSource`.)
+- [x] **1.1** `core/interfaces.py`: `SecretProvider`, `IdentityProvider`, `TraceExporterFactory`, `LLMGateway`, `AgentRuntimeAdapter`, `CloudProvider` + re-exported `agent_os` `AuditBackend`. (Egress config is exposed via `CloudProvider.egress_config_path()` rather than a standalone `EgressConfigSource`.)
 - [x] **1.2** `core/provider_factory.py`: `get_provider()` selects by `CLOUD_PROVIDER` (default `azure`); lazy-imports the adapter package; caches.
 - [x] **1.3** Split NHI: agnostic `core/nhi_registry.py` (data + registry) + `adapters/azure/identity.py` (`AzureIdentityProvider` / ManagedIdentityCredential). `get_credential()` routes through the factory.
 
@@ -131,7 +131,7 @@ adapters/
 - [x] **1.9** N/A — `run_pipeline_aca.py` is in the archived product; no orchestrator relocation needed.
 
 ### Tasks — MAF framework glue → `adapters/azure/maf/`
-- [x] **1.10** 3 MAF guard middlewares → `adapters/azure/maf/guards/` (MSGK logic stays an `agent_os` import).
+- [x] **1.10** 3 MAF guard middlewares → `adapters/azure/maf/guards/` (`agent_os` logic stays an `agent_os` import).
 - [x] **1.11** `governance/middleware.py` → `adapters/azure/maf/middleware.py` (policy/config dirs repointed to the agnostic `governance/` package).
 - [x] **1.12** `configure_otel_providers` MAF wiring → `adapters/azure/maf/runtime.py` (`MafRuntimeAdapter`) behind `AgentRuntimeAdapter`.
 - [x] **1.13** MAF-free guards (`escalation.py`, `egress.py`) and `policies/*.yaml` stay in agnostic `governance/`.
@@ -165,35 +165,35 @@ adapters/
 
 ---
 
-## WS3 — Sync base with MSGK (latest) ✅ DONE (2026-06-09)
+## WS3 — Sync base with the `agent_os` / `agent_sre` / `agentmesh` packages (latest) ✅ DONE (2026-06-09)
 
-> **Correction to the draft assumption:** there is **no "v4 umbrella package" rename.** The real toolkit packages keep their split names (`agent-framework-core`, `agent-framework-foundry`, `agent-framework-openai`, `agent-os-kernel`, `agent-sre`, `agentmesh-platform`) — the earlier WebFetch describing a 45→5 consolidation was unreliable. The env is `uv`-managed (no `pip` in the venv); versions were verified from dist-info + `uv pip list`.
+> **Correction to the draft assumption:** there is **no umbrella-package rename.** The packages keep their split names (`agent-framework-core`, `agent-framework-foundry`, `agent-framework-openai`, `agent-os-kernel`, `agent-sre`, `agentmesh-platform`) — the earlier WebFetch describing a 45→5 consolidation was unreliable. The env is `uv`-managed (no `pip` in the venv); versions were verified from dist-info + `uv pip list`.
 
 - [x] **3.1** Confirmed package names/imports unchanged: `agent_os.*`, `agentmesh.*`, `agent_sre.*`, `agent_framework.*`, `agent_framework_openai` all import. **No rename.**
 - [x] **3.2** Snapshotted prior pins (`agent-framework-core>=1.2.0,<2`, `agent-os-kernel>=3.2.2`, `agent-sre==3.2.2`, `agentmesh-platform>=3.2.2`) → `/tmp/ws3_env_before.txt` (full `uv pip freeze`).
 - [x] **3.3** Verified the seams resolve at the new versions (imported `audit_logger.AuditBackend/AuditEntry/GovernanceAuditLogger`, `egress_policy`, `credential_redactor`, `context_budget`, `prompt_injection`, `integrations.maf_adapter.create_governance_middleware`, plus `agent_framework.Agent` / `_middleware.AgentMiddleware` / `OpenAIChatClient`) — all OK.
-- [x] **3.4** Bumped to latest available: **agent-framework-core/foundry/openai 1.4.0 → 1.8.1**, **agent-sre 3.2.2 → 3.7.0**; `agent-os-kernel` and `agentmesh-platform` were already at **3.7.0** (latest). The load-bearing `agent-sre==3.2.2` exact pin is **released** — kernel was already 3.7.0 and 3.7.0 keeps `agent_sre.anomaly.RogueAgentDetector`; verified before relaxing. Controlled install changed only 5 packages (4 toolkit + `azure-ai-projects`).
+- [x] **3.4** Bumped to latest available: **agent-framework-core/foundry/openai 1.4.0 → 1.8.1**, **agent-sre 3.2.2 → 3.7.0**; `agent-os-kernel` and `agentmesh-platform` were already at **3.7.0** (latest). The load-bearing `agent-sre==3.2.2` exact pin is **released** — kernel was already 3.7.0 and 3.7.0 keeps `agent_sre.anomaly.RogueAgentDetector`; verified before relaxing. Controlled install changed only 5 packages (4 `agent_os`/`agent_sre`/`agentmesh`/`agent-framework` + `azure-ai-projects`).
 - [x] **3.5** No adapter/middleware breakage — **full suite 76 passed** at the new versions.
-- [x] **3.6** Verification record updated in **`docs/services-and-tech.md` §3** (the draft's `toolkit-verification.md` / `maf-verification.md` were archived in WS2) and `requirements.txt` floors bumped to `>=1.8.1,<2` / `>=3.7.0`.
+- [x] **3.6** Verification record updated in **`docs/services-and-tech.md` §3** (the draft's `agent-os-verification.md` / `maf-verification.md` were archived in WS2) and `requirements.txt` floors bumped to `>=1.8.1,<2` / `>=3.7.0`.
 
-**Acceptance:** ✅ On latest compatible MSGK (toolkit at 3.7.0 / framework at 1.8.1), tests green, version table updated, exact-pin question resolved (released).
+**Acceptance:** ✅ On the latest compatible packages (`agent_os`/`agent_sre`/`agentmesh` at 3.7.0 / `agent-framework` at 1.8.1), tests green, version table updated, exact-pin question resolved (released).
 
 > **Note (env vs lockfile):** the upgrade is applied to the live venv and reflected in `requirements.txt`. `uv.lock` and `pyproject.toml`'s optional-deps groups were not regenerated in this pass — regenerate the lock (`uv lock`) before a clean reinstall.
 
 ---
 
-## WS4 — Document our delta over MSGK ✅ DONE (2026-06-09)
+## WS4 — Document our delta over `agent_os` ✅ DONE (2026-06-09)
 
-**Objective:** A reviewable inventory of what we built on stock MSGK — confirmed to be **almost entirely the cloud-adapter set + the MAF glue + the agnostic seam + attribution/ledger/A2A**; very little governance *logic* is ours.
+**Objective:** A reviewable inventory of what we built on the stock `agent_os` / `agent_sre` / `agentmesh` packages — confirmed to be **almost entirely the cloud-adapter set + the MAF glue + the agnostic seam + attribution/ledger/A2A**; very little governance *logic* is ours.
 
-- [x] **4.1** Baseline established by **introspecting the installed package surface** (`pkgutil.iter_modules` over `agent_os`/`agentmesh`/`agent_sre`/`agent_framework`) rather than a repo install — more reliable given the bogus "v4 umbrella" repo description. Reproducible command in the doc.
-- [x] **4.2** Classified every platform module **(a)** pure MSGK / **(b)** MSGK + our wiring / **(c)** wholly ours, with LOC.
-- [x] **4.3** Wrote [`docs/DELTA_OVER_MSGK.md`](DELTA_OVER_MSGK.md) — full inventory with file-path evidence. Corrections to the pre-seed: MSGK identity is `agentmesh.identity`/`trust` (not SPIFFE/DID, and we don't use it — our cloud-IAM binding is ours); the hash-chain backend is `adapters/azure/audit.py` `PostgresHashChainBackend`; the payload is now `payload_agents/` (single Analyzer).
+- [x] **4.1** Baseline established by **introspecting the installed package surface** (`pkgutil.iter_modules` over `agent_os`/`agentmesh`/`agent_sre`/`agent_framework`) rather than a repo install — more reliable given the bogus "umbrella" repo description. Reproducible command in the doc.
+- [x] **4.2** Classified every platform module **(a)** pure `agent_os` / **(b)** `agent_os` + our wiring / **(c)** wholly ours, with LOC.
+- [x] **4.3** Wrote [`DELTA_OVER_AGENT_OS.md`](DELTA_OVER_AGENT_OS.md) — full inventory with file-path evidence. Corrections to the pre-seed: identity is `agentmesh.identity`/`trust` (not SPIFFE/DID, and we don't use it — our cloud-IAM binding is ours); the hash-chain backend is `adapters/azure/audit.py` `PostgresHashChainBackend`; the payload is now `payload_agents/` (single Analyzer).
 - [x] **4.4** Cross-referenced `docs/guardrails-inventory.md` (per-guard wired-vs-available + packaging-quirk shims).
 
-**Key findings:** (1) **audit-backend overlap** — MSGK ships `agent_os.otel_audit_backend`; our `governance/adapters/otel_audit_backend.py` may be redundant (the hash-chain backend is genuinely ours). (2) Our **compat shims** (`_CompatAuditLogger`, prompt-injection config backfill, egress `protocol: tcp` parser) survived the 3.7.0 bump but should be re-checked per upgrade / upstreamed. (3) Roadmap leverage already upstream: Gap 2 → `agent_os.policies`/`semantic_policy`; Gap 3 → `agent_sre.anomaly`; Gap 4 → `agent_os.content_governance`/MCP scanners; WS5/WS6 framework axis → `agent_framework.{amazon,google}`.
+**Key findings:** (1) **audit-backend overlap** — `agent_os` ships `agent_os.otel_audit_backend`; our `governance/adapters/otel_audit_backend.py` may be redundant (the hash-chain backend is genuinely ours). (2) Our **compat shims** (`_CompatAuditLogger`, prompt-injection config backfill, egress `protocol: tcp` parser) survived the 3.7.0 bump but should be re-checked per upgrade / upstreamed. (3) Roadmap leverage already upstream: Gap 2 → `agent_os.policies`/`semantic_policy`; Gap 3 → `agent_sre.anomaly`; Gap 4 → `agent_os.content_governance`/MCP scanners; WS5/WS6 framework axis → `agent_framework.{amazon,google}`.
 
-**Acceptance:** ✅ `docs/DELTA_OVER_MSGK.md` written; every item has file-path evidence + (a)/(b)/(c) classification + LOC.
+**Acceptance:** ✅ `DELTA_OVER_AGENT_OS.md` written; every item has file-path evidence + (a)/(b)/(c) classification + LOC.
 
 ---
 
@@ -204,7 +204,7 @@ adapters/
 - [x] **5.1** `adapters/aws/identity.py` — `AwsIdentityProvider`: `client_id` = the agent's IAM **role ARN**; STS `AssumeRole` (IRSA-friendly); degrades to `None` without boto3/creds.
 - [x] **5.2** `adapters/aws/secrets.py` — `SecretsManagerProvider`: **Secrets Manager** *or* **SSM** (`source=`), boto3 default chain, 5-min TTL cache, env-var fallback.
 - [x] **5.3** `adapters/aws/tracing.py` — `AwsTraceExporterFactory`: OTLP → **ADOT collector** → X-Ray/CloudWatch (`OTEL_EXPORTER_OTLP_ENDPOINT`); `None` when unconfigured.
-- [x] **5.4** `adapters/aws/audit.py` — `DynamoDbHashChainBackend` implements MSGK `AuditBackend`: SHA-256 hash-chain on **DynamoDB** (batched async flush + `verify_chain`); stdout mode when boto3/table absent.
+- [x] **5.4** `adapters/aws/audit.py` — `DynamoDbHashChainBackend` implements `agent_os` `AuditBackend`: SHA-256 hash-chain on **DynamoDB** (batched async flush + `verify_chain`); stdout mode when boto3/table absent.
 - [x] **5.5** `adapters/aws/egress.yaml` — AWS endpoint allow-list (API Gateway, Bedrock runtime, Secrets Manager, SSM, STS, X-Ray).
 - [x] **5.5a** `adapters/aws/gateway.py` — `AwsLLMGateway`: **API Gateway → Bedrock** (`x-api-key`) when `AWS_BEDROCK_GATEWAY_ENDPOINT` set, else **direct Bedrock** (SigV4/IAM, no static key). Mirrors `AzureLLMGateway`.
 - [x] **5.6** `adapters/aws/infra/main.tf` — **Terraform**: per-agent IAM roles (least-priv: Bedrock invoke + own-secret read + ledger write), DynamoDB ledger table, S3 artifact bucket.
@@ -223,12 +223,12 @@ adapters/
 - [ ] **6.1** `identity.py` — `IdentityProvider`: per-agent **Service Account** + **Workload Identity Federation**; map agent-type → SA email → trace-ledger `nhi_id`. (This realizes the gap-analysis "FinOps SAs get scoped IAM" framing.)
 - [ ] **6.2** `secrets.py` — `SecretProvider`: **Secret Manager** + **Application Default Credentials** (google-auth); env-var fallback retained.
 - [ ] **6.3** `tracing.py` — `TraceExporterFactory`: OTel → **Cloud Trace**.
-- [ ] **6.4** `audit.py` — MSGK `AuditBackend`: hash-chain ledger on **BigQuery** (or **Spanner**), with **Cloud Logging** mirror for deny/block events.
+- [ ] **6.4** `audit.py` — `agent_os` `AuditBackend`: hash-chain ledger on **BigQuery** (or **Spanner**), with **Cloud Logging** mirror for deny/block events.
 - [ ] **6.5** `egress.yaml` — GCP endpoint allow-list (Vertex AI, Secret Manager, etc.).
 - [ ] **6.5a** `gateway.py` — `LLMGateway`: **Apigee → Vertex AI** as the managed egress chokepoint (or direct **Vertex AI** endpoint with ADC token); resolve endpoint + auth from `SecretProvider`/WIF. Pairs with `egress.yaml`.
 - [ ] **6.6** `infra/` — **Terraform**: per-agent SAs + IAM bindings, job runtime (**Cloud Run jobs**), BigQuery/Spanner ledger.
 - [ ] **6.7** `orchestrator.py` — job orchestration via **Cloud Run jobs / Workflows** (the GCP analogue of `run_pipeline_aca.py`).
-- [ ] **6.8** *(optional, framework axis)* GCP framework adapter — wire MSGK's **Google ADK** adapter as the `AgentRuntimeAdapter`, replacing MAF for GCP runs. (LLM egress is handled by the gateway in 6.5a.)
+- [ ] **6.8** *(optional, framework axis)* GCP framework adapter — wire `agent_framework`'s **Google ADK** adapter as the `AgentRuntimeAdapter`, replacing MAF for GCP runs. (LLM egress is handled by the gateway in 6.5a.)
 - [ ] **6.9** Tests: factory loads `gcp` provider; mocked-SDK unit tests for identity/secrets/tracing/audit; document runtime-verified vs stubbed.
 
 **Acceptance:** `CLOUD_PROVIDER=gcp` resolves all cloud-binding interfaces; identity/secrets/tracing/audit have real impls + tests; Terraform applies; framework adapter status documented.
@@ -245,21 +245,21 @@ adapters/
 > - **Gap 1** [`data_fgac.py`](../governance/extensions/data_fgac.py) + [`data_classification.py`](../governance/extensions/data_classification.py): `DataAccessMediator` (authorize → allow/mask/deny by classification + NHI scope) + `InProcessEnforcer` (row filter + column mask/drop) + a YAML catalog (path via `GALAXY_DATA_CLASSIFICATION_PATH`). NHI binding: scope keyed on `agent_type` (the NHI registry's key); `authorize_for_identity()` attributes the read to `nhi_id`.
 > - **Gap 3** [`data_drift.py`](../governance/extensions/data_drift.py): `DataAccessDriftDetector` (volume z-score, first-seen table, sensitivity escalation, table-access entropy, denial rate → risk + quarantine) with a **persistent** `BaselineStore` (`JsonFileBaselineStore` default; fixes the cold-start reset; DynamoDB/Firestore/Postgres are the cloud adapters).
 > - **Gap 4** [`reasoning_guard.py`](../governance/extensions/reasoning_guard.py): `ReasoningStepValidator` — validates plan/tool-selection/data-access steps against the capability allow-list + the Gap-1 mediator **before** execution.
-> - **Gap 4+** [`reasoning_trace.py`](../governance/extensions/reasoning_trace.py): `ReasoningTraceLogger` — mandatory redact (MSGK `CredentialRedactor` + PII) → `reasoning.cot`/`reasoning.cove` OTel span events keyed to `nhi_id` → hash-stamped `reasoning_trace` audit entry; sampling + truncation.
+> - **Gap 4+** [`reasoning_trace.py`](../governance/extensions/reasoning_trace.py): `ReasoningTraceLogger` — mandatory redact (`agent_os` `CredentialRedactor` + PII) → `reasoning.cot`/`reasoning.cove` OTel span events keyed to `nhi_id` → hash-stamped `reasoning_trace` audit entry; sampling + truncation.
 >
 > **AWS follow-ups — ✅ done (2026-06-10):** 7.1.4 (AWS) cloud-native FGAC pushdown — [`adapters/aws/data_fgac.AwsLakeFormationEnforcer`](../adapters/aws/data_fgac.py): scoped Athena/Trino SQL (column projection + masked-column redaction literals + row-filter `WHERE`) so sensitive bytes never leave the store, plus Lake Formation data-cells-filter registration (lazy boto3) and a Macie catalog-population seam; 7.0.3 OWASP mapping refreshed (LLM Top 10 2025 + ASI) in `guardrails-inventory.md`; 7.5.6 (AWS) CoT/CoVe **CloudWatch Logs Insights** queries added to `observability-governance-showcase.md` §5 (Azure/GCP query parity noted as a small follow-up). +5 AWS-enforcer tests.
 >
 > **Still deferred:** 7.1.4 GCP (BigQuery CLS/DLP) + Azure (Synapse CLS) pushdown adapters; 7.4.3 semantic CoT analysis (research-y); 7.5.6 Azure/GCP query parity. None block the modules from functioning.
 
 ### ❌ Gap 2 — Unified policy engine — NOT BUILT (adopt upstream)
-MSGK **already ships** a standards-based YAML/OPA/Cedar policy engine. Per decision, we **do not implement** a policy engine. Instead, as part of WS3/WS4 we simply **adopt MSGK's engine** as the single decision point and (phased) migrate our `galaxy-*.yaml` rules onto it. Gaps 1 and 4 below **consume MSGK's policy engine** — they do not build one.
+`agent_os.policies` **already ships** a standards-based YAML/OPA/Cedar policy engine. Per decision, we **do not implement** a policy engine. Instead, as part of WS3/WS4 we simply **adopt `agent_os.policies`** as the single decision point and (phased) migrate our `galaxy-*.yaml` rules onto it. Gaps 1 and 4 below **consume `agent_os.policies`** — they do not build one.
 
-> Action (no new module): confirm MSGK engine + supported syntax (OPA vs Cedar) during WS3.3; record the adoption path in `docs/DELTA_OVER_MSGK.md`. If migration of `galaxy-*.yaml` is non-trivial, track it as a config task, not a gap build.
+> Action (no new module): confirm the `agent_os.policies` engine + supported syntax (OPA vs Cedar) during WS3.3; record the adoption path in `DELTA_OVER_AGENT_OS.md`. If migration of `galaxy-*.yaml` is non-trivial, track it as a config task, not a gap build.
 
 ### Gap 1 — Data-layer guardrails (FGAC for agent data consumption)
 *Today: governance is at IAM + tool boundary. No row/column filtering, no classification-aware masking.*
 - [ ] **7.1.1** Data-classification catalog schema (source → table → column → sensitivity), keyed to agent NHI scope.
-- [ ] **7.1.2** Cloud-agnostic `DataAccessMediator` interface every agent read flows through; decisions delegated to **MSGK's policy engine**.
+- [ ] **7.1.2** Cloud-agnostic `DataAccessMediator` interface every agent read flows through; decisions delegated to **`agent_os.policies`**.
 - [ ] **7.1.3** Row/column filtering + dynamic masking driven by classification + NHI.
 - [ ] **7.1.4** Per-cloud adapters: **GCP** = BigQuery column-level security + policy tags + dynamic data masking + DLP (original gap framing); **AWS** = Lake Formation FGAC + Glue catalog + Macie; **Azure** = Purview labels + SQL/Synapse CLS or app-side masking.
 - [ ] **7.1.5** Tests: agent scoped to dataset X cannot read masked columns / out-of-scope rows.
@@ -274,7 +274,7 @@ MSGK **already ships** a standards-based YAML/OPA/Cedar policy engine. Per decis
 ### Gap 4 — Reasoning-chain guardrails
 *Today: guards fire at each agent I/O boundary; every A2A hop governed + trace-linked; `reasoning_tokens` captured. No inspection of intra-LLM reasoning content.*
 - [ ] **7.4.1** Capture intermediate plan / tool-selection steps + `reasoning_tokens` into an inspectable structure (shared with the CoT/CoVe logging in **Gap 4+** below — capture once, both validate and log).
-- [ ] **7.4.2** Reasoning-step validator: check intermediate steps against **MSGK's policy engine** *before* execution (flag a plan step targeting out-of-scope data / disallowed tools).
+- [ ] **7.4.2** Reasoning-step validator: check intermediate steps against **`agent_os.policies`** *before* execution (flag a plan step targeting out-of-scope data / disallowed tools).
 - [ ] **7.4.3** Optional semantic checks (CoT consistency, goal-drift) — scope carefully; most research-y.
 - [ ] **7.4.4** New middleware layer; emit findings to audit backend + traces. (Cloud-neutral; consumes policy engine + audit.) Note: if delivered as MAF middleware, the binding lives in `adapters/azure/maf/`; the validator logic stays agnostic.
 - [ ] **7.4.5** Tests: a policy-violating reasoning step is caught pre-execution.
@@ -285,7 +285,7 @@ MSGK **already ships** a standards-based YAML/OPA/Cedar policy engine. Per decis
 - [ ] **7.5.1** **Capture** the agent's Chain-of-Thought (intermediate reasoning / tool-selection rationale) and Chain-of-Verification (self-generated verification questions + answers, e.g. SecurityReviewer/Reviewer cross-checks) from the same structure built in **7.4.1** — capture once, reuse.
 - [ ] **7.5.2** **Redact before persist (mandatory):** route CoT/CoVe content through the existing `CredentialRedactor` + PII policy **before** it touches any span, log, or ledger. Reasoning text is high-risk for leaking secrets/PII — never log raw. Audit the redaction itself.
 - [ ] **7.5.3** **Emit to OTel traces:** add `reasoning.cot` / `reasoning.cove` span events on the per-agent span (attributes: step index, phase, verification verdict, redaction applied), keyed to the agent's `nhi_id`. Exported via the per-cloud `TraceExporterFactory` (Azure Monitor / X-Ray / Cloud Trace) — no cloud coupling in the capture layer.
-- [ ] **7.5.4** **Persist to the audit ledger:** write a `reasoning_trace` record (CoT/CoVe summary + hash) into the hash-chained ledger via the MSGK `AuditBackend`, so reasoning is attributable and tamper-evident alongside actions. Extend `core/trace_ledger.py` schema with the reasoning fields.
+- [ ] **7.5.4** **Persist to the audit ledger:** write a `reasoning_trace` record (CoT/CoVe summary + hash) into the hash-chained ledger via the `agent_os` `AuditBackend`, so reasoning is attributable and tamper-evident alongside actions. Extend `core/trace_ledger.py` schema with the reasoning fields.
 - [ ] **7.5.5** **Volume controls:** CoT/CoVe content is large — add sampling + truncation + a size budget (config-driven; full content on deny/error, summarized on success) so tracing cost stays bounded. `log()` what was sampled out.
 - [ ] **7.5.6** **Surface it:** add CoT/CoVe query examples to `docs/observability-governance-showcase.md` (KQL / Cloud Logging / CloudWatch Insights equivalents per cloud).
 - [ ] **7.5.7** Tests: a reasoning chain is captured, redacted, emitted as span events, and written to the ledger with a valid hash link; secrets in CoT never reach the sink.
@@ -298,9 +298,9 @@ MSGK **already ships** a standards-based YAML/OPA/Cedar policy engine. Per decis
 ---
 
 ## Top risks
-1. **MSGK v4 package rename** (`agent_os.*` → umbrella) could break many imports — confirm WS3.1 first.
+1. **Package rename** (`agent_os.*` → umbrella) could break many imports — confirm WS3.1 first.
 2. **`agent-sre==3.2.2` exact pin** is load-bearing for `maf_adapter` and gap 3 — verify symbol compat before bumping.
 3. **AWS/GCP framework binding is optional/deferred** — once MAF moves to `adapters/azure/maf/`, end-to-end AWS/GCP runs need a framework adapter (LangGraph/Bedrock for WS5.8, ADK for WS6.8). WS5/WS6 deliver the *cloud bindings* with certainty; the framework axis is the optional last task in each. Don't claim AWS/GCP run end-to-end until those land.
-4. **Audit overlap:** our SHA-256 hash-chain ledger vs MSGK's Merkle audit — reconcile in WS4.
+4. **Audit overlap:** our SHA-256 hash-chain ledger vs `agent_os`'s Merkle audit — reconcile in WS4.
 5. **AWS/GCP runtime verification** — WS5/WS6 unit-test against mocked SDKs; real cloud verification (deployed identity, live tracing, ledger writes) may lag. Each WS acceptance requires documenting verified-vs-stubbed.
-6. **Gap-2 migration**: adopting MSGK's engine + porting `galaxy-*.yaml` may be fiddly even though it's "not built" — budget it as a config task in WS3/WS4.
+6. **Gap-2 migration**: adopting `agent_os.policies` + porting `galaxy-*.yaml` may be fiddly even though it's "not built" — budget it as a config task in WS3/WS4.

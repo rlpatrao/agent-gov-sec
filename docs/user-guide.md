@@ -1,6 +1,6 @@
 # Galaxy Agentic Governance Platform — User Guide
 
-A practical "how do I do X" guide for working with the **governance platform** — per-agent identity, the layered guard middleware stack, A2A governance, OTel tracing, and a hash-chained audit ledger. Built on the Microsoft Agent Governance Toolkit (MSGK / `agent_os`) and the Microsoft Agent Framework (MAF).
+A practical "how do I do X" guide for working with the **governance platform** — per-agent identity, the layered guard middleware stack, A2A governance, OTel tracing, and a hash-chained audit ledger. Built on the `agent_os` / `agent_sre` / `agentmesh` packages and the `agent-framework` runtime.
 
 Pairs with [architecture.md](architecture.md) (the visual system view) and [services-and-tech.md](services-and-tech.md) (the resource inventory).
 
@@ -131,7 +131,7 @@ When the handler calls `await agent.run(prompt, options={...})`, the request pas
 1. **PromptInjectionGuardMiddleware** — literal-string + heuristic detection, no LLM. Blocks before the model is called when the threat clears `prompt_injection_block_threshold` (default `high` for the Analyzer).
 2. **CredentialRedactorGuardMiddleware** — regex scan. In `redact` mode (the Analyzer's default) it masks detected secrets before the model sees them; in `deny` mode it blocks.
 3. **ContextBudgetGuardMiddleware** — pre-call token allocation with a hard cap (`context_budget_tokens`, 40000 for the Analyzer).
-4. **AuditTrailMiddleware** — writes a hash-chained ledger row (from MSGK's `create_governance_middleware`).
+4. **AuditTrailMiddleware** — writes a hash-chained ledger row (from `agent_os.integrations.maf_adapter.create_governance_middleware`).
 5. **GovernancePolicyMiddleware** — evaluates `governance/policies/*.yaml` against the call context (priority-sorted, first-match-wins). See [§6](#6-policies--the-yaml-rule-engine).
 6. **CapabilityGuardMiddleware** — enforces the YAML `allowed_tools` list (only present when the agent has tools; the read-only Analyzer has none).
 7. **RogueDetectionMiddleware** — behavioral-drift / anomaly detection on tool-use patterns.

@@ -5,7 +5,7 @@
 
 **Last updated:** 2026-06-09
 
-> **Repo scope.** This repository is the **governance platform** (`core/`, `governance/`, `a2a/`, `infra/`), built on the **Microsoft Agent Governance Toolkit (MSGK / `agent_os`)** and the **Microsoft Agent Framework (MAF)**. The agents it governs are a **minimal demonstration payload** (`payload_agents/`) — a single MAF **`Analyzer`** agent wired through the full guard stack, just enough to prove the platform governs a real agent end-to-end.
+> **Repo scope.** This repository is the **governance platform** (`core/`, `governance/`, `a2a/`, `infra/`), built on the **`agent_os` / `agent_sre` / `agentmesh` packages** and the **`agent-framework` runtime (MAF)**. The agents it governs are a **minimal demonstration payload** (`payload_agents/`) — a single MAF **`Analyzer`** agent wired through the full guard stack, just enough to prove the platform governs a real agent end-to-end.
 >
 > The full multi-agent AWS→Azure migration product (the 5-stage migration pipeline, discovery pipeline, scanner/AST pipeline, ~18 agents, ACA deployment) has been moved to a **local-only, gitignored `archive/`** and is **not part of this repo**. Where this doc shows that product's multi-agent trace topology, it is explicitly labeled **(archived)** for context only — it is not a current feature.
 >
@@ -387,7 +387,7 @@ No NHI has Key Vault access. The AOAI key never leaves APIM's inbound policy. An
 
 **File:** [`adapters/azure/maf/middleware.py`](../adapters/azure/maf/middleware.py) — `build_governance_stack()`
 
-Every `agent.run()` traverses this exact stack, in this order. Guards 1–3 are this repo's MAF wrappers around MSGK primitives; guards 4–7 come from MSGK's `agent_os.integrations.maf_adapter.create_governance_middleware`:
+Every `agent.run()` traverses this exact stack, in this order. Guards 1–3 are this repo's MAF wrappers around `agent_os` primitives; guards 4–7 come from `agent_os.integrations.maf_adapter.create_governance_middleware`:
 
 ```
 Incoming message (user prompt / tool result)
@@ -402,7 +402,7 @@ Incoming message (user prompt / tool result)
 ③ ContextBudgetGuardMiddleware          ← token pre-allocation hard cap (OWASP LLM04)
          │
          ▼
-④ AuditTrailMiddleware                  ← append-only audit entry, three backends (MSGK)
+④ AuditTrailMiddleware                  ← append-only audit entry, three backends (agent_os)
          │
          ▼
 ⑤ GovernancePolicyMiddleware            ← YAML declarative rules (galaxy-core/tools/pii/ast.yaml)
@@ -474,7 +474,7 @@ This guard prevents runaway cost from unbounded context growth. It pre-allocates
 
 **Files:** [`governance/policies/galaxy-core.yaml`](../governance/policies/galaxy-core.yaml), `galaxy-tools.yaml`, `galaxy-pii.yaml`, `galaxy-ast.yaml`
 
-These are MSGK `GovernancePolicyMiddleware` rules evaluated on every turn (priority-sorted, first-match-wins). All files under `governance/policies/` are auto-loaded at agent build time — no manifest, no code:
+These are `agent_os` `GovernancePolicyMiddleware` rules evaluated on every turn (priority-sorted, first-match-wins). All files under `governance/policies/` are auto-loaded at agent build time — no manifest, no code:
 
 ```yaml
 # galaxy-core.yaml — defense-in-depth net if the injection guard is misconfigured
@@ -564,7 +564,7 @@ traces
 The platform traces per-step/per-hop spans and `reasoning_tokens` counts; **WS7 (Gap 4+) added logging of the reasoning *content* itself.** `ReasoningTraceLogger` ([`governance/extensions/reasoning_trace.py`](../governance/extensions/reasoning_trace.py), flag `GALAXY_GAP_REASONING_TRACE`, off by default) does:
 
 - **Capture** the agent's CoT (reasoning / tool-selection rationale) and CoVe (self-generated verification Q&A).
-- **Redact before persist (mandatory):** every CoT/CoVe string is routed through MSGK's `CredentialRedactor` (credentials + PII) **before** it reaches any sink — raw reasoning never lands. The logger refuses to run without a redactor.
+- **Redact before persist (mandatory):** every CoT/CoVe string is routed through `agent_os`'s `CredentialRedactor` (credentials + PII) **before** it reaches any sink — raw reasoning never lands. The logger refuses to run without a redactor.
 - **Emit to OTel traces:** `reasoning.cot` / `reasoning.cove` span events on the current span, keyed to `governance.agent_id` (the `nhi_id`), with `reasoning.decision`, `reasoning.redaction_applied`, and a content hash.
 - **Persist to the audit ledger:** a hash-stamped `reasoning_trace` audit entry via the `AuditBackend`, attributable alongside actions.
 - **Volume controls:** sampling + truncation (full content on deny/error, summarized on success).
