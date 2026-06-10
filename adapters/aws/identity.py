@@ -27,6 +27,23 @@ logger = logging.getLogger(__name__)
 class AwsIdentityProvider:
     """IdentityProvider impl backed by STS AssumeRole (per-agent IAM role)."""
 
+    def resolve_client_id(self, *, agent_type: str) -> Optional[str]:
+        """Resolve the agent's **IAM** principal id (its role ARN).
+
+        Standard bridge: the ``NHI_CLIENT_ID_<AGENT_TYPE>`` env var that IaC
+        (CDK/Terraform) sets to the role ARN it provisions. If unset, derive it
+        from the per-agent role-name convention ``galaxy-<agent_type>`` when
+        ``AWS_ACCOUNT_ID`` is configured (the role-name pattern the WS5 Terraform
+        creates). Returns ``None`` if neither is available.
+        """
+        env = os.environ.get(f"NHI_CLIENT_ID_{agent_type.upper()}")
+        if env:
+            return env
+        account = os.environ.get("AWS_ACCOUNT_ID")
+        if account:
+            return f"arn:aws:iam::{account}:role/galaxy-{agent_type.lower()}"
+        return None
+
     def get_credential(self, *, client_id: str, agent_type: str) -> Optional[Any]:
         # client_id == the agent's IAM role ARN (e.g. arn:aws:iam::123:role/galaxy-analyzer)
         if not client_id:

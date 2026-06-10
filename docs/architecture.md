@@ -39,7 +39,7 @@ flowchart TB
     Gov["governance/  — guard protocol, policies/*.yaml,\nframework-free guards (egress, escalation), OtelAuditBackend"]
     A2A["a2a/  — typed envelopes + audited dispatcher"]
     Tracer["core/run_tracer.py — agnostic OTel SDK + pipeline span"]
-    NHI["core/nhi_registry.py — agent-type → client-id (data only)"]
+    NHI["core/nhi_registry.py — agent-type → principal id (resolver; no cloud SDK, no agent list)"]
   end
 
   subgraph ADAPTERS["Cloud + framework adapters — adapters/"]
@@ -92,7 +92,7 @@ core/                      # agnostic platform core (no azure, no agent framewor
 ├── interfaces.py          #   the seam: Protocols + re-exported AuditBackend
 ├── provider_factory.py    #   get_provider() by CLOUD_PROVIDER (lazy import)
 ├── secrets.py             #   EnvVarSecretProvider (agnostic fallback)
-├── nhi_registry.py        #   agent-type → client-id mapping + AgentIdentity (data)
+├── nhi_registry.py        #   agent-type → principal id resolver + AgentIdentity (no agent list)
 ├── run_tracer.py          #   agnostic OTel SDK setup + pipeline root span
 ├── trace_ledger.py        #   hash-chain ledger schema/logic (agnostic)
 └── discovery_artifacts.py #   Pydantic models (kept for the demo)
@@ -147,9 +147,12 @@ Every guard *logic* primitive comes from `agent_os` (anomaly/drift from `agent_s
 
 Source: [`core/nhi_registry.py`](../core/nhi_registry.py) (agnostic), [`adapters/azure/identity.py`](../adapters/azure/identity.py) (Azure credential)
 
-The registry is pure data: an agent-type → client-id mapping plus the attribution model. It imports no cloud SDK. Resolving an actual **credential** for an identity is delegated to the selected provider's `IdentityProvider` — on Azure, `ManagedIdentityCredential(client_id=...)` using Workload Identity federated OIDC tokens; on AWS it would be STS AssumeRole/IRSA, on GCP Workload Identity Federation. `AgentIdentity.get_credential()` routes through `core.provider_factory.get_provider().identity_provider()`, so the registry stays agnostic.
+The registry is fully generic and imports no cloud SDK — it **hardcodes no agent list**. Both halves of an identity are delegated to the selected provider's `IdentityProvider`:
 
-The `NHIRegistry` still lists the full set of agent types the archived product used; the **only agent in this repo** is `Analyzer`. Extra entries are harmless — `NHIRegistry.get(agent_type)` only resolves the types you actually build.
+- **id resolution** — `NHIRegistry.get(agent_type)` → `identity_provider().resolve_client_id(agent_type)`, which sources the agent's principal id from the cloud directory: Azure → **Entra** App Registration / User-Assigned MI `clientId`; AWS → **IAM** role ARN; GCP → **SA** email. The standard runtime bridge is the `NHI_CLIENT_ID_<AGENT_TYPE>` env var that IaC populates from the directory (so the value originates in the cloud identity system); core falls back to that env directly if no provider resolves it.
+- **credential** — `AgentIdentity.get_credential()` → `identity_provider().get_credential(...)` exchanges that id for a usable credential (Azure `ManagedIdentityCredential`, AWS STS AssumeRole/IRSA, GCP WIF).
+
+Any agent type — platform or payload — registers by its cloud identity / env var, never by editing core. The demo payload registers its three NHIs in-zone (`payload_agents/__init__.py` → `NHI_CLIENT_ID_*`).
 
 The `client_id` is carried as:
 - `x-nhi-id` header on every gateway request (set by the `LLMGateway` in `default_headers`)
@@ -159,7 +162,7 @@ The `client_id` is carried as:
 ```mermaid
 flowchart LR
   Agent["Python agent process\n(NHI_CLIENT_ID_* from env)"]
-  Reg["core/nhi_registry.py\n(agent-type → client-id, data only)"]
+  Reg["core/nhi_registry.py\n(agent-type → principal id resolver)"]
   IDP["IdentityProvider\n(adapters/azure/identity.py)"]
   Cloud["Cloud identity\n(Entra MI / STS / WIF)"]
   GW["LLMGateway\n(adapters/azure/gateway.py)"]

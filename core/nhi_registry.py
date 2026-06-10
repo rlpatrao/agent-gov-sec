@@ -35,35 +35,11 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 
-# Registry of all agent NHI client IDs
-# In AKS: loaded from env vars set by Bicep/Terraform during provisioning
-# In local dev: placeholder values are fine — no real auth happens
-_NHI_CLIENT_IDS: dict[str, str] = {
-    # Shared / Step 0
-    "Classifier":           os.environ.get("NHI_CLIENT_ID_CLASSIFIER",          ""),
-    # Migration pipeline
-    "Scanner":              os.environ.get("NHI_CLIENT_ID_SCANNER",              ""),
-    "ASTAnalyzer":          os.environ.get("NHI_CLIENT_ID_ASTANALYZER",          ""),
-    "Analyzer":             os.environ.get("NHI_CLIENT_ID_ANALYZER",             ""),
-    "LambdaAnalyzer":       os.environ.get("NHI_CLIENT_ID_LAMBDAANALYZER",       ""),
-    "Architect":            os.environ.get("NHI_CLIENT_ID_ARCHITECT",            ""),
-    "Coder":                os.environ.get("NHI_CLIENT_ID_CODER",                ""),
-    "Reviewer":             os.environ.get("NHI_CLIENT_ID_REVIEWER",             ""),
-    "Security":             os.environ.get("NHI_CLIENT_ID_SECURITY",             ""),
-    "SecurityReviewer":     os.environ.get("NHI_CLIENT_ID_SECURITYREVIEWER",     ""),
-    "Tester":               os.environ.get("NHI_CLIENT_ID_TESTER",               ""),
-    "IaCGen":               os.environ.get("NHI_CLIENT_ID_IACGEN",               ""),
-    "SLOWatcher":           os.environ.get("NHI_CLIENT_ID_SLOWATCHER",           ""),
-    # Discovery pipeline
-    "DiscoveryScanner":     os.environ.get("NHI_CLIENT_ID_DISCOVERYSCANNER",     ""),
-    "DiscoveryGrapher":     os.environ.get("NHI_CLIENT_ID_DISCOVERYGRAPHER",     ""),
-    "DiscoveryBRD":         os.environ.get("NHI_CLIENT_ID_DISCOVERYBRD",         ""),
-    "DiscoveryArchitect":   os.environ.get("NHI_CLIENT_ID_DISCOVERYARCHITECT",   ""),
-    "DiscoveryStories":     os.environ.get("NHI_CLIENT_ID_DISCOVERYSTORIES",     ""),
-    # Demo/payload agent types are NOT hardcoded here — they register via
-    # NHI_CLIENT_ID_<AGENT_TYPE> env (see NHIRegistry.get extensibility below),
-    # so core stays free of any specific payload's agent names.
-}
+# NO agent types are hardcoded here. The registry is fully generic: it resolves
+# any agent type at call time through the selected cloud IdentityProvider
+# (Azure → Entra, AWS → IAM, GCP → SA), with an `NHI_CLIENT_ID_<AGENT_TYPE>` env
+# bridge as the cloud-agnostic fallback. Agents (platform or payload) register by
+# their cloud identity / env var — never by editing this file.
 
 
 @dataclass(frozen=True)
@@ -106,40 +82,48 @@ class NHIRegistry:
 
     @staticmethod
     def get(agent_type: str) -> AgentIdentity:
-        # Resolution: the static map first, then an `NHI_CLIENT_ID_<AGENT_TYPE>`
-        # env var. The env fallback makes the registry **open for extension** —
-        # payload/demo agent types (e.g. a LangGraph demo's FinOps/Auditor/Rogue)
-        # register purely by setting their env var, with **no edit to this core
-        # file**. Resolved at call time so late-set env (or a payload package's
-        # import-time defaults) works.
-        client_id = _NHI_CLIENT_IDS.get(agent_type) or os.environ.get(
-            f"NHI_CLIENT_ID_{agent_type.upper()}", ""
-        )
+        """Resolve an agent's NHI principal id. The id is sourced from the
+        selected cloud IdentityProvider (Azure → Entra, AWS → IAM, GCP → SA);
+        the provider's standard implementation reads the IaC-provisioned
+        ``NHI_CLIENT_ID_<AGENT_TYPE>`` env. If no provider can resolve it (e.g.
+        an unimplemented cloud, or none selected), fall back to that env var
+        directly. No agent type is hardcoded in core."""
+        client_id = NHIRegistry._resolve_client_id(agent_type)
         if not client_id:
             raise ValueError(
                 f"No NHI registered for agent type '{agent_type}'. "
-                f"Register it in Entra and add NHI_CLIENT_ID_{agent_type.upper()} "
-                f"to your environment config."
+                f"Provision its cloud identity (Entra App Registration / IAM role "
+                f"/ GCP SA) and set NHI_CLIENT_ID_{agent_type.upper()} in the env."
             )
         return AgentIdentity(agent_type=agent_type, client_id=client_id)
 
     @staticmethod
+    def _resolve_client_id(agent_type: str) -> str:
+        # 1) cloud IdentityProvider — it knows how to source the id from its
+        #    directory (Azure → Entra, AWS → IAM, GCP → SA).
+        try:
+            from core.provider_factory import get_provider
+            cid = get_provider().identity_provider().resolve_client_id(agent_type=agent_type)
+            if cid:
+                return cid
+        except Exception:
+            pass  # provider unavailable / not implemented → agnostic env fallback
+        # 2) agnostic fallback: the NHI_CLIENT_ID_<TYPE> env bridge.
+        return os.environ.get(f"NHI_CLIENT_ID_{agent_type.upper()}", "")
+
+    @staticmethod
     def validate_all() -> None:
-        """
-        Call at platform startup to verify all NHIs are configured.
-        Fail fast before any agent runs.
-        """
+        """Warn if any configured ``NHI_CLIENT_ID_*`` env var isn't a real cloud
+        id (a UUID, for Entra). Generic — validates whatever the environment
+        registers; no agent list is hardcoded. In production each id is the
+        real Entra App Registration / IAM role / GCP SA injected by IaC."""
         import re
         _UUID_RE = re.compile(
             r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
         )
-        missing = [
-            agent for agent, client_id in _NHI_CLIENT_IDS.items()
-            if not _UUID_RE.match(client_id)
+        placeholders = [
+            k[len("NHI_CLIENT_ID_"):] for k, v in os.environ.items()
+            if k.startswith("NHI_CLIENT_ID_") and not _UUID_RE.match(v or "")
         ]
-        if missing:
-            logger.warning(
-                "nhi.missing_real_entra_ids",
-                extra={"agents": missing},
-            )
-            # Warning only in local dev. In ACA each job's MI injects the real UUID.
+        if placeholders:
+            logger.warning("nhi.non_uuid_ids", extra={"agents": placeholders})

@@ -60,6 +60,18 @@ def test_unknown_agent_without_env_still_raises(monkeypatch):
         nhi.NHIRegistry.get("Ghost")
 
 
+def test_get_routes_id_through_cloud_provider(monkeypatch):
+    # The id is sourced from the selected cloud IdentityProvider — not just a raw
+    # env read. Here AWS derives the IAM role ARN from the galaxy-<agent>
+    # convention, proving core delegates resolution to the cloud identity system.
+    monkeypatch.setenv("CLOUD_PROVIDER", "aws")
+    monkeypatch.setenv("AWS_ACCOUNT_ID", "111122223333")
+    monkeypatch.delenv("NHI_CLIENT_ID_CODER", raising=False)
+    nhi = _reload_registry()
+    ident = nhi.NHIRegistry.get("Coder")
+    assert ident.client_id == "arn:aws:iam::111122223333:role/galaxy-coder"
+
+
 def test_get_credential_degrades_to_none_without_cloud_sdk(monkeypatch):
     # Simulate the Azure SDK being unavailable (it may be installed in this venv):
     # setting sys.modules["azure.identity"] = None makes the lazy
