@@ -11,11 +11,19 @@ env-extensible lookup) and its deps are the opt-in `.[langgraph]` extra.
 
 ```bash
 pip install '.[langgraph]'           # langchain>=1.0, langgraph>=1.0, langchain-openai>=1.0
-uv run python scripts/demo_two_agents.py
+uv run python scripts/demo_two_agents.py            # results matrix only
+uv run python scripts/demo_two_agents.py --verbose  # + the governance log stream
 ```
 
 No Azure credentials, no database, no live LLM — a `FakeToolCallingModel` stands in
 for the model, the audit ledger runs in stdout mode, and OTel no-ops.
+
+**Seeing what ran.** By default the demo prints only the results matrix (logs are
+silenced). `--verbose` (≡ `--log-level INFO`) turns on the governance log stream —
+per-guard decisions (`agent_os.audit`), hash-chained ledger writes
+(`postgres_audit.queued`, stdout mode offline), and redactions/drift signals.
+`--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}` sets it explicitly. The audit
+ledger entries + hashes also print in the **[H]** section regardless.
 
 ## The three agents (`payload_agents/`)
 
