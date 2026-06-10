@@ -33,6 +33,7 @@ _PROVIDER_PACKAGES: dict[str, str] = {
     "azure": "adapters.azure",
     "aws": "adapters.aws",
     "gcp": "adapters.gcp",
+    "local": "adapters.local",   # cloud-neutral: env secrets, in-memory ledger, no egress
 }
 
 DEFAULT_PROVIDER = "azure"

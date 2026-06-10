@@ -24,6 +24,7 @@ import asyncio
 import argparse
 import json
 import logging
+import os
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -38,7 +39,6 @@ from langchain_core.messages import AIMessage
 from a2a.dispatcher import a2a_call
 from a2a.envelope import A2ARequest, A2AResponse
 from adapters.aws.data_fgac import AwsLakeFormationEnforcer
-from adapters.azure.audit import PostgresHashChainBackend
 from adapters.langgraph.governance import GovernanceViolation
 from adapters.langgraph.runtime import scripted_model
 from core.nhi_registry import NHIRegistry
@@ -102,20 +102,32 @@ async def section_identity(tmp: Path):
     except ValueError:
         record("A1 NHI identity", "Ghost", "unregistered → ValueError", "ValueError", "ValueError", True)
 
-    # A2 egress chokepoint: build surfaces the resolved mode (offline → refused)
+    # A2 egress chokepoint: build surfaces the resolved mode (cloud-specific;
+    # any non-empty mode = the gateway was consulted — offline refuses the key).
     b = await build_finops_agent("run-egress", scripted_model(AIMessage(content="ok")),
                                  drift_baseline_path=tmp / "e.json")
     record("A2 egress chokepoint", "FinOps", "LLM gateway consulted",
-           "mode resolved (offline → no key)", b.egress, b.egress in ("offline-no-egress", "apim", "aoai-direct"))
+           "mode resolved (offline → no key)", b.egress, bool(b.egress))
 
-    # A3 egress allow-list
+    # A3 egress allow-list — cloud-agnostic: test the FIRST allowed domain from
+    # the *active* provider's egress.yaml (APIM on azure, Bedrock on aws, …).
+    import yaml as _yaml
+    from core.provider_factory import get_provider
     pol = load_egress_policy()
-    allowed = check_outbound(pol, "https://example-apim.azure-api.net/openai")
-    denied = check_outbound(pol, "https://evil.example.com/exfil")
-    record("A3 egress allow-list", "FinOps", "listed APIM domain", "allow",
-           "allow" if allowed.allowed else "deny", allowed.allowed)
-    record("A3 egress allow-list", "Rogue", "unlisted host", "deny",
-           "allow" if denied.allowed else "deny", not denied.allowed)
+    egress_path = get_provider().egress_config_path()
+    listed = None
+    if egress_path and egress_path.exists():
+        rules = (_yaml.safe_load(egress_path.read_text("utf-8")) or {}).get("rules", [])
+        listed = next((r.get("domain") for r in rules if r.get("action") == "allow" and r.get("domain")), None)
+    if listed:
+        allowed = check_outbound(pol, f"https://{listed}/x")
+        denied = check_outbound(pol, "https://evil.example.com/exfil")
+        record("A3 egress allow-list", "FinOps", f"listed domain ({listed})", "allow",
+               "allow" if allowed.allowed else "deny", allowed.allowed)
+        record("A3 egress allow-list", "Rogue", "unlisted host", "deny",
+               "allow" if denied.allowed else "deny", not denied.allowed)
+    else:
+        record("A3 egress allow-list", "FinOps", "no allow-list for provider", "n/a", "n/a", True)
 
 
 # ── B. Per-call guards (live agent runs) ───────────────────────────────────────
@@ -343,19 +355,22 @@ async def section_escalation():
 
 
 # ── H. Audit ledger (hash chain) ────────────────────────────────────────────────
-def _verify_buffer(pg: PostgresHashChainBackend):
-    """Recompute the hash chain over the backend's buffered entries."""
-    from adapters.azure.audit import _compute_hash
+def _verify_buffer(pg):
+    """Recompute the hash chain over the backend's buffered entries. Backend-
+    agnostic: azure (Postgres), aws (DynamoDB), and local backends share the same
+    buffer shape, helpers, genesis, and SHA-256 hash — so this works in any mode."""
+    import hashlib
+    bk = type(pg)
     prev = "genesis-" + "0" * 64
     rows, ok = [], True
     for entry, stored_hash, stored_prev in pg._buffer:
-        expected = _compute_hash(
+        expected = hashlib.sha256("|".join([
             pg._run_id, entry.metadata.get("module_id", "unknown"),
-            PostgresHashChainBackend._agent_type(entry),
+            bk._agent_type(entry),
             entry.event_type or entry.action or "unknown",
-            PostgresHashChainBackend._decision_to_outcome(entry.decision),
+            bk._decision_to_outcome(entry.decision),
             str(entry.metadata.get("attempt", 1)), prev,
-        )
+        ]).encode("utf-8")).hexdigest()
         valid = expected == stored_hash and stored_prev == prev
         ok = ok and valid
         rows.append((entry, stored_hash, valid))
@@ -408,15 +423,26 @@ def print_matrix():
     return passed == total
 
 
-async def main(log_level: int = logging.CRITICAL):
+async def main(log_level: int = logging.CRITICAL, cloud: str = "azure"):
     # Default CRITICAL = quiet (just the results matrix). --verbose / --log-level
     # turn up the governance log stream (per-guard decisions, audit-ledger writes,
     # drift signals, redactions) so you can see what actually ran.
     logging.basicConfig(level=log_level, format="  log %(levelname)-7s %(name)s :: %(message)s")
+    # Select the cloud adapter set BEFORE any agent is built (the factory caches).
+    os.environ["CLOUD_PROVIDER"] = cloud
+    # Pre-flight: skeleton providers (gcp/WS6) raise NotImplementedError — fail
+    # cleanly with guidance instead of a mid-run traceback.
+    from core.provider_factory import get_provider
+    try:
+        get_provider(cloud).identity_provider()
+    except NotImplementedError:
+        print(_c(YELLOW, f"\n  '{cloud}' adapters are an interface-complete skeleton (not yet implemented). "
+                         f"Use --azure, --aws, or --local."))
+        sys.exit(2)
     tmp = Path(tempfile.mkdtemp(prefix="galaxy-demo-"))
     print()
     print(_c(BOLD + WHITE, "  Galaxy Governance — 3 LangGraph agents, every control, success + failure"))
-    print(dim("  FinOpsAnalyst · Auditor · Rogue   (offline: fake model, no creds, no DB)"))
+    print(dim(f"  FinOpsAnalyst · Auditor · Rogue   (offline: fake model, no creds, no DB)   cloud={cloud}"))
 
     print(hdr("\n[A] Identity & egress"));      await section_identity(tmp)
     print(hdr("[B] Per-call guards"));          await section_guards(tmp)
@@ -431,24 +457,34 @@ async def main(log_level: int = logging.CRITICAL):
     sys.exit(0 if all_ok else 1)
 
 
-def _parse_log_level() -> int:
+def _parse_args() -> tuple[int, str]:
     p = argparse.ArgumentParser(
         description="Galaxy governance demo — 3 LangGraph agents, every control, offline.",
     )
-    p.add_argument(
-        "-v", "--verbose", action="store_true",
-        help="show the governance log stream (shortcut for --log-level INFO)",
-    )
-    p.add_argument(
-        "--log-level", default=None,
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="explicit log level (default: CRITICAL — only the results matrix)",
-    )
+    # Cloud adapter set — selects which provider's identity/egress/audit bindings
+    # the demo exercises (all offline). Default azure.
+    cloud = p.add_mutually_exclusive_group()
+    cloud.add_argument("--azure", dest="cloud", action="store_const", const="azure", help="Azure adapters (default)")
+    cloud.add_argument("--aws", dest="cloud", action="store_const", const="aws", help="AWS adapters (IAM / Bedrock / DynamoDB)")
+    cloud.add_argument("--gcp", dest="cloud", action="store_const", const="gcp", help="GCP adapters (WS6 skeleton — partial)")
+    cloud.add_argument("--local", dest="cloud", action="store_const", const="local", help="cloud-neutral (env / in-memory, no cloud SDK)")
+    cloud.add_argument("--cloud", dest="cloud", choices=["azure", "aws", "gcp", "local"], help="select the cloud adapter set")
+    p.set_defaults(cloud="azure")
+    # Logging
+    p.add_argument("-v", "--verbose", action="store_true",
+                   help="show the governance log stream (shortcut for --log-level INFO)")
+    p.add_argument("--log-level", default=None,
+                   choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+                   help="explicit log level (default: CRITICAL — only the results matrix). "
+                        "Use DEBUG to see each prompt + the guard that intercepts it.")
     args = p.parse_args()
-    if args.log_level:                       # explicit wins
-        return getattr(logging, args.log_level)
-    return logging.INFO if args.verbose else logging.CRITICAL
+    if args.log_level:
+        level = getattr(logging, args.log_level)
+    else:
+        level = logging.INFO if args.verbose else logging.CRITICAL
+    return level, args.cloud
 
 
 if __name__ == "__main__":
-    asyncio.run(main(_parse_log_level()))
+    _level, _cloud = _parse_args()
+    asyncio.run(main(_level, _cloud))

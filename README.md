@@ -48,8 +48,10 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 ```bash
 uv run python scripts/demo_governance.py     # minimal guard/redaction/ledger walkthrough
-uv run python scripts/demo_two_agents.py      # full feature × agent matrix (3 LangGraph agents)
-uv run python scripts/demo_two_agents.py -v   # same, plus the governance log stream (--verbose / --log-level)
+uv run python scripts/demo_two_agents.py            # full feature × agent matrix (3 LangGraph agents)
+uv run python scripts/demo_two_agents.py --aws      # run against the AWS adapter set (--azure default / --gcp / --local)
+uv run python scripts/demo_two_agents.py -v         # + the governance log stream (--verbose / --log-level)
+uv run python scripts/demo_two_agents.py --aws --log-level DEBUG  # + each prompt and the guard that intercepts it
 ```
 
 `demo_two_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`) and drives every
