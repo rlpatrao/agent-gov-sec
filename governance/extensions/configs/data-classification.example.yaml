@@ -1,0 +1,47 @@
+# Example data-classification catalog + per-agent data scopes (Gap 1).
+# Loaded by governance.extensions.data_classification.DataClassificationCatalog.
+#
+# Sensitivity ladder (ascending): PUBLIC < INTERNAL < CONFIDENTIAL < RESTRICTED.
+# Unclassified columns and unknown labels fail CLOSED (treated as RESTRICTED).
+# Unknown agents get an empty (deny-all) scope.
+
+classification:
+  datasets:
+    finops:
+      tables:
+        billing:
+          columns:
+            account_id: INTERNAL
+            cost_usd: INTERNAL
+            region: INTERNAL
+            customer_email: CONFIDENTIAL
+            tax_id: RESTRICTED
+    hr:
+      tables:
+        employees:
+          columns:
+            employee_id: INTERNAL
+            department: INTERNAL
+            salary: CONFIDENTIAL
+            ssn: RESTRICTED
+
+agent_scopes:
+  # FinOps agent: only the finops dataset, up to CONFIDENTIAL, but email is
+  # always masked, and it may only see rows for its own region.
+  FinOps:
+    allowed_datasets: [finops]
+    max_sensitivity: CONFIDENTIAL
+    masked_columns: [customer_email]
+    row_filter:
+      region: [us-east-1, us-west-2]
+
+  # Analyzer (the demo payload): INTERNAL-only, no sensitive data.
+  Analyzer:
+    allowed_datasets: [finops]
+    max_sensitivity: INTERNAL
+    masked_columns: []
+
+  # Auditor: read-only across datasets up to CONFIDENTIAL (RESTRICTED masked).
+  Auditor:
+    allowed_datasets: [finops, hr]
+    max_sensitivity: CONFIDENTIAL

@@ -237,9 +237,17 @@ adapters/
 
 ---
 
-## WS7 — Gap-closing modules (Gaps 1, 3, 4 only)
+## WS7 — Gap-closing modules (Gaps 1, 3, 4 only) ✅ DONE — core (2026-06-09)
 
 **Build location:** `governance/extensions/`, one feature-flagged sub-module per gap (off by default), cloud-neutral with per-cloud adapters under the same `adapters/{azure,aws,gcp}/` scheme.
+
+> **Status — implemented (101 tests green; all flags default OFF via `governance/extensions/flags.py`):**
+> - **Gap 1** [`data_fgac.py`](../governance/extensions/data_fgac.py) + [`data_classification.py`](../governance/extensions/data_classification.py): `DataAccessMediator` (authorize → allow/mask/deny by classification + NHI scope) + `InProcessEnforcer` (row filter + column mask/drop) + a YAML catalog (path via `GALAXY_DATA_CLASSIFICATION_PATH`). NHI binding: scope keyed on `agent_type` (the NHI registry's key); `authorize_for_identity()` attributes the read to `nhi_id`.
+> - **Gap 3** [`data_drift.py`](../governance/extensions/data_drift.py): `DataAccessDriftDetector` (volume z-score, first-seen table, sensitivity escalation, table-access entropy, denial rate → risk + quarantine) with a **persistent** `BaselineStore` (`JsonFileBaselineStore` default; fixes the cold-start reset; DynamoDB/Firestore/Postgres are the cloud adapters).
+> - **Gap 4** [`reasoning_guard.py`](../governance/extensions/reasoning_guard.py): `ReasoningStepValidator` — validates plan/tool-selection/data-access steps against the capability allow-list + the Gap-1 mediator **before** execution.
+> - **Gap 4+** [`reasoning_trace.py`](../governance/extensions/reasoning_trace.py): `ReasoningTraceLogger` — mandatory redact (MSGK `CredentialRedactor` + PII) → `reasoning.cot`/`reasoning.cove` OTel span events keyed to `nhi_id` → hash-stamped `reasoning_trace` audit entry; sampling + truncation.
+>
+> **Deferred (not built this pass — explicitly tracked):** 7.1.4 cloud-native FGAC *pushdown* adapters (BigQuery CLS / Lake Formation / Synapse CLS — the in-process enforcer works cloud-neutral today; pushdown is the production optimization); 7.4.3 semantic CoT analysis (research-y); 7.5.6 per-cloud CoT/CoVe KQL examples in the showcase doc; 7.0.3 OWASP/reference-architecture mapping refresh. None block the modules from functioning.
 
 ### ❌ Gap 2 — Unified policy engine — NOT BUILT (adopt upstream)
 MSGK **already ships** a standards-based YAML/OPA/Cedar policy engine. Per decision, we **do not implement** a policy engine. Instead, as part of WS3/WS4 we simply **adopt MSGK's engine** as the single decision point and (phased) migrate our `galaxy-*.yaml` rules onto it. Gaps 1 and 4 below **consume MSGK's policy engine** — they do not build one.
