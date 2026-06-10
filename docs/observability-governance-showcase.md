@@ -19,7 +19,7 @@
 2. [How Traceability Works — From Agent Code to Azure Console](#2-how-traceability-works)
 3. [Non-Human Identity (NHI) — Every Agent Has Its Own Entra Principal](#3-non-human-identity)
 4. [Policies as Code — Governance Enforced Before the LLM Sees a Byte](#4-policies-as-code)
-5. [Observability of Reasoning Content — Roadmap](#5-observability-of-reasoning-content--roadmap)
+5. [Observability of Reasoning Content (CoT/CoVe) — Wired](#5-observability-of-reasoning-content-cotcove--wired-behind-flag)
 6. [Additional Governance Topics for the Presentation](#6-additional-governance-topics)
 
 ---
@@ -559,17 +559,46 @@ traces
 
 ---
 
-## 5. Observability of Reasoning Content — Roadmap
+## 5. Observability of Reasoning Content (CoT/CoVe) — ✅ Wired (behind flag)
 
-Today the platform traces **per-step and per-hop spans** and captures `reasoning_tokens` *counts*, but it does **not** log the reasoning *content* itself — no Chain-of-Thought (CoT) or Chain-of-Verification (CoVe) record is persisted. Logging reasoning content is a **planned observability extension** (WS7, Gap 4+ in [`REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md)), complementary to the planned reasoning-step *enforcement* (Gap 4):
+The platform traces per-step/per-hop spans and `reasoning_tokens` counts; **WS7 (Gap 4+) added logging of the reasoning *content* itself.** `ReasoningTraceLogger` ([`governance/extensions/reasoning_trace.py`](../governance/extensions/reasoning_trace.py), flag `GALAXY_GAP_REASONING_TRACE`, off by default) does:
 
-- **Capture** the agent's CoT (intermediate reasoning / tool-selection rationale) and CoVe (self-generated verification questions + answers) from a shared inspectable structure.
-- **Redact before persist (mandatory):** route CoT/CoVe through the existing `CredentialRedactor` + PII policy **before** it touches any span, log, or ledger — reasoning text is high-risk for leaking secrets/PII.
-- **Emit to OTel traces:** add `reasoning.cot` / `reasoning.cove` span events on the per-agent span (step index, phase, verification verdict, redaction applied), keyed to the agent's `nhi_id`.
-- **Persist to the audit ledger:** write a `reasoning_trace` record (CoT/CoVe summary + hash) into the hash-chained ledger, so reasoning is attributable and tamper-evident alongside actions.
-- **Volume controls:** sampling + truncation + a size budget (full content on deny/error, summarized on success).
+- **Capture** the agent's CoT (reasoning / tool-selection rationale) and CoVe (self-generated verification Q&A).
+- **Redact before persist (mandatory):** every CoT/CoVe string is routed through MSGK's `CredentialRedactor` (credentials + PII) **before** it reaches any sink — raw reasoning never lands. The logger refuses to run without a redactor.
+- **Emit to OTel traces:** `reasoning.cot` / `reasoning.cove` span events on the current span, keyed to `governance.agent_id` (the `nhi_id`), with `reasoning.decision`, `reasoning.redaction_applied`, and a content hash.
+- **Persist to the audit ledger:** a hash-stamped `reasoning_trace` audit entry via the `AuditBackend`, attributable alongside actions.
+- **Volume controls:** sampling + truncation (full content on deny/error, summarized on success).
 
-This is **not** wired today — treat it as the planned direction for reasoning observability, not a current capability. The KQL recipes for CoT/CoVe span events will be added here once WS7 lands (task 7.5.6).
+### Querying CoT/CoVe — AWS (CloudWatch Logs Insights)
+
+On AWS the span events are exported via the ADOT collector → X-Ray; when also forwarded to CloudWatch Logs (OTLP→CloudWatch), query them with **Logs Insights** (the AWS analogue of KQL). Note: only redacted content + hashes are present — secrets never reach the log.
+
+```
+# All reasoning traces for one NHI in the last hour, newest first
+fields @timestamp, attributes.governance.agent_id, attributes.reasoning.decision,
+       attributes.reasoning.redaction_applied, attributes.reasoning.cot_hash
+| filter name in ["reasoning.cot", "reasoning.cove"]
+| filter attributes.governance.agent_id = "Analyzer-<client-id>"
+| sort @timestamp desc
+```
+
+```
+# Incident view: reasoning on deny/block decisions where a redaction fired
+fields @timestamp, attributes.governance.agent_id, name, attributes.reasoning.cot
+| filter name = "reasoning.cot"
+| filter attributes.reasoning.decision in ["deny", "block", "error"]
+   and attributes.reasoning.redaction_applied = 1
+| sort @timestamp desc
+```
+
+```
+# Count CoT vs CoVe events per agent (coverage / volume sanity)
+fields attributes.governance.agent_id, name
+| filter name in ["reasoning.cot", "reasoning.cove"]
+| stats count(*) as events by attributes.governance.agent_id, name
+```
+
+> **X-Ray** alternative: the same events appear as span event metadata on the agent's trace segment — filter the trace map by `governance.agent_id` and open the segment's events. **Azure** equivalents (App Insights KQL: `traces | where message startswith "reasoning."`) and **GCP** (Cloud Logging: `jsonPayload.name=~"^reasoning\."`) follow the same shape; per-cloud KQL/LogQL parity is a small follow-up.
 
 ---
 
@@ -617,7 +646,7 @@ The APIM subscription key is the shared egress credential. Adding a **Key Vault 
 | YAML policy-as-code | NIST AI RMF GOVERN 1.1 (Policies documented) |
 | APIM as LLM egress proxy | Zero Trust Network Architecture — LLM key never in agent |
 | Per-NHI tool allow-list | Principle of Least Privilege |
-| Reasoning-trace logging (CoT/CoVe) — *roadmap* | NIST AI RMF MEASURE / EU AI Act transparency (planned, WS7) |
+| Reasoning-trace logging (CoT/CoVe) — *wired (flag)* | NIST AI RMF MEASURE / EU AI Act transparency (WS7, `GALAXY_GAP_REASONING_TRACE`) |
 
 ---
 

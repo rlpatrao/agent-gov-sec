@@ -156,3 +156,63 @@ def test_aws_audit_stdout_mode_without_sdk(monkeypatch):
     asyncio.run(backend.flush_async())  # no table → clears buffer, no raise
     assert backend._buffer == []
     assert asyncio.run(backend.verify_chain()) is True  # no table → trivially true
+
+
+# ── Gap 1 cloud-native FGAC pushdown (Lake Formation / Athena) ────────────────
+
+_CATALOG = Path(__file__).parent.parent / "governance" / "extensions" / "configs" / "data-classification.example.yaml"
+
+
+def _finops_decision():
+    from governance.extensions.data_classification import DataClassificationCatalog
+    from governance.extensions.data_fgac import DataAccessMediator
+    med = DataAccessMediator(catalog=DataClassificationCatalog.load(_CATALOG))
+    return med.authorize(
+        agent_type="FinOps", dataset="finops", table="billing",
+        columns=["account_id", "cost_usd", "region", "customer_email", "tax_id"],
+    )
+
+
+def test_aws_fgac_scoped_query_projects_masks_and_filters():
+    from adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    sql = AwsLakeFormationEnforcer().scoped_query(_finops_decision(), database="finops", table="billing")
+    # allowed columns projected
+    assert "account_id" in sql and "cost_usd" in sql and "region" in sql
+    assert "FROM finops.billing" in sql
+    # masked columns redacted at the store (the raw value is never selected)
+    assert "AS customer_email" in sql and "AS tax_id" in sql
+    assert "'***REDACTED***'" in sql
+    # row filter pushed down as WHERE ... IN (...)
+    assert "WHERE region IN ('us-east-1', 'us-west-2')" in sql
+
+
+def test_aws_fgac_scoped_query_denied_raises():
+    from governance.extensions.data_fgac import DataAccessDecision
+    from adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    denied = DataAccessDecision(agent_type="FinOps", dataset="hr", table="employees", denied=True, reason="out of scope")
+    with pytest.raises(PermissionError, match="denied"):
+        AwsLakeFormationEnforcer().scoped_query(denied, database="hr", table="employees")
+
+
+def test_aws_fgac_apply_is_defense_in_depth():
+    # As a DataAccessEnforcer it still masks post-fetch rows (delegates in-process).
+    from adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    dec = _finops_decision()
+    rows = [{"account_id": "a1", "cost_usd": 1, "region": "us-east-1", "customer_email": "x@y.com", "tax_id": "T-1"},
+            {"account_id": "a2", "cost_usd": 2, "region": "eu-west-1", "customer_email": "z@y.com", "tax_id": "T-2"}]
+    out = AwsLakeFormationEnforcer().apply(dec, rows)
+    assert len(out) == 1 and out[0]["region"] == "us-east-1"
+    assert out[0]["customer_email"] == "***REDACTED***" and out[0]["tax_id"] == "***REDACTED***"
+
+
+def test_aws_fgac_register_filter_requires_boto3(monkeypatch):
+    monkeypatch.setitem(sys.modules, "boto3", None)
+    from adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    with pytest.raises(RuntimeError, match="boto3"):
+        AwsLakeFormationEnforcer().register_data_cells_filter(_finops_decision(), database="finops", table="billing")
+
+
+def test_aws_fgac_satisfies_enforcer_protocol():
+    from governance.extensions.data_fgac import DataAccessEnforcer
+    from adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    assert isinstance(AwsLakeFormationEnforcer(), DataAccessEnforcer)
