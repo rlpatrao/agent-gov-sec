@@ -43,6 +43,23 @@ def test_registered_agent_resolves(monkeypatch):
     assert str(ident) == "Analyzer/11111111-2222-3333-4444-555555555555"
 
 
+def test_env_extensibility_registers_unknown_agent(monkeypatch):
+    # An agent type NOT in the static map resolves purely from its env var —
+    # so a demo payload (FinOps/Auditor/Rogue) registers without editing core.
+    monkeypatch.setenv("NHI_CLIENT_ID_FINOPS", "cid-finops-xyz")
+    nhi = _reload_registry()
+    ident = nhi.NHIRegistry.get("FinOps")
+    assert ident.agent_type == "FinOps"
+    assert ident.client_id == "cid-finops-xyz"
+
+
+def test_unknown_agent_without_env_still_raises(monkeypatch):
+    monkeypatch.delenv("NHI_CLIENT_ID_GHOST", raising=False)
+    nhi = _reload_registry()
+    with pytest.raises(ValueError, match="No NHI registered"):
+        nhi.NHIRegistry.get("Ghost")
+
+
 def test_get_credential_degrades_to_none_without_cloud_sdk(monkeypatch):
     # Simulate the Azure SDK being unavailable (it may be installed in this venv):
     # setting sys.modules["azure.identity"] = None makes the lazy

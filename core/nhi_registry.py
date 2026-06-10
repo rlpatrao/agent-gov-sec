@@ -14,6 +14,12 @@ Federation), obtained via ``core.provider_factory.get_provider()``.
 CLIENT_IDs are not secrets — they are identity references. Store them in env
 vars or config, not a secret store.
 
+Extensibility (open/closed): the registry resolves an agent type from the
+static map **or** an ``NHI_CLIENT_ID_<AGENT_TYPE>`` env var, so new agent types
+(e.g. a demo payload, or any downstream agents) register by setting their env
+var — **without editing this core file**. Keep new-agent registration out of
+``core/`` and in env/config.
+
 Significance:
   - Every action in the trace ledger has an nhi_id attached
   - The cloud's audit log shows per-agent activity independently
@@ -97,7 +103,14 @@ class NHIRegistry:
 
     @staticmethod
     def get(agent_type: str) -> AgentIdentity:
-        client_id = _NHI_CLIENT_IDS.get(agent_type)
+        # Resolution: the static map first, then an `NHI_CLIENT_ID_<AGENT_TYPE>`
+        # env var. The env fallback makes the registry **open for extension** —
+        # new agent types (e.g. a demo payload's FinOps/Auditor/Rogue, or any
+        # downstream agent) register purely by setting their env var, with **no
+        # edit to this core file**. Resolved at call time so late-set env works.
+        client_id = _NHI_CLIENT_IDS.get(agent_type) or os.environ.get(
+            f"NHI_CLIENT_ID_{agent_type.upper()}", ""
+        )
         if not client_id:
             raise ValueError(
                 f"No NHI registered for agent type '{agent_type}'. "

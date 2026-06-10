@@ -39,6 +39,14 @@ aws = [
 ]
 # WS6: google-auth, google-cloud-secret-manager, Cloud Trace exporter, BigQuery.
 gcp = []
+# Optional LangGraph multi-agent governance demo (the non-MAF framework axis).
+# The demo lives entirely in adapters/langgraph/ + payload_agents/ and touches
+# NO core framework code — it registers its NHIs via NHI_CLIENT_ID_* env vars
+# (see core/nhi_registry extensibility) and ships its own doc + additive tests.
+langgraph = [
+    "langchain>=1.0",
+    "langgraph>=0.2",
+]
 
 [tool.pytest.ini_options]
 # The repo's tests only — never recurse into the local-only archive/.
