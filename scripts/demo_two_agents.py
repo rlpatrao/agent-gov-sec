@@ -21,6 +21,7 @@ Run:
 from __future__ import annotations
 
 import asyncio
+import argparse
 import json
 import logging
 import sys
@@ -407,8 +408,11 @@ def print_matrix():
     return passed == total
 
 
-async def main():
-    logging.basicConfig(level=logging.CRITICAL)
+async def main(log_level: int = logging.CRITICAL):
+    # Default CRITICAL = quiet (just the results matrix). --verbose / --log-level
+    # turn up the governance log stream (per-guard decisions, audit-ledger writes,
+    # drift signals, redactions) so you can see what actually ran.
+    logging.basicConfig(level=log_level, format="  log %(levelname)-7s %(name)s :: %(message)s")
     tmp = Path(tempfile.mkdtemp(prefix="galaxy-demo-"))
     print()
     print(_c(BOLD + WHITE, "  Galaxy Governance — 3 LangGraph agents, every control, success + failure"))
@@ -427,5 +431,24 @@ async def main():
     sys.exit(0 if all_ok else 1)
 
 
+def _parse_log_level() -> int:
+    p = argparse.ArgumentParser(
+        description="Galaxy governance demo — 3 LangGraph agents, every control, offline.",
+    )
+    p.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="show the governance log stream (shortcut for --log-level INFO)",
+    )
+    p.add_argument(
+        "--log-level", default=None,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="explicit log level (default: CRITICAL — only the results matrix)",
+    )
+    args = p.parse_args()
+    if args.log_level:                       # explicit wins
+        return getattr(logging, args.log_level)
+    return logging.INFO if args.verbose else logging.CRITICAL
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main(_parse_log_level()))
