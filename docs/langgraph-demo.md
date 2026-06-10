@@ -13,7 +13,8 @@ env-extensible lookup) and its deps are the opt-in `.[langgraph]` extra.
 pip install '.[langgraph]'           # langchain>=1.0, langgraph>=1.0, langchain-openai>=1.0
 uv run python scripts/demo_two_agents.py            # results matrix only (azure adapters by default)
 uv run python scripts/demo_two_agents.py --aws      # run against the AWS adapter set
-uv run python scripts/demo_two_agents.py --verbose  # + the governance log stream
+uv run python scripts/demo_two_agents.py --verbose  # curated narrative (agents/prompts/LLM/tools/interceptions)
+uv run python scripts/demo_two_agents.py --logs     # raw logger stream
 ```
 
 **Cloud adapter set.** `--azure` (default) / `--aws` / `--gcp` / `--local` (or `--cloud X`)
@@ -25,12 +26,19 @@ ledger, no cloud SDK). `--gcp` is a WS6 skeleton and exits with a notice.
 No Azure credentials, no database, no live LLM — a `FakeToolCallingModel` stands in
 for the model, the audit ledger runs in stdout mode, and OTel no-ops.
 
-**Seeing what ran.** By default the demo prints only the results matrix (logs are
-silenced). `--verbose` (≡ `--log-level INFO`) turns on the governance log stream —
-per-guard decisions (`agent_os.audit`), hash-chained ledger writes
-(`postgres_audit.queued`, stdout mode offline), and redactions/drift signals.
-`--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}` sets it explicitly. The audit
-ledger entries + hashes also print in the **[H]** section regardless.
+**Seeing what ran.** By default the demo prints only the results matrix. Two
+independent (combinable) views:
+
+- **`--verbose`** — the curated *narrative*: each agent's identity (NHI / cloud
+  principal id), the prompt it received, the LLM/tool output, **guardrail
+  interceptions** (e.g. `🛡 INTERCEPTED [Rogue]: prompt_injection …`), and every
+  check's outcome **with its data** (masked columns, drift `signals=[…]`, etc.).
+- **`--logs`** — the raw logger stream at INFO (per-guard `agent_os.audit`
+  decisions, hash-chained ledger writes, redactions). `--log-level {DEBUG…CRITICAL}`
+  sets it explicitly; `DEBUG` adds the middleware's own `guard.prompt` /
+  `guard.verdict` lines.
+
+The audit ledger entries + hashes also print in the **[H]** section regardless.
 
 ## The three agents (`payload_agents/`)
 
