@@ -24,6 +24,9 @@ venv/
 migrated/
 migrated_aca/
 
+# Archived code/docs — kept locally, removed from the repo
+/archive/
+
 # Presentation files — keep in local only
 *.pptx
 *.docx

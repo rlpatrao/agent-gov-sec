@@ -1,25 +1,27 @@
-# Galaxy Agentic SDLC Platform
+# Galaxy Agentic Governance Platform
 
-An enterprise-grade multi-agent platform that automates the migration of AWS workloads to Azure, governed at runtime by Microsoft Agent Framework and the agent_os governance toolkit.
+A runtime governance & security platform for multi-agent systems, built on the **Microsoft Agent Governance Toolkit (MSGK / `agent_os`)** and the Microsoft Agent Framework (MAF). It provides per-agent identity, a layered guard middleware stack, A2A governance, OTel tracing, and a hash-chained audit ledger — independent of the agents it governs.
+
+> **Repo focus.** This repository is the **governance platform**. The agents are a **minimal demonstration payload** (`payload_agents/`) — just enough to show the governance stack wrapping a real MAF agent. The full multi-agent AWS→Azure migration product (migration / discovery / scanner pipelines, 18 agents, ACA deployment) has been moved to a local-only `archive/` and is not part of this repo. See [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) for the cloud-agnostic refactor roadmap.
 
 ## What this platform does
 
-**Migration pipeline** (`scripts/run_migration.py`): Takes a legacy AWS codebase (Lambda, Spring Boot, ECS, Terraform, etc.) and runs it through a five-agent pipeline — Analyzer → Coder → Tester → Reviewer → SecurityReviewer — to produce migrated Azure Functions code, unit tests, Bicep IaC, and a review report. Coder and Tester form a self-healing loop: on test failure, structured failure context is fed back into the next Coder attempt (up to 3 attempts).
+**Governance platform** (`core/`, `governance/`, `a2a/`): per-agent Non-Human Identity (Entra), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → Application Insights tracing, a hash-chained Postgres audit ledger, and APIM as the sole egress path to the LLM. Every guard logic primitive comes from MSGK; this repo's value is the **bindings** (cloud + framework) and **composition**.
 
-**Discovery pipeline** (agent files in `agents/discovery_*`): A five-agent upstream pipeline — DiscoveryScanner → DiscoveryGrapher → DiscoveryBRD → DiscoveryArchitect → DiscoveryStories — that produces a structured inventory, dependency graph, business requirements, target architecture design, and a wave-scheduled migration backlog before migration begins.
+**Demonstration payload** (`payload_agents/`): a single MAF `Analyzer` agent and its dependencies, wired through the full governance stack via `build_agent()`. It exists to prove the platform governs a real agent end-to-end — not as a product.
 
-**Scanner pipeline** (`scripts/run_scanner.py`): A standalone pre-migration analysis tool — Scanner walks the repo and dispatches to ASTAnalyzer for deterministic tree-sitter extraction.
-
-All three pipelines share the same governance platform: per-agent Non-Human Identity (Entra), seven-layer middleware stack (prompt injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue detection), OTel → Application Insights tracing, hash-chained Postgres audit ledger, and APIM as the sole egress path to Azure OpenAI.
+**Offline governance demo** (`scripts/demo_governance.py`): runs with no Azure credentials, no database, and no LLM calls. Demonstrates a normal request passing all guards, a prompt-injection attack blocked before the LLM, a credential leak redacted, and hash-chained audit-ledger verification.
 
 ---
 
 ## Architecture
 
-See [`docs/architecture.md`](docs/architecture.md) for the full system design organized as:
+See [`docs/architecture.md`](docs/architecture.md) for the full system design:
 
 - **Part 1 — Governance Platform**: NHI identity, middleware stack, A2A protocol, OTel tracing, audit ledger, Azure resource map
-- **Part 2 — Payload App**: Migration pipeline, Discovery pipeline, codebase classification, structured logging
+- **Part 2 — Payload**: the sample agent, codebase classification, structured logging
+
+The planned cloud-agnostic restructure (Azure/MAF → `adapters/azure/`, plus AWS/GCP adapters) and the gap-closing modules are described in [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md).
 
 ---
 
@@ -29,7 +31,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full system design or
 
 - Python 3.13 or 3.14
 - `uv` (or `pip`)
-- `az` CLI logged into your Azure tenant and <your-subscription-name>
+- For cloud runs: `az` CLI logged into your Azure tenant (local/offline runs need nothing)
 
 ### Install
 
@@ -40,102 +42,48 @@ uv venv --python 3.14 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
 ```
 
-### Configure `.env`
+### Run the offline governance demo (no Azure required)
+
+```bash
+uv run python scripts/demo_governance.py
+```
+
+This is the fastest way to see the guard stack, redaction, and audit chain in action — fully offline.
+
+### Run the tests
+
+```bash
+uv run python -m pytest tests/ -q
+```
+
+All tests run without Azure credentials.
+
+### Configure `.env` (only needed for live LLM / cloud runs)
 
 ```bash
 # LLM egress via APIM (recommended) — agents route through APIM which injects the real AOAI key
-APIM_ENDPOINT=https://galaxyscanner-apim.azure-api.net
+APIM_ENDPOINT=https://<your-apim>.azure-api.net
 APIM_SUBSCRIPTION_KEY=<from keyvault: apim-subscription-key>
 
 # Direct AOAI (used when APIM_ENDPOINT is unset)
-AZURE_OPENAI_ENDPOINT=https://galaxyscanner-openai.openai.azure.com/
-AZURE_OPENAI_DEPLOYMENT=gpt-5-3-codex
+AZURE_OPENAI_ENDPOINT=https://<your-aoai>.openai.azure.com/
+AZURE_OPENAI_DEPLOYMENT=<deployment-name>
 AZURE_OPENAI_API_VERSION=preview
 AZURE_OPENAI_KEY=<from keyvault: azure-openai-key>
 
 # Observability
 APPLICATIONINSIGHTS_CONNECTION_STRING=<from keyvault: appinsights-connection-string>
-OTEL_SERVICE_NAME=galaxy-migration-local
+OTEL_SERVICE_NAME=galaxy-governance-local
 
-# Key Vault (leave blank locally — env-var fallback activates)
+# Key Vault + ledger (leave blank locally — env-var / stdout fallback activates)
 AZURE_KEY_VAULT_URL=
 POSTGRES_DSN=
 
-# Per-agent NHI identities (placeholders are fine for local dev)
-NHI_CLIENT_ID_SCANNER=local-scanner-nhi
-NHI_CLIENT_ID_ASTANALYZER=local-astanalyzer-nhi
+# Per-agent NHI identity (placeholder is fine for local dev)
 NHI_CLIENT_ID_ANALYZER=local-analyzer-nhi
-NHI_CLIENT_ID_CODER=local-coder-nhi
-NHI_CLIENT_ID_TESTER=local-tester-nhi
-NHI_CLIENT_ID_REVIEWER=local-reviewer-nhi
-NHI_CLIENT_ID_SECURITYREVIEWER=local-securityreviewer-nhi
-NHI_CLIENT_ID_DISCOVERYSCANNER=local-discoveryscanner-nhi
-NHI_CLIENT_ID_DISCOVERYGRAPHER=local-discoverygrapher-nhi
-NHI_CLIENT_ID_DISCOVERYBRD=local-discoverybrd-nhi
-NHI_CLIENT_ID_DISCOVERYARCHITECT=local-discoveryarchitect-nhi
-NHI_CLIENT_ID_DISCOVERYSTORIES=local-discoverystories-nhi
 ```
 
-### Run the migration pipeline
-
-```bash
-# Migrate the bundled example repo (auto-classifies as python_serverless)
-uv run python scripts/run_migration.py --source-dir legacy/aws_legacy
-
-# Override the detected stack type
-uv run python scripts/run_migration.py --source-dir legacy/aws_legacy --codebase-type python_serverless
-
-# Assign a custom run ID for tracing
-uv run python scripts/run_migration.py --source-dir legacy/aws_legacy --run-id run-$(date +%s)
-```
-
-Output lands in `migrated/<repo>/vN/` (auto-versioned — previous runs are never overwritten).
-
-### Run via Azure Container Apps (cloud)
-
-Runs each agent in its own ACA Job with its own Managed Identity. Artifacts flow through the shared Azure Files mount.
-
-**Prerequisites:** `az login`, 18 ACA jobs deployed (see `scripts/provision_aca_jobs.sh`), and `.env` uploaded to Azure Files.
-
-```bash
-# Upload .env to Azure Files (shared by all 18 jobs)
-az storage file upload \
-  --account-name galaxyscannersa \
-  --share-name galaxy-runs \
-  --source .env --path .env
-
-# First run — provision clean jobs then execute pipeline
-python scripts/run_pipeline_aca.py \
-  --source-dir legacy/aws_legacy \
-  --run-id run-$(date +%Y%m%d-%H%M%S) \
-  --module-id aws_legacy \
-  --provision
-
-# Subsequent runs — jobs already deployed, skip provision
-python scripts/run_pipeline_aca.py \
-  --source-dir legacy/aws_legacy \
-  --run-id run-$(date +%Y%m%d-%H%M%S) \
-  --module-id aws_legacy
-```
-
-Results download automatically to `migrated_aca/<run-id>/` when the SecurityReviewer finishes.
-
----
-
-### Run the scanner pipeline
-
-```bash
-uv run python scripts/run_scanner.py \
-  --repo legacy/aws_legacy \
-  --run-id run-001 \
-  --module-id payments-service
-```
-
-### Run tests
-
-```bash
-uv run python -m pytest tests/ -x -q
-```
+See [`.env.example`](.env.example) for the full set.
 
 ---
 
@@ -144,54 +92,40 @@ uv run python -m pytest tests/ -x -q
 ```
 agentic-sdlc/
 │
-├── agents/                         Migration and discovery agents
-│   ├── _base.py                    Universal build_agent() factory
-│   ├── _lib/                       Shared utilities (classifier, tools, logger, scanner)
-│   ├── config/                     Per-agent YAML configs (*.yaml)
-│   ├── prompts/                    System prompts (per-stack Coder variants + shared rules)
-│   ├── analyzer_agent.py           Migration pipeline agents
-│   ├── coder_agent.py
-│   ├── tester_agent.py
-│   ├── reviewer_agent.py
-│   ├── security_reviewer_agent.py
-│   ├── scanner_agent.py            Scanner pipeline agents
-│   ├── ast_agent.py
-│   ├── discovery_scanner_agent.py  Discovery pipeline agents
-│   ├── discovery_grapher_agent.py
-│   ├── discovery_brd_agent.py
-│   ├── discovery_architect_agent.py
-│   └── discovery_stories_agent.py
+├── payload_agents/                 Minimal demonstration payload (governed by the platform)
+│   ├── _base.py                    Universal build_agent() factory (wires the governance stack)
+│   ├── config.py                   Pydantic config loader (extra="forbid")
+│   ├── analyzer_agent.py           The sample MAF agent
+│   ├── _lib/                       Utilities the sample agent needs (chunker, classifier, tools, logger)
+│   ├── config/analyzer.yaml        Per-agent config
+│   └── prompts/analyzer.md         System prompt
 │
-├── core/                           Shared infrastructure
-│   ├── nhi_identity.py             Non-Human Identity registry (17 agent principals)
-│   ├── run_tracer.py               OTel configure_tracing + pipeline_span context manager
-│   ├── token_provider.py           Key Vault / env-var credential provider (5-min TTL)
-│   ├── trace_ledger.py             Hash-chained Postgres audit ledger
-│   └── discovery_artifacts.py      Pydantic models for discovery pipeline outputs
+├── core/                           Shared infrastructure  (Azure-coupled today; → adapters/ in WS1)
+│   ├── nhi_identity.py             Non-Human Identity registry
+│   ├── run_tracer.py               OTel configure_tracing + pipeline_span
+│   ├── token_provider.py           Key Vault / env-var credential provider
+│   ├── trace_ledger.py             Hash-chained audit ledger schema
+│   └── discovery_artifacts.py      Pydantic models
 │
-├── governance/                     Security and compliance layer
-│   ├── middleware.py               build_governance_stack() — the 7-guard factory
-│   ├── guards/                     Custom guard implementations
+├── governance/                     Security & compliance layer
+│   ├── middleware.py               build_governance_stack() — the guard factory
+│   ├── guards/                     Guard implementations (MAF middleware wrapping MSGK primitives)
 │   ├── adapters/                   Audit backends (OTel, Postgres hash-chain)
 │   ├── policies/                   YAML declarative rules (galaxy-*.yaml)
 │   ├── configs/                    Guard configs (prompt-injection.yaml, egress.yaml)
-│   └── mappings/                   aws-azure-reference.yaml (codebase_type → strategy)
+│   └── mappings/                   aws-azure-reference.yaml
 │
-├── a2a/                            Agent-to-Agent protocol
-│   ├── envelope.py                 Typed A2ARequest / A2AResponse / A2AStatus
-│   └── dispatcher.py               a2a_call() with audit + OTel spans
+├── a2a/                            Agent-to-Agent protocol (envelope + audited dispatcher)
 │
-├── scripts/                        Runnable entry points
-│   ├── run_migration.py            Migration pipeline orchestrator
-│   ├── run_scanner.py              Scanner + ASTAnalyzer pipeline
+├── scripts/
 │   └── demo_governance.py          Offline governance demo (no Azure required)
 │
-├── tests/                          Test suite (all tests run without Azure credentials)
-├── infra/                          ledger_schema.sql (Postgres DDL)
-├── legacy/                         Source AWS codebases for migration
-├── migrated/                       Migration outputs (versioned, never overwritten)
-├── docs/                           Architecture, user guide, guardrails inventory
+├── tests/                          Test suite (runs without Azure credentials)
+├── infra/                          ledger_schema.sql, aca_jobs.bicep  (→ adapters/azure/ in WS1)
+├── docs/                           Architecture, user guide, guardrails inventory, refactor plan
 └── .env.example                    Environment variable template
+
+(archive/ — local-only, gitignored: the full migration payload, pipeline scripts, legacy samples, and historical docs.)
 ```
 
 ---
@@ -200,41 +134,29 @@ agentic-sdlc/
 
 | Concern | Implementation |
 |---|---|
-| Per-agent identity | `NHIRegistry` (17 types) — each agent has its own Entra App Registration |
-| No static secrets in AKS | `TokenProvider` via `ManagedIdentityCredential` + Key Vault; env-var fallback for local dev only |
-| Single LLM-egress path | APIM Consumption (`galaxyscanner-apim`) — real AOAI key never in agent code |
-| Prompt injection | `PromptInjectionGuardMiddleware` — 7-vector taxonomy, blocks before LLM call |
-| Credential leak | `CredentialRedactorGuardMiddleware` — regex scan, redacts before model sees content |
+| Per-agent identity | `NHIRegistry` — each agent has its own Entra App Registration |
+| No static secrets | `TokenProvider` via `ManagedIdentityCredential` + Key Vault; env-var fallback for local dev only |
+| Single LLM-egress path | APIM Consumption — real AOAI key never in agent code |
+| Prompt injection | `PromptInjectionGuardMiddleware` — blocks before the LLM call |
+| Credential leak | `CredentialRedactorGuardMiddleware` — regex scan, redacts before the model sees content |
 | Token cost control | `ContextBudgetGuardMiddleware` — pre-call token allocation with hard cap |
 | Declarative policy | `GovernancePolicyMiddleware` — YAML rules, no-code governance updates |
 | Tool containment | `CapabilityGuardMiddleware` + closure-bound sandboxed tools |
 | Behavioral drift | `RogueDetectionMiddleware` — anomaly detection on tool-use patterns |
 | Immutable audit | Hash-chained `trace_ledger` (SHA-256 chain; stdout mode until Postgres is provisioned) |
-| Traceability | OTel `pipeline.run` root span → all agent spans → App Insights |
+| Traceability | OTel root span → all agent spans → App Insights |
 
 ---
 
-## Adding a new agent
+## Adding an agent to the payload
 
-1. Create `agents/your_agent.py` with a `Handler` class and a `build_<name>_agent() → AgentBundle` factory.
+1. Create `payload_agents/your_agent.py` with a `Handler` class and a `build_<name>_agent() → AgentBundle` factory.
 2. Register NHI in `core/nhi_identity.py` under `_NHI_CLIENT_IDS` and add `NHI_CLIENT_ID_YOURAGENTTYPE` to `.env.example`.
-3. Create `agents/config/<name>.yaml` (Pydantic schema enforces `extra="forbid"` — typos raise at load time).
+3. Create `payload_agents/config/<name>.yaml` (Pydantic schema enforces `extra="forbid"` — typos raise at load time).
 4. Call `build_agent(config, tools=[...])` — the governance stack wires automatically.
-5. Wire the handler into the relevant orchestrator script.
-6. Add tests to `tests/test_<name>_agent.py`.
+5. Add tests to `tests/test_<name>_agent.py`.
 
 See [`docs/user-guide.md`](docs/user-guide.md) for the full walkthrough.
-
----
-
-## Adding a new source stack (codebase type)
-
-1. Add classifier signals in `agents/_lib/repo_classifier.py`
-2. Add a mapping entry in `governance/mappings/aws-azure-reference.yaml`
-3. Write a Coder prompt at `agents/prompts/coder_<type>.md`
-4. Add tests in `tests/test_repo_classifier.py`
-
-See [`docs/user-guide.md §3`](docs/user-guide.md#3-adding-a-new-source-stack) for step-by-step detail.
 
 ---
 
@@ -254,8 +176,9 @@ Without `POSTGRES_DSN`, the hash chain runs in stdout mode — full chain logic 
 
 | Doc | What it covers |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | Full system design — governance platform + both pipelines, Mermaid diagrams |
-| [`docs/user-guide.md`](docs/user-guide.md) | How-to guide — running pipelines, adding stacks, debugging |
+| [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) | Cloud-agnostic refactor, MSGK re-baseline, AWS/GCP adapters, and gap-closing modules |
+| [`docs/architecture.md`](docs/architecture.md) | Full system design — governance platform + payload, Mermaid diagrams |
+| [`docs/user-guide.md`](docs/user-guide.md) | How-to guide — running the platform, adding agents, debugging |
 | [`docs/services-and-tech.md`](docs/services-and-tech.md) | Azure resource inventory, package versions, env var reference |
 | [`docs/guardrails-inventory.md`](docs/guardrails-inventory.md) | What governance modules are wired vs. available |
-| [`docs/observability-governance-showcase.md`](docs/observability-governance-showcase.md) | KQL queries, App Insights screenshots, traceability walkthrough |
+| [`docs/observability-governance-showcase.md`](docs/observability-governance-showcase.md) | KQL queries, App Insights diagnostics, traceability walkthrough |

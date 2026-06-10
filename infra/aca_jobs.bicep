@@ -16,10 +16,10 @@ param location string = 'eastus'
 param environmentName string = 'galaxyscanner-aca-env'
 
 @description('ACR login server')
-param registryServer string = 'galaxyscannercrd63cdd.azurecr.io'
+param registryServer string = 'examplecr.azurecr.io'
 
 @description('ACR admin username')
-param registryUsername string = 'galaxyscannercrd63cdd'
+param registryUsername string = 'examplecr'
 
 @description('ACR admin password — passed at deploy time, never stored in source')
 @secure()

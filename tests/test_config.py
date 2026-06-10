@@ -9,7 +9,7 @@ import textwrap
 
 import pytest
 
-from agents.config import (
+from payload_agents.config import (
     AgentConfigModel,
     ConfigError,
     clear_config_cache,
@@ -19,22 +19,20 @@ from agents.config import (
 
 
 class TestLoadConfig:
-    def test_load_scanner(self):
-        cfg = load_agent_config("scanner")
-        assert cfg.agent_type == "Scanner"
-        assert cfg.max_file_scan_bytes == 50_000
-        assert "ASTAnalyzer" in cfg.a2a.allowed_recipients
-        assert cfg.a2a.max_files_per_dispatch == 40
-        assert cfg.a2a.timeout_seconds == 30
+    def test_load_analyzer(self):
+        cfg = load_agent_config("analyzer")
+        assert cfg.agent_type == "Analyzer"
+        assert cfg.max_file_scan_bytes == 256_000
+        assert cfg.a2a.max_files_per_dispatch == 60
+        assert cfg.a2a.timeout_seconds == 120
         assert cfg.governance.enable_rogue_detection is True
 
-    def test_load_ast_analyzer_leaf(self):
-        cfg = load_agent_config("ast-analyzer")
-        assert cfg.agent_type == "ASTAnalyzer"
+    def test_load_analyzer_leaf(self):
+        cfg = load_agent_config("analyzer")
+        assert cfg.agent_type == "Analyzer"
         # Leaf agents legitimately have an empty allowed_recipients list —
         # the schema must permit it (not require min_length >= 1).
         assert cfg.a2a.allowed_recipients == []
-        assert cfg.a2a.max_files_per_dispatch == 0
 
     def test_missing_file_raises(self):
         with pytest.raises(ConfigError, match="not found"):
@@ -42,8 +40,8 @@ class TestLoadConfig:
 
     def test_caching_returns_same_instance(self):
         clear_config_cache()
-        a = load_agent_config_cached("scanner")
-        b = load_agent_config_cached("scanner")
+        a = load_agent_config_cached("analyzer")
+        b = load_agent_config_cached("analyzer")
         assert a is b
 
     def test_invalid_yaml_raises_config_error(self, tmp_path: Path):

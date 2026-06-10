@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from a2a.envelope import A2ARequest
-from agents.analyzer_agent import (
+from payload_agents.analyzer_agent import (
     AGENT_TYPE,
     REPORT_SCHEMA,
     REQUEST_SCHEMA,

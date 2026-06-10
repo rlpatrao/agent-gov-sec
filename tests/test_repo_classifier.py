@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from agents._lib.repo_classifier import classify_repo
+from payload_agents._lib.repo_classifier import classify_repo
 
 
 def _write(p: Path, body: str) -> Path:

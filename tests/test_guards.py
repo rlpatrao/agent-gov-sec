@@ -135,6 +135,6 @@ class TestEgressPolicy:
         )
         # APIM and AOAI should be allowed; arbitrary host denied.
         # EgressDecision shape: .allowed (bool), .matched_rule, .reason.
-        assert policy.check_url("https://galaxyscanner-apim.azure-api.net/openai/v1/responses").allowed is True
-        assert policy.check_url("https://galaxyscanner-openai.openai.azure.com/").allowed is True
+        assert policy.check_url("https://example-apim.azure-api.net/openai/v1/responses").allowed is True
+        assert policy.check_url("https://example-openai.openai.azure.com/").allowed is True
         assert policy.check_url("https://example.com/").allowed is False

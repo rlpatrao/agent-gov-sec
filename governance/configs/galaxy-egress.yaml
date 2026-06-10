@@ -14,13 +14,13 @@
 
 rules:
   # APIM gateway — primary LLM egress
-  - domain: galaxyscanner-apim.azure-api.net
+  - domain: example-apim.azure-api.net
     ports: [443]
     protocol: tcp
     action: allow
 
   # Direct Azure OpenAI fallback (only used when APIM_ENDPOINT is unset)
-  - domain: galaxyscanner-openai.openai.azure.com
+  - domain: example-openai.openai.azure.com
     ports: [443]
     protocol: tcp
     action: allow
@@ -38,7 +38,7 @@ rules:
     action: allow
 
   # Key Vault data plane
-  - domain: galaxyscanner-kv-d63cdd.vault.azure.net
+  - domain: example-kv.vault.azure.net
     ports: [443]
     protocol: tcp
     action: allow
