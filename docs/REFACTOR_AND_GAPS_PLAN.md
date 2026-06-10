@@ -197,22 +197,22 @@ adapters/
 
 ---
 
-## WS5 — AWS adapters
+## WS5 — AWS adapters ✅ DONE (2026-06-09)
 
-**Objective:** Fill in `adapters/aws/` against the WS1 interfaces so the platform runs with `CLOUD_PROVIDER=aws`. Mirrors the Azure cloud-binding surface (no MAF — AWS uses its own framework adapter).
+**Objective:** Fill in `adapters/aws/` against the WS1 interfaces so the platform runs with `CLOUD_PROVIDER=aws`. Mirrors the Azure cloud-binding surface (no MAF — AWS uses its own framework adapter). All `boto3` imports are lazy/guarded so the package + tests run with **no AWS SDK installed** (mirrors the Azure degrade-gracefully pattern).
 
-- [ ] **5.1** `identity.py` — `IdentityProvider`: per-agent **IAM role** mapping; credentials via **IRSA** (EKS) / **STS AssumeRole**; map agent-type → role ARN → trace-ledger `nhi_id`.
-- [ ] **5.2** `secrets.py` — `SecretProvider`: **Secrets Manager** + **SSM Parameter Store** via boto3 default credential chain; env-var fallback retained.
-- [ ] **5.3** `tracing.py` — `TraceExporterFactory`: OTel → **X-Ray** via ADOT collector (or CloudWatch OTLP).
-- [ ] **5.4** `audit.py` — MSGK `AuditBackend`: hash-chain ledger on **DynamoDB** (or **QLDB** for native ledger), with **CloudWatch Logs** mirror for deny/block events.
-- [ ] **5.5** `egress.yaml` — AWS endpoint allow-list (Bedrock, Secrets Manager, STS, etc.).
-- [ ] **5.5a** `gateway.py` — `LLMGateway`: **API Gateway → Bedrock** as the managed egress chokepoint (or direct Bedrock runtime with **SigV4** signing); resolve endpoint + auth from `SecretProvider`/IAM. Pairs with `egress.yaml`.
-- [ ] **5.6** `infra/` — **CDK or Terraform**: per-agent IAM roles, job runtime (**ECS Fargate / AWS Batch / Lambda**), DynamoDB/QLDB ledger table.
-- [ ] **5.7** `orchestrator.py` — job orchestration via **AWS Batch / Step Functions / ECS RunTask** (the AWS analogue of `run_pipeline_aca.py`).
-- [ ] **5.8** *(optional, framework axis)* AWS framework adapter — wire MSGK's **LangGraph** or **Bedrock Agents** adapter as the `AgentRuntimeAdapter`, replacing MAF for AWS runs. (LLM egress is handled by the gateway in 5.5a.)
-- [ ] **5.9** Tests: factory loads `aws` provider; mocked-SDK unit tests for identity/secrets/tracing/audit; document what is runtime-verified vs stubbed.
+- [x] **5.1** `adapters/aws/identity.py` — `AwsIdentityProvider`: `client_id` = the agent's IAM **role ARN**; STS `AssumeRole` (IRSA-friendly); degrades to `None` without boto3/creds.
+- [x] **5.2** `adapters/aws/secrets.py` — `SecretsManagerProvider`: **Secrets Manager** *or* **SSM** (`source=`), boto3 default chain, 5-min TTL cache, env-var fallback.
+- [x] **5.3** `adapters/aws/tracing.py` — `AwsTraceExporterFactory`: OTLP → **ADOT collector** → X-Ray/CloudWatch (`OTEL_EXPORTER_OTLP_ENDPOINT`); `None` when unconfigured.
+- [x] **5.4** `adapters/aws/audit.py` — `DynamoDbHashChainBackend` implements MSGK `AuditBackend`: SHA-256 hash-chain on **DynamoDB** (batched async flush + `verify_chain`); stdout mode when boto3/table absent.
+- [x] **5.5** `adapters/aws/egress.yaml` — AWS endpoint allow-list (API Gateway, Bedrock runtime, Secrets Manager, SSM, STS, X-Ray).
+- [x] **5.5a** `adapters/aws/gateway.py` — `AwsLLMGateway`: **API Gateway → Bedrock** (`x-api-key`) when `AWS_BEDROCK_GATEWAY_ENDPOINT` set, else **direct Bedrock** (SigV4/IAM, no static key). Mirrors `AzureLLMGateway`.
+- [x] **5.6** `adapters/aws/infra/main.tf` — **Terraform**: per-agent IAM roles (least-priv: Bedrock invoke + own-secret read + ledger write), DynamoDB ledger table, S3 artifact bucket.
+- [x] **5.7** `adapters/aws/orchestrator.py` — `submit_agent_job` via **AWS Batch** (lazy boto3; clear error if absent). Single-agent demo runs in-process; this is for the fan-out shape.
+- [ ] **5.8** *(optional, framework axis — DEFERRED)* AWS framework adapter (LangGraph / Bedrock Agents as `AgentRuntimeAdapter`). `runtime_adapter()` intentionally returns `None` today; in-process agent uses the existing builder. Tracked for when an AWS runtime is targeted.
+- [x] **5.9** `tests/test_aws_adapter.py` — factory resolves `aws`; protocol conformance; secret env-fallback + missing-key; identity degrades without SDK; gateway API-GW vs direct-Bedrock contract; egress allow-list (path + via factory); stdout-mode audit + hash-chain link. Updated `test_provider_factory` skeleton test to gcp-only. **Full suite: 85 passed.** Wired `.[aws]` extra (boto3 + OTLP exporter) in `pyproject.toml`; aligned base/azure pins to the WS3 3.7.0/1.8.1 baseline.
 
-**Acceptance:** `CLOUD_PROVIDER=aws` resolves all cloud-binding interfaces; identity/secrets/tracing/audit have real impls + tests; infra templates apply; framework adapter status documented.
+**Acceptance:** ✅ `CLOUD_PROVIDER=aws` resolves all cloud-binding interfaces with real impls + tests; Terraform reference applies; framework adapter status documented (5.8 deferred). ⚠️ **Runtime-verified vs stubbed:** unit-tested with the SDK *absent* (mocked-out); live AWS (real STS/Bedrock/DynamoDB/Batch) is **not** exercised in this env — verify with `.[aws]` installed against an account.
 
 ---
 

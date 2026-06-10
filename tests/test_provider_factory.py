@@ -48,7 +48,7 @@ def test_azure_provider_resolves_accessors():
     assert az.egress_config_path() is not None and az.egress_config_path().name == "egress.yaml"
 
 
-@pytest.mark.parametrize("cloud", ["aws", "gcp"])
+@pytest.mark.parametrize("cloud", ["gcp"])  # aws implemented in WS5 (see test_aws_adapter.py)
 def test_skeleton_providers_resolve_but_not_implemented(cloud):
     p = get_provider(cloud)
     assert p.name == cloud

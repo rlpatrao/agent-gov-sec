@@ -7,9 +7,10 @@ requires-python = ">=3.14"
 # Agnostic core: MSGK governance toolkit + OTel SDK + config. No cloud SDK,
 # no agent framework — those live in the per-cloud extras below.
 dependencies = [
-    "agent-os-kernel>=3.2.2",
-    "agent-sre==3.2.2",
-    "agentmesh-platform>=3.2.2",
+    # WS3 re-baseline: governance toolkit aligned at 3.7.0 (agent-sre exact pin released).
+    "agent-os-kernel>=3.7.0",
+    "agent-sre>=3.7.0",
+    "agentmesh-platform>=3.7.0",
     "opentelemetry-sdk>=1.27.0",
     "opentelemetry-api>=1.27.0",
     "pydantic>=2.0.0,<3",
@@ -23,16 +24,19 @@ dependencies = [
 [project.optional-dependencies]
 # Azure cloud bindings + the Microsoft Agent Framework (MAF) glue.
 azure = [
-    "agent-framework-core>=1.2.0,<2",
-    "agent-framework-foundry",
+    "agent-framework-core>=1.8.1,<2",
+    "agent-framework-foundry>=1.8.1",
     "azure-identity>=1.19.0",
     "azure-keyvault-secrets>=4.8.0",
     "azure-monitor-opentelemetry-exporter>=1.0.0b50",
     "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
     "asyncpg>=0.29.0",
 ]
-# WS5: boto3, OTel X-Ray/ADOT exporter, DynamoDB/QLDB ledger deps.
-aws = []
+# WS5: boto3 (Secrets Manager/SSM/STS/Bedrock/DynamoDB/Batch) + OTLP→ADOT/X-Ray exporter.
+aws = [
+    "boto3>=1.34.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
+]
 # WS6: google-auth, google-cloud-secret-manager, Cloud Trace exporter, BigQuery.
 gcp = []
 

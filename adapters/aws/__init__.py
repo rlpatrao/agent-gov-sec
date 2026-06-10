@@ -1,18 +1,22 @@
 """
-adapters.aws — AWS cloud bindings (SKELETON — WS5).
+adapters.aws — AWS cloud bindings (WS5).
 
-The contract is locked: ``PROVIDER`` implements ``core.interfaces.CloudProvider``
-so ``CLOUD_PROVIDER=aws`` resolves cleanly, but every accessor raises
-``NotImplementedError`` until WS5 fills them in:
+``PROVIDER`` implements ``core.interfaces.CloudProvider`` so ``CLOUD_PROVIDER=aws``
+resolves the AWS bindings:
 
-  identity  → per-agent IAM role via IRSA / STS AssumeRole
-  secrets   → Secrets Manager + SSM Parameter Store (boto3 chain)
-  tracing   → OTel → X-Ray via ADOT (or CloudWatch OTLP)
-  audit     → hash-chain ledger on DynamoDB / QLDB
-  gateway   → API Gateway → Bedrock (or direct Bedrock + SigV4)
-  egress    → AWS endpoint allow-list (Bedrock, Secrets Manager, STS, …)
+  identity  → per-agent IAM role via STS AssumeRole / IRSA   (identity.AwsIdentityProvider)
+  secrets   → Secrets Manager + SSM Parameter Store          (secrets.SecretsManagerProvider)
+  tracing   → OTel → ADOT collector → X-Ray / CloudWatch     (tracing.AwsTraceExporterFactory)
+  gateway   → API Gateway → Bedrock (direct-Bedrock/SigV4)   (gateway.AwsLLMGateway)
+  audit     → SHA-256 hash-chain ledger on DynamoDB          (audit.DynamoDbHashChainBackend)
+  egress    → AWS endpoint allow-list                        (egress.yaml)
 
-See docs/REFACTOR_AND_GAPS_PLAN.md WS5.
+Every accessor lazy-imports its implementation, and each implementation
+lazy-imports ``boto3``, so importing this package (or the provider factory)
+needs no AWS SDK. The framework axis (``runtime_adapter``) is intentionally
+``None`` — AWS would wire LangGraph / Bedrock Agents (WS5.8), not MAF.
+
+See docs/REFACTOR_AND_GAPS_PLAN.md WS5 and docs/aws-deployment-topology.html.
 """
 
 from __future__ import annotations
@@ -20,38 +24,40 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional
 
-_WS = "WS5 — adapters/aws not yet implemented"
-
-
-def _todo(what: str):
-    raise NotImplementedError(f"{_WS}: {what}")
+_EGRESS_YAML = Path(__file__).parent / "egress.yaml"
 
 
 class AwsProvider:
+    """CloudProvider impl: AWS cloud bindings."""
+
     name = "aws"
 
     def secret_provider(self, **kwargs: Any):
-        _todo("SecretProvider (Secrets Manager + SSM)")
+        from adapters.aws.secrets import SecretsManagerProvider
+        return SecretsManagerProvider(**kwargs)
 
     def identity_provider(self):
-        _todo("IdentityProvider (IAM role via IRSA / STS AssumeRole)")
+        from adapters.aws.identity import AwsIdentityProvider
+        return AwsIdentityProvider()
 
     def trace_exporter_factory(self):
-        _todo("TraceExporterFactory (X-Ray via ADOT)")
+        from adapters.aws.tracing import AwsTraceExporterFactory
+        return AwsTraceExporterFactory()
 
     def llm_gateway(self):
-        _todo("LLMGateway (API Gateway → Bedrock)")
+        from adapters.aws.gateway import AwsLLMGateway
+        return AwsLLMGateway()
 
     def runtime_adapter(self):
-        # AWS uses its own framework adapter (LangGraph / Bedrock Agents), not MAF.
+        # AWS uses its own framework adapter (LangGraph / Bedrock Agents), not MAF — WS5.8.
         return None
 
     async def audit_backend(self, run_id: str):
-        _todo("AuditBackend (DynamoDB / QLDB hash-chain ledger)")
+        from adapters.aws.audit import DynamoDbHashChainBackend
+        return await DynamoDbHashChainBackend.create(run_id=run_id)
 
     def egress_config_path(self) -> Optional[Path]:
-        path = Path(__file__).parent / "egress.yaml"
-        return path if path.exists() else None
+        return _EGRESS_YAML if _EGRESS_YAML.exists() else None
 
 
 PROVIDER = AwsProvider()
