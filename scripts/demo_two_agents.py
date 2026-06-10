@@ -73,11 +73,77 @@ class Check:
 
 CHECKS: list[Check] = []
 
+
+# ── Narrator: the curated, human-readable story (--verbose) ────────────────────
+# Distinct from --logs (the raw logger stream). Narrates agent identities, the
+# prompts sent, what the model/tools returned, guardrail interceptions, and each
+# check's outcome + data — the meaningful "what happened", not the log firehose.
+_ID_LABEL = {"azure": "Entra clientId", "aws": "IAM role ARN", "gcp": "SA email", "local": "NHI id"}
+_INTERCEPT_HINTS = ("block", "deny", "mask", "broken", "quarantine", "signals",
+                    "valueerror", "permissionerror", "redact", "timed_out")
+
+
+class _Narrator:
+    def __init__(self) -> None:
+        self.on = False
+        self._seen: set[str] = set()
+
+    def agent(self, bundle) -> None:
+        at = bundle.config.agent_type
+        if not self.on or at in self._seen:
+            return
+        self._seen.add(at)
+        label = _ID_LABEL.get(os.environ.get("CLOUD_PROVIDER", "azure"), "id")
+        print(_c(BOLD + CYAN, f"  ▸ agent instantiated: {at:<8}") +
+              dim(f"  NHI_ID={bundle.nhi_id}  ({label})  egress={bundle.egress}"))
+
+    def prompt(self, bundle, text: str) -> None:
+        if self.on:
+            print(f"    {_c(WHITE, bundle.config.agent_type)} ⟵ prompt: {dim(repr(text[:120]))}")
+
+    def turn(self, result) -> None:
+        if not self.on:
+            return
+        for m in result.get("messages", []) if isinstance(result, dict) else []:
+            cls = m.__class__.__name__
+            if cls == "AIMessage":
+                txt = getattr(m, "content", "") or ""
+                if txt:
+                    print(f"      LLM ⟶ {dim(repr(txt[:140]))}")
+                for tc in (getattr(m, "tool_calls", None) or []):
+                    print(dim(f"      tool ▶ {tc.get('name')}({tc.get('args')})"))
+            elif cls == "ToolMessage":
+                print(dim(f"      tool result ⟵ {str(m.content)[:200]}"))
+
+    def intercept(self, agent: str, code: str, reason: str) -> None:
+        if self.on:
+            print(_c(YELLOW, f"      🛡 guardrail INTERCEPTED [{agent}]: {code}") + dim(f" — {reason}"))
+
+    def outcome(self, feature, agent, scenario, actual, ok) -> None:
+        if not self.on:
+            return
+        gi = " 🛡" if any(h in str(actual).lower() for h in _INTERCEPT_HINTS) else ""
+        mark = _c(GREEN, "✓") if ok else _c(RED, "✗")
+        print(f"    {mark}{_c(YELLOW, gi)} {feature} [{agent}] {dim(scenario)} → {_c(BOLD, str(actual))}")
+
+
+_N = _Narrator()
+
+
 def record(feature, agent, scenario, expected, actual, ok):
     CHECKS.append(Check(feature, agent, scenario, expected, actual, ok))
+    _N.outcome(feature, agent, scenario, actual, ok)
 
 def invoke(bundle, prompt):
-    return bundle.agent.invoke({"messages": [{"role": "user", "content": prompt}]})
+    _N.agent(bundle)
+    _N.prompt(bundle, prompt)
+    try:
+        result = bundle.agent.invoke({"messages": [{"role": "user", "content": prompt}]})
+    except GovernanceViolation as e:
+        _N.intercept(bundle.config.agent_type, e.code, str(e))
+        raise
+    _N.turn(result)
+    return result
 
 def tool_payload(result):
     for m in result["messages"]:
@@ -106,6 +172,7 @@ async def section_identity(tmp: Path):
     # any non-empty mode = the gateway was consulted — offline refuses the key).
     b = await build_finops_agent("run-egress", scripted_model(AIMessage(content="ok")),
                                  drift_baseline_path=tmp / "e.json")
+    _N.agent(b)
     record("A2 egress chokepoint", "FinOps", "LLM gateway consulted",
            "mode resolved (offline → no key)", b.egress, bool(b.egress))
 
@@ -423,11 +490,12 @@ def print_matrix():
     return passed == total
 
 
-async def main(log_level: int = logging.CRITICAL, cloud: str = "azure"):
-    # Default CRITICAL = quiet (just the results matrix). --verbose / --log-level
-    # turn up the governance log stream (per-guard decisions, audit-ledger writes,
-    # drift signals, redactions) so you can see what actually ran.
+async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate: bool = False):
+    # --logs / --log-level → the raw logger stream (guard decisions, audit writes…).
+    # --verbose → the curated narrative (agents, prompts, LLM/tool output, guardrail
+    # interceptions, per-check outcomes). They're independent and can combine.
     logging.basicConfig(level=log_level, format="  log %(levelname)-7s %(name)s :: %(message)s")
+    _N.on = narrate
     # Select the cloud adapter set BEFORE any agent is built (the factory caches).
     os.environ["CLOUD_PROVIDER"] = cloud
     # Pre-flight: skeleton providers (gcp/WS6) raise NotImplementedError — fail
@@ -457,7 +525,7 @@ async def main(log_level: int = logging.CRITICAL, cloud: str = "azure"):
     sys.exit(0 if all_ok else 1)
 
 
-def _parse_args() -> tuple[int, str]:
+def _parse_args() -> tuple[int, str, bool]:
     p = argparse.ArgumentParser(
         description="Galaxy governance demo — 3 LangGraph agents, every control, offline.",
     )
@@ -470,21 +538,26 @@ def _parse_args() -> tuple[int, str]:
     cloud.add_argument("--local", dest="cloud", action="store_const", const="local", help="cloud-neutral (env / in-memory, no cloud SDK)")
     cloud.add_argument("--cloud", dest="cloud", choices=["azure", "aws", "gcp", "local"], help="select the cloud adapter set")
     p.set_defaults(cloud="azure")
-    # Logging
+    # Output. --verbose and --logs are independent and can be combined.
     p.add_argument("-v", "--verbose", action="store_true",
-                   help="show the governance log stream (shortcut for --log-level INFO)")
+                   help="curated narrative: agent identities, prompts, LLM/tool output, "
+                        "guardrail interceptions, and each check's outcome + data")
+    p.add_argument("--logs", action="store_true",
+                   help="the raw logger stream at INFO (guard decisions, audit writes, drift)")
     p.add_argument("--log-level", default=None,
                    choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-                   help="explicit log level (default: CRITICAL — only the results matrix). "
-                        "Use DEBUG to see each prompt + the guard that intercepts it.")
+                   help="explicit logger level (implies --logs; DEBUG also shows each prompt "
+                        "+ the intercepting guard from the middleware)")
     args = p.parse_args()
     if args.log_level:
         level = getattr(logging, args.log_level)
+    elif args.logs:
+        level = logging.INFO
     else:
-        level = logging.INFO if args.verbose else logging.CRITICAL
-    return level, args.cloud
+        level = logging.CRITICAL
+    return level, args.cloud, args.verbose
 
 
 if __name__ == "__main__":
-    _level, _cloud = _parse_args()
-    asyncio.run(main(_level, _cloud))
+    _level, _cloud, _narrate = _parse_args()
+    asyncio.run(main(_level, _cloud, _narrate))
