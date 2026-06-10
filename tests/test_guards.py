@@ -1,28 +1,38 @@
 """
-tests/test_guards.py — unit tests for governance.guards.
+tests/test_guards.py — MAF-integration tests for the Azure adapter's guard
+middlewares (``adapters/azure/maf/guards/``).
 
-Each guard is exercised against a minimal AgentContext stub. We don't go
-through MAF's middleware pipeline here — these tests pin the guard logic
-itself. End-to-end live verification lives in the policy-probe pattern
-described in user-guide §9.2.
+These exercise the three MAF ``AgentMiddleware`` wrappers against a minimal
+AgentContext stub. They require the Microsoft Agent Framework, so the whole
+module is skipped unless ``agent_framework`` is importable (install ``.[azure]``).
+
+Cloud-/framework-agnostic guard logic (egress allow-list) lives in
+``tests/test_egress.py`` and always runs. The agnostic WS1 seam is covered by
+``tests/test_provider_factory.py``, ``test_gateway.py``, ``test_secrets.py``,
+and ``test_nhi_registry.py``. See ``tests/README.md`` for the test strategy.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 import pytest
+
+# MAF is an optional (Azure-adapter) dependency. Skip this whole module cleanly
+# when it isn't installed, rather than erroring at collection.
+pytest.importorskip(
+    "agent_framework",
+    reason="MAF guard middlewares require agent-framework — install '.[azure]'",
+)
 
 from agent_framework._middleware import MiddlewareTermination
 from agent_os.audit_logger import GovernanceAuditLogger, InMemoryBackend
 from agent_os.context_budget import ContextScheduler
 
-from governance.guards.context_budget import ContextBudgetGuardMiddleware
-from governance.guards.credential_redactor import CredentialRedactorGuardMiddleware
-from governance.guards.egress import load_egress_policy
-from governance.guards.prompt_injection import PromptInjectionGuardMiddleware
+from adapters.azure.maf.guards.context_budget import ContextBudgetGuardMiddleware
+from adapters.azure.maf.guards.credential_redactor import CredentialRedactorGuardMiddleware
+from adapters.azure.maf.guards.prompt_injection import PromptInjectionGuardMiddleware
 
 
 # ── Minimal context stub matching what AgentMiddleware.process expects ──────
@@ -126,15 +136,3 @@ class TestContextBudgetGuard:
         await guard.process(ctx, _called)
         assert _called.fired is True
         assert any(e.event_type == "context_budget_check" and e.decision == "allow" for e in backend.entries)
-
-
-class TestEgressPolicy:
-    def test_allow_list_loads(self):
-        policy = load_egress_policy(
-            yaml_path=Path(__file__).parent.parent / "governance" / "configs" / "galaxy-egress.yaml"
-        )
-        # APIM and AOAI should be allowed; arbitrary host denied.
-        # EgressDecision shape: .allowed (bool), .matched_rule, .reason.
-        assert policy.check_url("https://example-apim.azure-api.net/openai/v1/responses").allowed is True
-        assert policy.check_url("https://example-openai.openai.azure.com/").allowed is True
-        assert policy.check_url("https://example.com/").allowed is False

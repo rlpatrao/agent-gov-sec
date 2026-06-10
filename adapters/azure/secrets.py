@@ -1,9 +1,12 @@
 """
-token_provider.py
+adapters.azure.secrets — Azure SecretProvider (Key Vault + Workload Identity).
 
-Fetches short-lived credentials from Azure Key Vault using AKS Workload Identity.
+``TokenProvider`` implements ``core.interfaces.SecretProvider`` (``get_api_key``
+/ ``invalidate``). It is the Azure managed-secret path; the agnostic env-var
+fallback lives in ``core.secrets.EnvVarSecretProvider`` and is also used here
+when Key Vault is unreachable.
 
-In AKS:
+In AKS/ACA:
   - Pod has a federated token via Workload Identity (no secrets in env vars)
   - DefaultAzureCredential picks up the federated token automatically
   - Key Vault issues a short-lived secret fetch — cached and refreshed every 5 minutes
@@ -11,6 +14,9 @@ In AKS:
 Locally (dev):
   - Falls back to the env-var named by `env_var_fallback` if Key Vault is unreachable
   - Never use this fallback in staging or prod
+
+The ``azure.*`` imports are guarded; importing this module without the Azure
+SDK installed degrades to env-var mode rather than failing.
 """
 
 import os

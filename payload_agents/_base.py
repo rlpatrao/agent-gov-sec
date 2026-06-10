@@ -33,10 +33,11 @@ from agent_framework_openai import OpenAIChatClient
 from agent_os.audit_logger import GovernanceAuditLogger
 
 from payload_agents.config import AgentConfigModel, load_agent_config_cached
-from governance.adapters.postgres_audit_backend import PostgresHashChainBackend
-from governance.middleware import build_governance_stack
-from core.nhi_identity import NHIRegistry
-from core.token_provider import TokenProvider
+from core.interfaces import SecretProvider
+from core.nhi_registry import NHIRegistry
+from core.provider_factory import get_provider
+from adapters.azure.audit import PostgresHashChainBackend
+from adapters.azure.maf.middleware import build_governance_stack
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class AgentBundle:
     config: AgentConfigModel
     agent_id: str        # "<AgentType>-<nhi-client-id>"
     nhi_id: str
-    egress: str          # "apim" | "aoai-direct"
+    egress: str          # gateway mode, e.g. "apim" | "aoai-direct"
 
 
 async def build_agent(
@@ -67,7 +68,7 @@ async def build_agent(
     run_id: str,
     *,
     prompt_file_override: Optional[str] = None,
-    token_provider: Optional[TokenProvider] = None,
+    token_provider: Optional[SecretProvider] = None,
     tools: Optional[list[Callable[..., Any]]] = None,
 ) -> AgentBundle:
     """Build a fully-instrumented MAF Agent for `agent_name`.
@@ -91,33 +92,30 @@ async def build_agent(
     instructions = _load_prompt(agent_name, effective_prompt_file, cfg.shared_prompt_files)
     _validate_tool_allowlist(agent_name, cfg, tools)
 
-    tp, endpoint, egress = _resolve_egress(token_provider)
     deployment = cfg.model or os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-5-3-codex")
     api_version = os.environ.get("AZURE_OPENAI_API_VERSION") or "preview"
 
     identity = NHIRegistry.get(cfg.agent_type)
     agent_id = f"{cfg.agent_type}-{identity.client_id}"
 
-    subscription_key = tp.get_api_key()
-    # APIM validates via Ocp-Apim-Subscription-Key; the real Azure OpenAI key
-    # is injected by APIM's inbound policy and never leaves the gateway.
-    # Direct Azure OpenAI mode uses the key as api-key (OpenAI SDK convention).
-    apim_headers: dict[str, str] = (
-        {"Ocp-Apim-Subscription-Key": subscription_key} if egress == "apim" else {}
+    # The LLM gateway is the managed egress chokepoint, resolved per cloud
+    # provider (Azure → APIM → Azure OpenAI, with direct-AOAI fallback). It
+    # returns the endpoint, the key, and the attribution/auth headers
+    # (x-agent-type, x-nhi-id, and Ocp-Apim-Subscription-Key in APIM mode).
+    # x-galaxy-run-id / x-module-id are per-call, stamped via
+    # `options.extra_headers` on agent.run() at the callsite.
+    egress_resolution = get_provider().llm_gateway().resolve(
+        agent_type=cfg.agent_type,
+        client_id=identity.client_id,
+        secret_provider=token_provider,
     )
+    egress = egress_resolution.mode
     client = OpenAIChatClient(
         model=deployment,
-        api_key=subscription_key,
-        azure_endpoint=endpoint,
+        api_key=egress_resolution.api_key,
+        azure_endpoint=egress_resolution.endpoint,
         api_version=api_version,
-        default_headers={
-            # APIM uses these for governance attribution + rate limiting.
-            # x-galaxy-run-id and x-module-id are per-call and stamped via
-            # `options.extra_headers` on agent.run() at the callsite.
-            "x-agent-type": cfg.agent_type,
-            "x-nhi-id":     identity.client_id,
-            **apim_headers,
-        },
+        default_headers=egress_resolution.default_headers,
     )
 
     middleware, pg_backend, audit = await build_governance_stack(
@@ -249,29 +247,6 @@ def _validate_tool_allowlist(
             f"governance.allowed_tools (declared: {sorted(allowed) or '[]'}). "
             f"Add them to agents/config/{agent_name}.yaml or remove from tools=."
         )
-
-
-def _resolve_egress(
-    token_provider: Optional[TokenProvider],
-) -> tuple[TokenProvider, str, str]:
-    """Pick APIM if APIM_ENDPOINT is set, else direct Azure OpenAI.
-
-    APIM mode: the subscription key replaces the AOAI key at the API edge —
-    APIM injects the real AOAI key from a KV-backed named value via inbound
-    policy.
-    """
-    apim_endpoint = os.environ.get("APIM_ENDPOINT")
-    if apim_endpoint:
-        tp = token_provider or TokenProvider(
-            secret_name="apim-subscription-key",
-            env_var_fallback="APIM_SUBSCRIPTION_KEY",
-        )
-        return tp, apim_endpoint, "apim"
-    tp = token_provider or TokenProvider(
-        secret_name="azure-openai-key",
-        env_var_fallback="AZURE_OPENAI_KEY",
-    )
-    return tp, os.environ["AZURE_OPENAI_ENDPOINT"], "aoai-direct"
 
 
 def extract_usage(response: Any) -> tuple[int, int]:

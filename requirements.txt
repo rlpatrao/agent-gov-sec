@@ -2,19 +2,22 @@
 # Depending on agent-framework-core directly (not the `agent-framework` meta
 # that pulls core[all]) because [all] pulls agent-framework-azure-ai-search,
 # which ships an empty agent_framework/__init__.py that clobbers the real one.
-# See docs/toolkit-verification.md "Known packaging conflicts".
-agent-framework-core>=1.2.0,<2
-agent-framework-foundry
+# WS3 re-baseline (2026-06-09): synced to the latest toolkit; verified 76 tests
+# green. See docs/services-and-tech.md §3 for the verified version table.
+agent-framework-core>=1.8.1,<2
+agent-framework-foundry>=1.8.1
 
 # ── Microsoft Agent Governance Toolkit ──────────────────────────────────────
-# Pinning agent-sre to 3.2.2 exactly — the toolkit's maf_adapter imports
-# agent_sre.anomaly.RogueAgentDetector which was renamed/removed in 1.1.2.
-agent-os-kernel>=3.2.2
-agent-sre==3.2.2
+# WS3: the old `agent-sre==3.2.2` exact pin (held because maf_adapter imports
+# agent_sre.anomaly.RogueAgentDetector) is released — agent-os-kernel was already
+# at 3.7.0, and agent-sre 3.7.0 keeps the same symbol; the maf_adapter import +
+# full suite verified green. All three governance packages now align at 3.7.0.
+agent-os-kernel>=3.7.0
+agent-sre>=3.7.0
 # agent_os.integrations.maf_adapter imports from agentmesh.governance.
 # Normally pulled by agent-governance-toolkit[full]; we pin it explicitly
 # because we don't use the [full] extra (it drags the broken azure-ai-search).
-agentmesh-platform>=3.2.2
+agentmesh-platform>=3.7.0
 
 # ── Azure identity + secrets (Workload Identity + Key Vault) ───────────────
 azure-identity>=1.19.0

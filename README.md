@@ -177,6 +177,7 @@ Without `POSTGRES_DSN`, the hash chain runs in stdout mode — full chain logic 
 | Doc | What it covers |
 |---|---|
 | [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) | Cloud-agnostic refactor, MSGK re-baseline, AWS/GCP adapters, and gap-closing modules |
+| [`docs/DELTA_OVER_MSGK.md`](docs/DELTA_OVER_MSGK.md) | What this repo adds over the stock Microsoft Agent Governance Toolkit — module-by-module (a)/(b)/(c) classification |
 | [`docs/architecture.md`](docs/architecture.md) | Full system design — governance platform + payload, Mermaid diagrams |
 | [`docs/user-guide.md`](docs/user-guide.md) | How-to guide — running the platform, adding agents, debugging |
 | [`docs/services-and-tech.md`](docs/services-and-tech.md) | Azure resource inventory, package versions, env var reference |

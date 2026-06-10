@@ -1,36 +1,32 @@
 """
-nhi_identity.py
+nhi_registry.py
 
-Non-Human Identity (NHI) — each agent type has its own Entra service principal.
+Non-Human Identity (NHI) registry — agnostic. Each agent type maps to its own
+cloud identity principal (Entra App Registration / AWS IAM role / GCP Service
+Account). This module holds only the agent-type → client-id mapping and the
+attribution model; it knows nothing about any cloud SDK.
 
-In production:
-  - Each agent's CLIENT_ID is registered in Entra as a dedicated service principal
-  - ManagedIdentityCredential picks up the pod's Workload Identity federated token
-  - Actions taken by each agent are attributable to its own identity in Entra audit logs
-  - The Compliance Auditor can see that Scanner/xxx read files, Coder/xxx wrote code
+Resolving an actual cloud *credential* for an identity is the job of an
+``IdentityProvider`` under ``adapters/<cloud>/identity.py`` (Azure →
+ManagedIdentityCredential, AWS → STS AssumeRole, GCP → Workload Identity
+Federation), obtained via ``core.provider_factory.get_provider()``.
 
-CLIENT_IDs are not secrets — they are identity references.
-Store them in env vars or config, not Key Vault.
+CLIENT_IDs are not secrets — they are identity references. Store them in env
+vars or config, not a secret store.
 
 Significance:
   - Every action in the trace ledger has an nhi_id attached
-  - Entra audit log shows per-agent activity independently
-  - If an agent is compromised, it can be disabled in Entra without affecting others
-  - Satisfies the "least privilege" requirement — each NHI has scoped permissions only
+  - The cloud's audit log shows per-agent activity independently
+  - If an agent is compromised, its identity can be disabled without affecting others
+  - Satisfies "least privilege" — each NHI has scoped permissions only
 """
 
 import os
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
-
-try:
-    from azure.identity import ManagedIdentityCredential
-    _AZURE_AVAILABLE = True
-except ImportError:
-    _AZURE_AVAILABLE = False
 
 
 # Registry of all agent NHI client IDs
@@ -73,15 +69,18 @@ class AgentIdentity:
     def __str__(self) -> str:
         return f"{self.agent_type}/{self.client_id}"
 
-    def get_credential(self) -> Optional[object]:
+    def get_credential(self) -> Optional[Any]:
         """
-        Returns a ManagedIdentityCredential scoped to this agent's NHI.
-        None in local dev where Azure identity is unavailable.
+        Returns a cloud credential scoped to this agent's NHI, resolved through
+        the selected provider's ``IdentityProvider`` (Azure
+        ManagedIdentityCredential, etc.). ``None`` in local dev where no cloud
+        identity is available. Agnostic — no cloud SDK is imported here.
         """
-        if not _AZURE_AVAILABLE:
-            return None
         try:
-            return ManagedIdentityCredential(client_id=self.client_id)
+            from core.provider_factory import get_provider
+            return get_provider().identity_provider().get_credential(
+                client_id=self.client_id, agent_type=self.agent_type
+            )
         except Exception as e:
             logger.warning(
                 "nhi.credential_unavailable",

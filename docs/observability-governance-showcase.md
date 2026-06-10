@@ -259,7 +259,7 @@ A conventional platform uses a single service account for all AI operations. If 
 
 ### 3.2 The NHI Registry
 
-**File:** [`core/nhi_identity.py`](../core/nhi_identity.py)
+**File:** [`core/nhi_registry.py`](../core/nhi_registry.py)
 
 ```python
 identity = NHIRegistry.get("Analyzer")
@@ -385,7 +385,7 @@ No NHI has Key Vault access. The AOAI key never leaves APIM's inbound policy. An
 
 ### 4.1 The Middleware Stack (Ordered, Fail-Fast)
 
-**File:** [`governance/middleware.py`](../governance/middleware.py) — `build_governance_stack()`
+**File:** [`adapters/azure/maf/middleware.py`](../adapters/azure/maf/middleware.py) — `build_governance_stack()`
 
 Every `agent.run()` traverses this exact stack, in this order. Guards 1–3 are this repo's MAF wrappers around MSGK primitives; guards 4–7 come from MSGK's `agent_os.integrations.maf_adapter.create_governance_middleware`:
 
@@ -526,7 +526,7 @@ At runtime, `CapabilityGuardMiddleware` enforces the same list as a second layer
 
 ### 4.7 The Hash-Chained Audit Ledger
 
-**Files:** [`core/trace_ledger.py`](../core/trace_ledger.py), [`governance/adapters/postgres_audit_backend.py`](../governance/adapters/postgres_audit_backend.py)
+**Files:** [`core/trace_ledger.py`](../core/trace_ledger.py), [`adapters/azure/audit.py`](../adapters/azure/audit.py)
 
 Every `AuditEntry` is written to three sinks simultaneously:
 

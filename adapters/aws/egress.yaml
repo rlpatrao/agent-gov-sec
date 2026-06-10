@@ -1,0 +1,48 @@
+# Egress allow-list (AWS) — loaded by governance.guards.egress.load_egress_policy()
+# and passed into agent_os.egress_policy.EgressPolicy. Sibling of
+# adapters/azure/egress.yaml; selected when CLOUD_PROVIDER=aws.
+#
+# Loader format is the minimal stdlib parser in
+# agent_os.egress_policy.EgressPolicy.load_from_yaml:
+#   - protocol must be `tcp` or `udp` (port 443 = HTTPS)
+#   - one rule per `- domain:` block
+#   - other top-level keys (version/name/description) are ignored
+#
+# Regional hosts assume us-east-1 — adjust to your AWS_REGION.
+
+rules:
+  # API Gateway → Bedrock (primary LLM egress when AWS_BEDROCK_GATEWAY_ENDPOINT is set)
+  - domain: example-gw.execute-api.us-east-1.amazonaws.com
+    ports: [443]
+    protocol: tcp
+    action: allow
+
+  # Amazon Bedrock runtime (direct, SigV4) — fallback when no gateway endpoint
+  - domain: bedrock-runtime.us-east-1.amazonaws.com
+    ports: [443]
+    protocol: tcp
+    action: allow
+
+  # Secrets Manager data plane
+  - domain: secretsmanager.us-east-1.amazonaws.com
+    ports: [443]
+    protocol: tcp
+    action: allow
+
+  # SSM Parameter Store
+  - domain: ssm.us-east-1.amazonaws.com
+    ports: [443]
+    protocol: tcp
+    action: allow
+
+  # STS — per-agent role assumption (NHI)
+  - domain: sts.amazonaws.com
+    ports: [443]
+    protocol: tcp
+    action: allow
+
+  # X-Ray ingestion (via the ADOT collector → X-Ray)
+  - domain: xray.us-east-1.amazonaws.com
+    ports: [443]
+    protocol: tcp
+    action: allow

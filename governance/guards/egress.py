@@ -24,11 +24,22 @@ logger = logging.getLogger(__name__)
 
 
 def load_egress_policy(yaml_path: Optional[Path] = None) -> EgressPolicy:
-    """Load the project's egress allow-list. Default-deny if no rules."""
+    """Load the egress allow-list. Default-deny if no rules.
+
+    The allow-list is a per-cloud asset (Azure APIM/AOAI/KV domains, AWS Bedrock
+    endpoints, etc.), so when no explicit path is given it is resolved from the
+    selected provider via ``core.provider_factory`` — keeping this guard itself
+    cloud-agnostic and MAF-free.
+    """
     policy = EgressPolicy(default_action="deny")
     if yaml_path is None:
-        yaml_path = Path(__file__).parent.parent / "configs" / "galaxy-egress.yaml"
-    if yaml_path.exists():
+        try:
+            from core.provider_factory import get_provider
+            yaml_path = get_provider().egress_config_path()
+        except Exception as e:
+            logger.warning("egress.provider_path_unavailable", extra={"error": str(e)})
+            yaml_path = None
+    if yaml_path and Path(yaml_path).exists():
         try:
             policy.load_from_yaml(yaml_path.read_text(encoding="utf-8"))
             logger.info("egress.policy_loaded", extra={"path": str(yaml_path)})
