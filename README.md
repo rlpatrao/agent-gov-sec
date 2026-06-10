@@ -1,17 +1,17 @@
 # Galaxy Agentic Governance Platform
 
-A runtime governance & security platform for multi-agent systems, built on the **Microsoft Agent Governance Toolkit** — the open-source `agent_os`, `agent_sre`, and `agentmesh` packages — and the Microsoft Agent Framework (MAF). It provides per-agent identity, a layered guard middleware stack, A2A governance, OTel tracing, and a hash-chained audit ledger — independent of the agents it governs.
+A runtime, **framework-agnostic** governance & security platform for multi-agent systems, built on the open-source `agent_os`, `agent_sre`, and `agentmesh` packages (the Microsoft Agent Governance Toolkit). It governs agents from **any** framework — e.g. LangGraph — through thin adapters, providing per-agent identity, a layered guard middleware stack, A2A governance, OTel tracing, and a hash-chained audit ledger, independent of the agents it governs.
 
-> **Repo focus.** This repository is the **governance platform**. The agents are a **minimal demonstration payload** (`payload_agents/`) — just enough to show the governance stack wrapping a real MAF agent. The full multi-agent AWS→Azure migration product (migration / discovery / scanner pipelines, 18 agents, ACA deployment) has been moved to a local-only `archive/` and is not part of this repo. See [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) for the cloud-agnostic refactor roadmap.
+> **Repo focus.** This repository is the **governance platform**. The agents are a **minimal demonstration payload** (`payload_agents/`) — just enough to show the governance stack wrapping real agents end-to-end. The full multi-agent AWS→Azure migration product (migration / discovery / scanner pipelines, 18 agents, ACA deployment) has been moved to a local-only `archive/` and is not part of this repo. See [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) for the cloud-agnostic refactor roadmap.
 
 ## What this platform does
 
 **Governance platform** (`core/`, `governance/`, `a2a/`): per-agent Non-Human Identity (Entra), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → Application Insights tracing, a hash-chained Postgres audit ledger, and APIM as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
 
-**Demonstration payload** (`payload_agents/`): three governed **LangGraph** agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). They are deliberately built on LangGraph rather than MAF to prove the governance stack is **framework-agnostic**: the same `governance/` + `core/` + `a2a/` primitives and WS7 extensions that wrap a MAF agent also wrap a LangGraph `create_agent`, via a thin LangChain `AgentMiddleware` shim (`adapters/langgraph/`).
+**Demonstration payload** (`payload_agents/`): three governed **LangGraph** agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). They prove the governance stack is **framework-agnostic**: the same `governance/` + `core/` + `a2a/` primitives and WS7 extensions wrap a LangGraph `create_agent` via a thin LangChain `AgentMiddleware` shim (`adapters/langgraph/`) — exactly as they'd wrap any agent framework.
 
 **Offline governance demos** (no Azure credentials, no database, no LLM calls):
-- `scripts/demo_governance.py` — the minimal MAF-free guard/redaction/ledger walkthrough.
+- `scripts/demo_governance.py` — the minimal, framework-free guard/redaction/ledger walkthrough.
 - `scripts/demo_two_agents.py` — the **full feature × agent matrix** across the three LangGraph agents: identity/egress, the per-call guard stack, A2A authz, data-layer FGAC (mask/row-filter/deny + AWS Lake Formation pushdown), data-access drift, reasoning-step guard + CoT/CoVe trace, and hash-chained audit + tamper detection — each exercised on both its success and failure path.
 
 ---
@@ -23,7 +23,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full system design:
 - **Part 1 — Governance Platform**: NHI identity, middleware stack, A2A protocol, OTel tracing, audit ledger, Azure resource map
 - **Part 2 — Payload**: the sample agent, codebase classification, structured logging
 
-The planned cloud-agnostic restructure (Azure/MAF → `adapters/azure/`, plus AWS/GCP adapters) and the gap-closing modules are described in [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md).
+The planned cloud-agnostic restructure (Azure bindings → `adapters/azure/`, plus AWS/GCP adapters) and the gap-closing modules are described in [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md).
 
 ---
 
@@ -106,7 +106,7 @@ agentic-sdlc/
 │   ├── config/{finops,auditor,rogue}.yaml   Per-agent config
 │   └── prompts/{finops,auditor,rogue}.md    System prompts
 │
-├── adapters/langgraph/             LangGraph framework axis (non-MAF binding)
+├── adapters/langgraph/             LangGraph framework axis (agent-framework binding)
 │   ├── _base.py                    build_langgraph_agent() factory (NHI + egress + governance)
 │   ├── governance.py               GalaxyGuardMiddleware + build_langgraph_governance()
 │   └── runtime.py                  FakeToolCallingModel (offline) + live model factory
@@ -120,7 +120,7 @@ agentic-sdlc/
 │
 ├── governance/                     Security & compliance layer
 │   ├── middleware.py               build_governance_stack() — the guard factory
-│   ├── guards/                     Guard implementations (MAF middleware wrapping `agent_os` primitives)
+│   ├── guards/                     Guard implementations (framework middleware wrapping `agent_os` primitives)
 │   ├── adapters/                   Audit backends (OTel, Postgres hash-chain)
 │   ├── policies/                   YAML declarative rules (galaxy-*.yaml)
 │   ├── configs/                    Guard configs (prompt-injection.yaml, egress.yaml)
