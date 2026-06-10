@@ -385,6 +385,22 @@ flowchart LR
 
 **APIM egress policy (reference):** validates `Ocp-Apim-Subscription-Key`; rejects requests missing `x-agent-type` / `x-galaxy-run-id` (HTTP 400); rate-limits per subscription key; injects the real AOAI key from a Key-Vault-backed named value before forwarding. The `LLMGateway` (`adapters/azure/gateway.py`) stamps `x-agent-type` / `x-nhi-id` and the subscription key, so the egress contract is honored whenever an agent runs against a live APIM endpoint.
 
+### 1.8 Deployment topology — AWS (WS5 target)
+
+A layered, slide-ready view of how the platform maps onto AWS services — the **WS5 adapter target** (interface-complete skeleton today; Azure is the implemented provider). The top three layers (application, governance/orchestration, runtime) are cloud-agnostic; only the bottom two (AWS platform services, observability) are provider-specific, supplied by `adapters/aws/`. The application layer reflects the current repo — the single `Analyzer` demonstration agent, with the per-agent NHI model scaling to N.
+
+➡️ **[`docs/aws-deployment-topology.html`](aws-deployment-topology.html)** — open in a browser (self-contained, no dependencies).
+
+The five layers, top → bottom:
+
+| Layer | AWS realization |
+|---|---|
+| **Agent application** (`galaxy-agent:latest`) | `payload_agents/` — the `Analyzer` demo agent (scales to N agents) |
+| **Security, governance & orchestration** | MSGK governance adapter (7-guard stack) · framework runtime + A2A dispatcher (Bedrock Agents / LangGraph, STS auth) · YAML policy engine |
+| **Runtime & compute** | Bedrock Agents runtime · ECS Fargate / AWS Batch jobs · A2A Gateway (API Gateway, SigV4) |
+| **AWS platform services** | Amazon Bedrock · Secrets Manager / SSM · IAM Roles / IRSA / STS (per-agent NHI) · S3 + DynamoDB/QLDB ledger |
+| **Observability** | AWS X-Ray (ADOT) — OTel `gen_ai.*` + audit span events · CloudWatch Logs + Metrics |
+
 ---
 
 ## Part 2 — Payload App (demonstration only)

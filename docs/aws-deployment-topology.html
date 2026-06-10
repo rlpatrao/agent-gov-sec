@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galaxy Agentic Governance Platform — AWS Deployment Topology</title>
+<style>
+  :root {
+    --green:  #2e9c5a;
+    --purple: #6c47d6;
+    --teal:   #1f8f7a;
+    --blue:   #2f6df0;
+    --orange: #e08a1e;
+    --card-bg:    #f6f7fb;
+    --card-line:  #d3d7e3;
+    --title-ink:  #1b2030;
+    --sub-ink:    #6b7280;
+    --muted:      #9aa1ad;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    background: #ffffff;
+    color: var(--title-ink);
+    margin: 0;
+    padding: 32px 28px 40px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  .topnote {
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    letter-spacing: .2px;
+    margin: 0 0 6px;
+  }
+  .subnote {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12.5px;
+    margin: 0 0 18px;
+  }
+
+  .connector {
+    width: 2px;
+    height: 22px;
+    background: #c7ccd8;
+    margin: 0 auto;
+  }
+
+  .layer {
+    border: 2.5px solid var(--bc, #ccc);
+    border-radius: 14px;
+    padding: 14px 16px 16px;
+  }
+  .layer h2 {
+    margin: 2px 0 12px;
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--bc, #333);
+    letter-spacing: .1px;
+  }
+  .layer h2 .dim { color: var(--title-ink); font-weight: 800; }
+
+  .cards { display: flex; gap: 14px; flex-wrap: wrap; }
+  .card {
+    flex: 1 1 0;
+    min-width: 230px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-line);
+    border-radius: 9px;
+    padding: 11px 13px 12px;
+  }
+  .card.full { flex-basis: 100%; }
+  .card.hl { border-color: #7a8190; border-width: 1.5px; }
+  .card .t { font-size: 14.5px; font-weight: 700; color: var(--title-ink); margin-bottom: 3px; }
+  .card .s { font-size: 13px; color: var(--sub-ink); line-height: 1.45; }
+
+  .layer.green  { --bc: var(--green); }
+  .layer.purple { --bc: var(--purple); }
+  .layer.teal   { --bc: var(--teal); }
+  .layer.blue   { --bc: var(--blue); }
+  .layer.orange { --bc: var(--orange); }
+
+  .footer {
+    margin-top: 22px;
+    font-size: 12.5px;
+    color: var(--sub-ink);
+    line-height: 1.55;
+    border-top: 1px solid #ededf2;
+    padding-top: 14px;
+  }
+  .footer b { color: var(--title-ink); }
+  .pill {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    color: #8a5a00; background: #fdf1da; border: 1px solid #f0d9a8;
+    border-radius: 999px; padding: 1px 9px; vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="topnote">AWS account · &lt;account-id&gt; · us-east-1 · Bedrock + ECS/Fargate Jobs</p>
+  <p class="subnote"><span class="pill">WS5 adapter target</span> &nbsp;skeleton today (<code>NotImplementedError</code>) — this is the reference deployment shape, not yet provisioned</p>
+
+  <!-- Layer 1 — Agent application -->
+  <div class="layer green">
+    <h2>Agent application · <span class="dim">galaxy-agent:latest</span></h2>
+    <div class="cards">
+      <div class="card">
+        <div class="t">payload_agents · Analyzer</div>
+        <div class="s">Read-only AWS→Azure migration analysis · RepoClassifier auto-detect · tree-sitter complexity score</div>
+      </div>
+      <div class="card">
+        <div class="t">Demonstration payload</div>
+        <div class="s">A single governed agent — just enough to prove the platform wraps a real agent end-to-end</div>
+      </div>
+      <div class="card">
+        <div class="t">Scales to N agents</div>
+        <div class="s">Per-agent NHI model supports many agents · the full multi-agent product is archived</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"></div>
+
+  <!-- Layer 2 — Security, governance & orchestration -->
+  <div class="layer purple">
+    <h2>Security, governance &amp; orchestration</h2>
+    <div class="cards">
+      <div class="card full">
+        <div class="t">MSGK governance adapter · agent-os-kernel 3.2.2</div>
+        <div class="s">Policy evaluator · Circuit breaker · Audit logger · Injection detector · Rogue-agent detect — 7-guard middleware stack, cloud-agnostic (core/ + governance/)</div>
+      </div>
+      <div class="card">
+        <div class="t">Framework runtime · A2A dispatcher</div>
+        <div class="s">Bedrock Agents / LangGraph routing · STS role-assumption auth (the AWS framework axis, WS5.8)</div>
+      </div>
+      <div class="card">
+        <div class="t">YAML policy engine</div>
+        <div class="s">Deny-unknown · per-agent tool allowlist (galaxy-*.yaml)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"></div>
+
+  <!-- Layer 3 — Runtime & compute -->
+  <div class="layer teal">
+    <h2>Runtime &amp; compute</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="t">Bedrock Agents runtime</div>
+        <div class="s">1 demo reasoning agent · scales to N</div>
+      </div>
+      <div class="card">
+        <div class="t">ECS Fargate / AWS Batch jobs</div>
+        <div class="s">Per-agent job · 1 demo (fan-out archived)</div>
+      </div>
+      <div class="card">
+        <div class="t">A2A Gateway · API Gateway</div>
+        <div class="s">SigV4-signed inter-agent hop routing</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"></div>
+
+  <!-- Layer 4 — AWS platform services -->
+  <div class="layer blue">
+    <h2>AWS platform services</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="t">Amazon Bedrock</div>
+        <div class="s">Claude / Titan models · ADK-native · LLM egress via API Gateway</div>
+      </div>
+      <div class="card hl">
+        <div class="t">Secrets Manager / SSM</div>
+        <div class="s">Model creds · connection strings</div>
+      </div>
+      <div class="card">
+        <div class="t">IAM Roles · IRSA / STS</div>
+        <div class="s">Per-agent NHI · 1 role (demo) · scales to N</div>
+      </div>
+      <div class="card">
+        <div class="t">Storage · S3 + DynamoDB</div>
+        <div class="s">S3 galaxy-runs · DynamoDB / QLDB hash-chain ledger</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"></div>
+
+  <!-- Layer 5 — Observability -->
+  <div class="layer orange">
+    <h2>Observability</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="t">AWS X-Ray (ADOT)</div>
+        <div class="s">OTel gen_ai.* · governance audit span events · traceparent propagation</div>
+      </div>
+      <div class="card">
+        <div class="t">CloudWatch Logs + Metrics</div>
+        <div class="s">Structured logs · metrics · dashboards</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p><b>How to read this.</b> The top three layers (application, governance/orchestration, runtime) are largely <b>cloud-agnostic</b> — they live in <code>core/</code>, <code>governance/</code>, <code>a2a/</code> and depend only on the interface seam. Only the bottom two layers (AWS platform services, observability) are provider-specific, supplied by <code>adapters/aws/</code>.</p>
+    <p><b>Status.</b> This is the <b>WS5 target topology</b>. The AWS adapter is an interface-complete skeleton today (every accessor raises <code>NotImplementedError</code>); Azure is the one fully-implemented provider. The application layer reflects the current repo — a single <code>Analyzer</code> demonstration agent in <code>payload_agents/</code>; the full multi-agent migration product is archived. See <code>docs/REFACTOR_AND_GAPS_PLAN.md</code> (WS5) and <code>docs/architecture.md</code>.</p>
+  </div>
+
+</div>
+</body>
+</html>
