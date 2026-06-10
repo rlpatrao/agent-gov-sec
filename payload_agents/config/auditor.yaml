@@ -1,0 +1,37 @@
+version: "1.0"
+name: auditor-agent-config
+description: >
+  Auditor — the privileged cross-dataset reader and A2A callee (LangGraph).
+  Reads across finops + hr up to CONFIDENTIAL ([finops, HR, PII]); RESTRICTED
+  columns (ssn, tax_id) are still masked even for the Auditor. Receives A2A
+  dispatches from FinOpsAnalyst so the full hop (dispatch → child span → callee
+  runs its own governance stack) is demonstrated. A leaf agent — does not
+  dispatch onward.
+
+agent:
+  type: Auditor
+  description: Cross-dataset compliance auditor (LangGraph, data-reading, A2A recipient)
+  max_file_scan_bytes: 256000
+  prompt_file: prompts/auditor.md
+  max_output_tokens: 4000
+
+a2a:
+  allowed_recipients: []           # leaf: receives but does not dispatch
+  max_files_per_dispatch: 0
+  timeout_seconds: 60
+
+governance:
+  enable_prompt_injection_guard: true
+  prompt_injection_block_threshold: high
+  enable_credential_redactor: true
+  credential_mode: redact
+  enable_context_budget: true
+  context_budget_tokens: 40000
+  enable_rogue_detection: true
+  allowed_tools: [query_dataset, summarize_costs]
+  denied_tools: []
+  blocked_patterns: ["DROP TABLE", "DELETE FROM", "rm -rf"]
+  enable_data_fgac: true
+  enable_data_drift: true
+  enable_reasoning_guard: true
+  enable_reasoning_trace: true

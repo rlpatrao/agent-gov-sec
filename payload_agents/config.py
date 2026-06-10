@@ -83,6 +83,34 @@ class GovernanceConfig(BaseModel):
     )
     denied_tools: list[str] = Field(default_factory=list)
 
+    # ── WS7 gap-module toggles (consumed by the LangGraph axis,
+    #    adapters/langgraph/governance.build_langgraph_governance) ──────────
+    blocked_patterns: list[str] = Field(
+        default_factory=list,
+        description="Substrings denied in tool arguments / model output "
+                    "(e.g. 'DROP TABLE'). Cheap allowlist-style content guard.",
+    )
+    enable_data_fgac: bool = Field(
+        default=False,
+        description="Gap 1 — route the agent's data reads through the FGAC "
+                    "DataAccessMediator (ABAC mask/row-filter/deny per NHI scope).",
+    )
+    enable_data_drift: bool = Field(
+        default=False,
+        description="Gap 3 — feed each data read to the DataAccessDriftDetector "
+                    "(volume/sensitivity/new-table drift → quarantine).",
+    )
+    enable_reasoning_guard: bool = Field(
+        default=False,
+        description="Gap 4 — validate planned tool/data-access steps against the "
+                    "capability allow-list + data scope before execution.",
+    )
+    enable_reasoning_trace: bool = Field(
+        default=False,
+        description="Gap 4+ — capture CoT/CoVe with mandatory redaction → span "
+                    "event + hash-stamped audit entry.",
+    )
+
 
 class AgentConfigModel(BaseModel):
     """One validated agent config."""

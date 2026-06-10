@@ -8,9 +8,11 @@ A runtime governance & security platform for multi-agent systems, built on the *
 
 **Governance platform** (`core/`, `governance/`, `a2a/`): per-agent Non-Human Identity (Entra), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → Application Insights tracing, a hash-chained Postgres audit ledger, and APIM as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
 
-**Demonstration payload** (`payload_agents/`): a single MAF `Analyzer` agent and its dependencies, wired through the full governance stack via `build_agent()`. It exists to prove the platform governs a real agent end-to-end — not as a product.
+**Demonstration payload** (`payload_agents/`): three governed **LangGraph** agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). They are deliberately built on LangGraph rather than MAF to prove the governance stack is **framework-agnostic**: the same `governance/` + `core/` + `a2a/` primitives and WS7 extensions that wrap a MAF agent also wrap a LangGraph `create_agent`, via a thin LangChain `AgentMiddleware` shim (`adapters/langgraph/`).
 
-**Offline governance demo** (`scripts/demo_governance.py`): runs with no Azure credentials, no database, and no LLM calls. Demonstrates a normal request passing all guards, a prompt-injection attack blocked before the LLM, a credential leak redacted, and hash-chained audit-ledger verification.
+**Offline governance demos** (no Azure credentials, no database, no LLM calls):
+- `scripts/demo_governance.py` — the minimal MAF-free guard/redaction/ledger walkthrough.
+- `scripts/demo_two_agents.py` — the **full feature × agent matrix** across the three LangGraph agents: identity/egress, the per-call guard stack, A2A authz, data-layer FGAC (mask/row-filter/deny + AWS Lake Formation pushdown), data-access drift, reasoning-step guard + CoT/CoVe trace, and hash-chained audit + tamper detection — each exercised on both its success and failure path.
 
 ---
 
@@ -42,13 +44,17 @@ uv venv --python 3.14 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
 ```
 
-### Run the offline governance demo (no Azure required)
+### Run the offline governance demos (no Azure required)
 
 ```bash
-uv run python scripts/demo_governance.py
+uv run python scripts/demo_governance.py     # minimal guard/redaction/ledger walkthrough
+uv run python scripts/demo_two_agents.py      # full feature × agent matrix (3 LangGraph agents)
 ```
 
-This is the fastest way to see the guard stack, redaction, and audit chain in action — fully offline.
+`demo_two_agents.py` builds the three LangGraph agents (FinOpsAnalyst / Auditor / Rogue) with a
+fake chat model and drives the success **and** failure path of every control, printing a
+feature × agent results matrix and verifying the hash-chained ledger (incl. a tamper demo) —
+fully offline. The LangGraph axis needs `pip install '.[langgraph]'` (langchain≥1.0 + langgraph).
 
 ### Run the tests
 
@@ -92,13 +98,19 @@ See [`.env.example`](.env.example) for the full set.
 ```
 agentic-sdlc/
 │
-├── payload_agents/                 Minimal demonstration payload (governed by the platform)
-│   ├── _base.py                    Universal build_agent() factory (wires the governance stack)
+├── payload_agents/                 Demonstration payload — 3 LangGraph agents (governed)
 │   ├── config.py                   Pydantic config loader (extra="forbid")
-│   ├── analyzer_agent.py           The sample MAF agent
-│   ├── _lib/                       Utilities the sample agent needs (chunker, classifier, tools, logger)
-│   ├── config/analyzer.yaml        Per-agent config
-│   └── prompts/analyzer.md         System prompt
+│   ├── finops_agent.py             FinOpsAnalyst — scoped data reader (happy path)
+│   ├── auditor_agent.py            Auditor — cross-dataset reader + A2A callee
+│   ├── rogue_agent.py              Rogue — untrusted agent that trips every guard
+│   ├── _lib/                       Shared utilities (+ demo_data.py sample rows)
+│   ├── config/{finops,auditor,rogue}.yaml   Per-agent config
+│   └── prompts/{finops,auditor,rogue}.md    System prompts
+│
+├── adapters/langgraph/             LangGraph framework axis (non-MAF binding)
+│   ├── _base.py                    build_langgraph_agent() factory (NHI + egress + governance)
+│   ├── governance.py               GalaxyGuardMiddleware + build_langgraph_governance()
+│   └── runtime.py                  FakeToolCallingModel (offline) + live model factory
 │
 ├── core/                           Shared infrastructure  (Azure-coupled today; → adapters/ in WS1)
 │   ├── nhi_identity.py             Non-Human Identity registry
@@ -118,7 +130,8 @@ agentic-sdlc/
 ├── a2a/                            Agent-to-Agent protocol (envelope + audited dispatcher)
 │
 ├── scripts/
-│   └── demo_governance.py          Offline governance demo (no Azure required)
+│   ├── demo_governance.py          Minimal offline governance demo (no Azure required)
+│   └── demo_two_agents.py          Full feature × agent matrix over the 3 LangGraph agents
 │
 ├── tests/                          Test suite (runs without Azure credentials)
 ├── infra/                          ledger_schema.sql, aca_jobs.bicep  (→ adapters/azure/ in WS1)
