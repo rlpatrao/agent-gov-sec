@@ -33,7 +33,7 @@ from payload_agents._lib.complexity_scorer import ComplexityResult, score_comple
 from payload_agents._lib.repo_classifier import ClassificationResult, classify_repo
 from payload_agents._lib.run_logger import get_run_logger
 from payload_agents.config import load_agent_config_cached
-from core.token_provider import TokenProvider
+from core.interfaces import SecretProvider
 
 logger = logging.getLogger(__name__)
 
@@ -242,7 +242,7 @@ def _build_user_prompt(
 
 async def build_analyzer_agent(
     run_id: str,
-    token_provider: Optional[TokenProvider] = None,
+    token_provider: Optional[SecretProvider] = None,
 ) -> AgentBundle:
     return await build_agent("analyzer", run_id, token_provider=token_provider)
 

@@ -169,7 +169,7 @@ Use [`payload_agents/analyzer_agent.py`](../payload_agents/analyzer_agent.py) as
 
 ### Step 2: Register the NHI
 
-Add the agent type to `_NHI_CLIENT_IDS` in [`core/nhi_identity.py`](../core/nhi_identity.py) and add `NHI_CLIENT_ID_<AGENTTYPE>` to [`.env.example`](../.env.example). The identity flows into `agent_id` and every audit row's `nhi_id`.
+Add the agent type to `_NHI_CLIENT_IDS` in [`core/nhi_registry.py`](../core/nhi_registry.py) and add `NHI_CLIENT_ID_<AGENTTYPE>` to [`.env.example`](../.env.example). The identity flows into `agent_id` and every audit row's `nhi_id`.
 
 ### Step 3: Add the per-agent YAML config
 
@@ -217,7 +217,7 @@ identity.agent_type     # = "Analyzer"
 str(identity)           # = "Analyzer/local-analyzer-nhi"
 ```
 
-Source: [`core/nhi_identity.py`](../core/nhi_identity.py).
+Source: [`core/nhi_registry.py`](../core/nhi_registry.py).
 
 In Azure each NHI is a User-Assigned Managed Identity. In local dev the env-var placeholder (e.g. `local-analyzer-nhi`) is used; production agents need their own MIs before deployment.
 
@@ -240,7 +240,7 @@ tp = TokenProvider(
 value = tp.get_api_key()   # cached for 5 minutes
 ```
 
-Source: [`core/token_provider.py`](../core/token_provider.py).
+Source: [`adapters/azure/secrets.py`](../adapters/azure/secrets.py).
 
 ### 5.3 APIM subscription key
 
@@ -277,7 +277,7 @@ chain_ok = await pg_backend.verify_chain()
 # False means a row was modified after the fact
 ```
 
-See [`infra/ledger_schema.sql`](../infra/ledger_schema.sql) for the table DDL and [architecture.md](architecture.md) for the full explanation. The offline demo (`scripts/demo_governance.py`) exercises the exact same chain logic against an in-memory ledger.
+See [`adapters/azure/infra/ledger_schema.sql`](../adapters/azure/infra/ledger_schema.sql) for the table DDL and [architecture.md](architecture.md) for the full explanation. The offline demo (`scripts/demo_governance.py`) exercises the exact same chain logic against an in-memory ledger.
 
 ---
 
@@ -662,7 +662,7 @@ from governance.adapters.postgres_audit_backend import PostgresHashChainBackend
 broken_at = await backend.find_first_broken_link()
 ```
 
-If the chain breaks without deliberate tampering, check whether `_compute_hash` in [`governance/adapters/postgres_audit_backend.py`](../governance/adapters/postgres_audit_backend.py) and `verify_chain` use the same field order in the hash input — they must be identical.
+If the chain breaks without deliberate tampering, check whether `_compute_hash` in [`adapters/azure/audit.py`](../adapters/azure/audit.py) and `verify_chain` use the same field order in the hash input — they must be identical.
 
 In stdout/in-memory mode (no `POSTGRES_DSN`), the "chain" resets on each run. This is expected — the offline demo demonstrates the same logic in-memory.
 

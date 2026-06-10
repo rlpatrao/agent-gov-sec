@@ -1,6 +1,6 @@
 # Cloud-Agnostic Refactor, MSGK Re-baseline & Gap-Closure Plan
 
-**Status:** Draft — not yet started
+**Status:** WS1 (adapter isolation) ✅ done & verified · WS2 (doc/asset cleanup) ✅ done · WS3–WS7 not started
 **Owner:** _(assign)_
 **Created:** 2026-06-09
 **Goal:** Make the governance platform **cloud- and framework-agnostic** by isolating *everything Microsoft-specific* (Azure cloud services **and** the Microsoft Agent Framework / MAF) into a self-contained `adapters/azure/` folder, re-baseline on the upstream **Microsoft Agent Governance Toolkit (MSGK)**, document our delta over it, and build the gap-closing modules that are **not** already provided upstream.
@@ -66,7 +66,9 @@ We treat **Azure + MAF as one Microsoft bundle** and move **both** behind the ad
 
 ---
 
-## WS1 — Isolate Azure + MAF into `adapters/azure/`
+## WS1 — Isolate Azure + MAF into `adapters/azure/` ✅ DONE
+
+> **Status: complete & verified.** Acceptance grep is clean; the provider factory resolves azure (full) and aws/gcp (clean `NotImplementedError`); the agnostic core imports with **no** Azure SDK / MAF installed; the 35 agnostic tests pass. The MAF/Azure-dependent tests (`test_guards`, `test_analyzer_agent`) and a live `CLOUD_PROVIDER=azure` pipeline run were **not executed** in the refactor environment (`agent_framework`/`azure` not installed) — verify those where the `.[azure]` extra is installed. Two deviations from the draft below, both deliberate: **(1.6)** `OtelAuditBackend` is pure OTel (cloud-neutral) so it **stays** in `governance/adapters/`; only `PostgresHashChainBackend` moved to `adapters/azure/audit.py`. **(1.9)** `run_pipeline_aca.py` is in the archived product, so no `orchestrator.py` was created.
 
 **Objective:** Core (`core/`, `governance/`, `a2a/`) expresses cloud- and framework-agnostic governance. Every `azure.*` SDK call **and** every `agent_framework` (MAF) touchpoint outside `agents/` moves behind an interface into `adapters/azure/`. AWS/GCP get parallel adapter trees (interface-complete; one reference impl each for the high-value cloud bindings).
 
@@ -115,30 +117,30 @@ adapters/
 ```
 
 ### Tasks — agnostic core
-- [ ] **1.1** `core/interfaces.py`: `IdentityProvider`, `SecretProvider`, `TraceExporterFactory`, `EgressConfigSource`, `LLMGateway`, `AgentRuntimeAdapter` (the framework-binding seam). Re-use MSGK's `AuditBackend`.
-- [ ] **1.2** `core/provider_factory.py`: select adapter set by `CLOUD_PROVIDER` (default `azure`); lazy-import so non-selected cloud SDKs/frameworks aren't required.
-- [ ] **1.3** Split NHI: agnostic `core/nhi_registry.py` (AgentIdentity, registry, attribution) + `adapters/azure/identity.py` (ManagedIdentityCredential).
+- [x] **1.1** `core/interfaces.py`: `SecretProvider`, `IdentityProvider`, `TraceExporterFactory`, `LLMGateway`, `AgentRuntimeAdapter`, `CloudProvider` + re-exported MSGK `AuditBackend`. (Egress config is exposed via `CloudProvider.egress_config_path()` rather than a standalone `EgressConfigSource`.)
+- [x] **1.2** `core/provider_factory.py`: `get_provider()` selects by `CLOUD_PROVIDER` (default `azure`); lazy-imports the adapter package; caches.
+- [x] **1.3** Split NHI: agnostic `core/nhi_registry.py` (data + registry) + `adapters/azure/identity.py` (`AzureIdentityProvider` / ManagedIdentityCredential). `get_credential()` routes through the factory.
 
 ### Tasks — Azure cloud bindings → `adapters/azure/`
-- [ ] **1.4** `core/token_provider.py` → `adapters/azure/secrets.py` behind `SecretProvider`; env-var fallback stays in core.
-- [ ] **1.4a** Extract the **LLM gateway** → `adapters/azure/gateway.py` behind a new `LLMGateway` interface: resolve the APIM endpoint + `Ocp-Apim-Subscription-Key` (from `SecretProvider`), with direct-AOAI fallback when `APIM_ENDPOINT` is unset. This is the managed egress chokepoint and pairs with `egress.yaml` (chokepoint vs allow-list). The chat-client construction stays in `agents/_base.py` (payload) and *consumes* `LLMGateway` — minimal/no payload change if the interface preserves the current env-var contract.
-- [ ] **1.5** `core/run_tracer.py`: OTel SDK setup stays agnostic in core; `AzureMonitorTraceExporter` → `adapters/azure/tracing.py`.
-- [ ] **1.6** `governance/adapters/{otel,postgres}_audit_backend.py` → `adapters/azure/audit.py` (already implement MSGK `AuditBackend` — pure relocation).
-- [ ] **1.7** `governance/configs/galaxy-egress.yaml` → `adapters/azure/egress.yaml`; egress guard reads path from provider factory.
-- [ ] **1.8** `infra/` → `adapters/azure/infra/`.
-- [ ] **1.9** `scripts/run_pipeline_aca.py` → `adapters/azure/orchestrator.py`; keep agnostic `scripts/run_migration.py`.
+- [x] **1.4** `core/token_provider.py` → `adapters/azure/secrets.py` (`TokenProvider`, Key Vault). Agnostic env-var default added at `core/secrets.py` (`EnvVarSecretProvider`).
+- [x] **1.4a** `adapters/azure/gateway.py` (`AzureLLMGateway`) behind `LLMGateway`: APIM endpoint + `Ocp-Apim-Subscription-Key`, direct-AOAI fallback. `payload_agents/_base.py` now consumes it via `get_provider().llm_gateway().resolve(...)`.
+- [x] **1.5** `core/run_tracer.py` agnostic (SDK + factory + runtime-adapter); `AzureMonitorTraceExporter` → `adapters/azure/tracing.py`.
+- [x] **1.6** `PostgresHashChainBackend` → `adapters/azure/audit.py`. **`OtelAuditBackend` kept agnostic in `governance/adapters/`** (pure OTel — not Azure-specific; deviation from draft).
+- [x] **1.7** `galaxy-egress.yaml` → `adapters/azure/egress.yaml`; egress guard resolves the path via the provider factory.
+- [x] **1.8** `infra/` → `adapters/azure/infra/`.
+- [x] **1.9** N/A — `run_pipeline_aca.py` is in the archived product; no orchestrator relocation needed.
 
 ### Tasks — MAF framework glue → `adapters/azure/maf/`
-- [ ] **1.10** Move the 3 MAF guard middlewares (`credential_redactor`, `context_budget`, `prompt_injection`) → `adapters/azure/maf/guards/`. The MSGK *logic* they wrap stays an `agent_os` import; only the MAF-middleware wrapper relocates.
-- [ ] **1.11** Move `governance/middleware.py` (the MAF assembly using `maf_adapter`) → `adapters/azure/maf/middleware.py`.
-- [ ] **1.12** Move `run_tracer`'s `configure_otel_providers` MAF wiring → `adapters/azure/maf/runtime.py`, behind the `AgentRuntimeAdapter` seam.
-- [ ] **1.13** Keep MAF-free guards (`escalation.py`, `egress.py`) and `policies/*.yaml` in agnostic `governance/`.
+- [x] **1.10** 3 MAF guard middlewares → `adapters/azure/maf/guards/` (MSGK logic stays an `agent_os` import).
+- [x] **1.11** `governance/middleware.py` → `adapters/azure/maf/middleware.py` (policy/config dirs repointed to the agnostic `governance/` package).
+- [x] **1.12** `configure_otel_providers` MAF wiring → `adapters/azure/maf/runtime.py` (`MafRuntimeAdapter`) behind `AgentRuntimeAdapter`.
+- [x] **1.13** MAF-free guards (`escalation.py`, `egress.py`) and `policies/*.yaml` stay in agnostic `governance/`.
 
 ### Tasks — wiring + adapter contracts
-- [ ] **1.14** Create empty `adapters/aws/` + `adapters/gcp/` package skeletons that declare (but don't implement) every WS1 interface — `NotImplementedError` stubs + a `# WS5`/`# WS6` marker. This locks the contract so WS5/WS6 are pure fill-in. **Full AWS/GCP impls live in WS5/WS6, not here.**
-- [ ] **1.15** Update imports across `core/`, `governance/`, `a2a/`, `scripts/`.
-- [ ] **1.16** Split optional deps: `.[azure]` (incl. MAF), `.[aws]`, `.[gcp]`.
-- [ ] **1.17** Tests green; local migration run completes with `CLOUD_PROVIDER=azure`; smoke test that the factory can *load* each provider package (azure fully; aws/gcp raise clean `NotImplementedError` until WS5/WS6).
+- [x] **1.14** `adapters/aws/` + `adapters/gcp/` skeletons: `PROVIDER` resolves; every accessor raises `NotImplementedError` with a `WS5`/`WS6` marker.
+- [x] **1.15** Imports updated across `core/`, `governance/`, `a2a/`, `payload_agents/`, `tests/`. (`scripts/demo_governance.py` is self-contained — unaffected.)
+- [x] **1.16** Optional deps split in `pyproject.toml`: `.[azure]` (incl. MAF), `.[aws]`, `.[gcp]`; agnostic deps in base.
+- [x] **1.17** 35 agnostic tests green; factory loads azure (full) + aws/gcp (`NotImplementedError`). ⚠️ MAF/Azure-dependent tests + live `CLOUD_PROVIDER=azure` pipeline not run in this env (deps absent) — verify with `.[azure]` installed.
 
 **Acceptance:** `grep -rE "^\s*(from|import) (azure|agent_framework)" core governance a2a` returns nothing (all Azure + MAF under `adapters/azure/`). Provider factory resolves azure/aws/gcp. Local Azure pipeline works. Tests green.
 

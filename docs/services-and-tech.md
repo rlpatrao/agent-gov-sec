@@ -14,22 +14,22 @@ For the cloud-agnostic refactor roadmap, see [REFACTOR_AND_GAPS_PLAN.md](REFACTO
 
 ## 1. Azure resource topology — (archived full-product deployment / roadmap target)
 
-> **This inventory describes the archived full-product deployment**, where ~18 agents ran as Container Apps jobs. It is retained as the **target / reference deployment topology** for a live cloud run, not a description of current repo state. This repo today ships only the offline governance demo (`scripts/demo_governance.py`) and a single `Analyzer` payload agent. The Bicep that provisioned this topology lives at [`infra/aca_jobs.bicep`](../infra/aca_jobs.bicep) (still present) and is slated to move to `adapters/azure/infra/` under the refactor.
+> **This inventory describes the archived full-product deployment**, where ~18 agents ran as Container Apps jobs. It is retained as the **target / reference deployment topology** for a live cloud run, not a description of current repo state. This repo today ships only the offline governance demo (`scripts/demo_governance.py`) and a single `Analyzer` payload agent. The Bicep that provisioned this topology now lives under the Azure adapter at [`adapters/azure/infra/aca_jobs.bicep`](../adapters/azure/infra/aca_jobs.bicep) (WS1 complete).
 
 Provisioned in subscription **`<your-subscription-name>` (`<your-subscription-id>`)**, tenant **`<your-tenant-id>`**, region **East US**, resource group **`galaxyscanner-rg`** unless noted.
 
 | # | Resource | Name | What it does | Status | Where it touches code |
 |---|---|---|---|---|---|
 | 1 | Resource Group | `galaxyscanner-rg` | Container for everything below | Provisioned | — |
-| 2 | Key Vault (access-policy mode) | `example-kv` | Stores `azure-openai-key`, `apim-subscription-key`, `appinsights-connection-string`, `acr-password`. RBAC mode unavailable (account lacks `roleAssignments/write`); access-policy mode works for Contributor. | Provisioned | [core/token_provider.py](../core/token_provider.py) reads `AZURE_KEY_VAULT_URL` + `DefaultAzureCredential` |
+| 2 | Key Vault (access-policy mode) | `example-kv` | Stores `azure-openai-key`, `apim-subscription-key`, `appinsights-connection-string`, `acr-password`. RBAC mode unavailable (account lacks `roleAssignments/write`); access-policy mode works for Contributor. | Provisioned | [adapters/azure/secrets.py](../adapters/azure/secrets.py) reads `AZURE_KEY_VAULT_URL` + `DefaultAzureCredential` |
 | 3 | Azure Container Registry (Basic) | `examplecr` | Hosted the agent image plus the imported `devcontainers-python:3.13` base. Admin enabled (Basic doesn't support scope-map tokens). | Provisioned | (archived) — the `Dockerfile` that referenced it now lives in `archive/` |
-| 4 | User-Assigned Managed Identity | `galaxyscanner-mi` | A per-agent NHI in production. Federated tokens via Workload Identity exchange to this MI; its `clientId` flows into the relevant `NHI_CLIENT_ID_*` env var. | Provisioned | [core/nhi_identity.py](../core/nhi_identity.py) reads `NHI_CLIENT_ID_*` from env |
+| 4 | User-Assigned Managed Identity | `galaxyscanner-mi` | A per-agent NHI in production. Federated tokens via Workload Identity exchange to this MI; its `clientId` flows into the relevant `NHI_CLIENT_ID_*` env var. | Provisioned | [core/nhi_registry.py](../core/nhi_registry.py) reads `NHI_CLIENT_ID_*` from env |
 | 5 | Log Analytics workspace | `galaxyscanner-law` | Backing store for App Insights *and* Container Apps console-log capture. | Provisioned | linked to App Insights below |
 | 6 | Application Insights (workspace-based) | `galaxyscanner-ai` | OTel span sink. Connection string in KV. Read via the `Logs` blade / KQL. | Provisioned | [core/run_tracer.py](../core/run_tracer.py) wires `AzureMonitorTraceExporter` when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set |
 | 7 | Azure OpenAI Service | `example-openai` | Hosts the **`gpt-5-3-codex`** deployment. Endpoint `https://example-openai.openai.azure.com/`. Uses the **Responses API** (`/openai/v1/responses?api-version=preview`) since codex models don't support Chat Completions. | Provisioned + deployed | [payload_agents/_base.py](../payload_agents/_base.py) — `OpenAIChatClient(azure_endpoint=…)` |
 | 8 | Container Apps Environment | `galaxyscanner-aca-env` | The control plane for the (archived) Container App jobs. Linked to `galaxyscanner-law` for stdout capture. | Provisioned | — |
-| 9 | Container App Job(s) | `galaxyscanner-job` | (Archived) manual-triggered batch jobs — one per agent in the full product. | (archived) — no runnable ACA path in this repo | [infra/aca_jobs.bicep](../infra/aca_jobs.bicep) DDL retained |
-| 10 | Postgres Flexible Server (B1ms) | `galaxyscanner-pg` (planned) | Persistent hash-chained `trace_ledger` archive — survives container restarts, queryable for compliance. | Deferred / opt-in | [infra/ledger_schema.sql](../infra/ledger_schema.sql) DDL ready; [governance/adapters/postgres_audit_backend.py](../governance/adapters/postgres_audit_backend.py) wired |
+| 9 | Container App Job(s) | `galaxyscanner-job` | (Archived) manual-triggered batch jobs — one per agent in the full product. | (archived) — no runnable ACA path in this repo | [adapters/azure/infra/aca_jobs.bicep](../adapters/azure/infra/aca_jobs.bicep) DDL retained |
+| 10 | Postgres Flexible Server (B1ms) | `galaxyscanner-pg` (planned) | Persistent hash-chained `trace_ledger` archive — survives container restarts, queryable for compliance. | Deferred / opt-in | [adapters/azure/infra/ledger_schema.sql](../adapters/azure/infra/ledger_schema.sql) DDL ready; [adapters/azure/audit.py](../adapters/azure/audit.py) wired |
 | 11 | API Management (Consumption) | `example-apim` | Reverse proxy in front of Azure OpenAI. Validates `Ocp-Apim-Subscription-Key`; rejects calls missing `x-agent-type` or `x-galaxy-run-id` (returns 400); rate-limits per-subscription; injects the AOAI key from a KV-backed named value before forwarding. Stub `validate-jwt` policy in place but not enforced. Gateway: `https://example-apim.azure-api.net`; API path: `/openai`. | Provisioned + policy live | [payload_agents/_base.py](../payload_agents/_base.py) `_resolve_egress` (APIM mode), `.env` `APIM_ENDPOINT` |
 | 12 | Microsoft Foundry resource (pre-existing) | `<your-foundry-resource>` | Pre-existing Foundry resource. Currently **unused** — Anthropic models aren't in East US for this tenant; Azure OpenAI is used instead. | Idle | not wired |
 
@@ -157,7 +157,7 @@ Documented at the bottom of [requirements.txt](../requirements.txt). All replace
 
 ## 5. Governance policies (YAML on disk)
 
-The `*.yaml` policy packs are loaded by `GovernancePolicyMiddleware` (`agent_os.policies.PolicyEvaluator`) at agent build time — all files in `governance/policies/` are auto-loaded, no manifest needed. See [governance/middleware.py](../governance/middleware.py).
+The `*.yaml` policy packs are loaded by `GovernancePolicyMiddleware` (`agent_os.policies.PolicyEvaluator`) at agent build time — all files in `governance/policies/` are auto-loaded, no manifest needed. See [adapters/azure/maf/middleware.py](../adapters/azure/maf/middleware.py).
 
 | File | What it enforces |
 |---|---|
@@ -170,7 +170,7 @@ Two further guard configs live under `governance/configs/` (read by the pre-midd
 
 | File | What it tunes |
 |---|---|
-| [governance/configs/galaxy-egress.yaml](../governance/configs/galaxy-egress.yaml) | Outbound network egress control rules |
+| [adapters/azure/egress.yaml](../adapters/azure/egress.yaml) | Outbound network egress control rules |
 | [governance/configs/prompt-injection.yaml](../governance/configs/prompt-injection.yaml) | Injection threat patterns + scoring thresholds |
 
 ### Per-agent config (separate from policies)
@@ -196,16 +196,16 @@ The offline demo (`scripts/demo_governance.py`) and the test suite need **none**
 | `AZURE_OPENAI_ENDPOINT` | Direct AOAI URL when `APIM_ENDPOINT` is unset | Required if no APIM | [payload_agents/_base.py](../payload_agents/_base.py) |
 | `AZURE_OPENAI_DEPLOYMENT` | Deployment name | Optional (code defaults to `gpt-5-3-codex`) | [payload_agents/_base.py:95](../payload_agents/_base.py#L95) |
 | `AZURE_OPENAI_API_VERSION` | `preview` (literal) for the Responses API | Optional (defaults to `preview`) | [payload_agents/_base.py:96](../payload_agents/_base.py#L96) |
-| `AZURE_OPENAI_KEY` | Direct AOAI key | Required if no APIM and no KV | [payload_agents/_base.py](../payload_agents/_base.py) / [core/token_provider.py](../core/token_provider.py) fallback (`env_var_fallback="AZURE_OPENAI_KEY"`) |
-| `AZURE_KEY_VAULT_URL` | KV URL; leave **blank locally** so the env-var fallback wins | Optional | [core/token_provider.py:50](../core/token_provider.py#L50) |
+| `AZURE_OPENAI_KEY` | Direct AOAI key | Required if no APIM and no KV | [payload_agents/_base.py](../payload_agents/_base.py) / [adapters/azure/secrets.py](../adapters/azure/secrets.py) fallback (`env_var_fallback="AZURE_OPENAI_KEY"`) |
+| `AZURE_KEY_VAULT_URL` | KV URL; leave **blank locally** so the env-var fallback wins | Optional | [adapters/azure/secrets.py:50](../adapters/azure/secrets.py#L50) |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | OTel → App Insights | Optional (recommended for live runs) | [core/run_tracer.py](../core/run_tracer.py) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector fallback (App Insights wins when both set) | Optional | [core/run_tracer.py](../core/run_tracer.py) |
 | `OTEL_SERVICE_NAME` | OTel resource attribute | Optional (code default `galaxy-platform`) | [core/run_tracer.py:54](../core/run_tracer.py#L54) |
-| `POSTGRES_DSN` | Hash-chain ledger persistence | Optional (stdout/in-memory mode if unset) | [core/trace_ledger.py:81](../core/trace_ledger.py#L81), [governance/adapters/postgres_audit_backend.py](../governance/adapters/postgres_audit_backend.py) |
-| `NHI_CLIENT_ID_ANALYZER` | Entra MI clientId for the `Analyzer` — **the only agent present in this repo** | Required for live runs (placeholder OK locally) | [core/nhi_identity.py:45](../core/nhi_identity.py#L45) |
+| `POSTGRES_DSN` | Hash-chain ledger persistence | Optional (stdout/in-memory mode if unset) | [core/trace_ledger.py:81](../core/trace_ledger.py#L81), [adapters/azure/audit.py](../adapters/azure/audit.py) |
+| `NHI_CLIENT_ID_ANALYZER` | Entra MI clientId for the `Analyzer` — **the only agent present in this repo** | Required for live runs (placeholder OK locally) | [core/nhi_registry.py:45](../core/nhi_registry.py#L45) |
 | `AZURE_CLIENT_ID` | Hint for `DefaultAzureCredential` to pick a specific MI when several are attached | Deployed runs only | — (read by the Azure SDK) |
 
-**Archived-product NHI identities (still in `.env.example` for compatibility).** `core/nhi_identity.py` still registers the full agent-type table the archived product used, and `.env.example` still lists the matching `NHI_CLIENT_ID_*` variables. **Only `NHI_CLIENT_ID_ANALYZER` corresponds to an agent present in this repo** — the rest resolve to nothing unless you build one of the archived agents:
+**Archived-product NHI identities (still in `.env.example` for compatibility).** `core/nhi_registry.py` still registers the full agent-type table the archived product used, and `.env.example` still lists the matching `NHI_CLIENT_ID_*` variables. **Only `NHI_CLIENT_ID_ANALYZER` corresponds to an agent present in this repo** — the rest resolve to nothing unless you build one of the archived agents:
 
 ```
 NHI_CLIENT_ID_CLASSIFIER · NHI_CLIENT_ID_SCANNER · NHI_CLIENT_ID_ASTANALYZER
@@ -238,14 +238,14 @@ The keys you can query in App Insights `customDimensions`. Sources:
 | Concern | Configured in | Read by |
 |---|---|---|
 | Per-agent runtime tunables | [payload_agents/config/analyzer.yaml](../payload_agents/config/analyzer.yaml) | [payload_agents/config.py](../payload_agents/config.py) |
-| Runtime governance rules | [governance/policies/*.yaml](../governance/policies/) | [governance/middleware.py](../governance/middleware.py) → `agent_os.policies.PolicyEvaluator` |
+| Runtime governance rules | [governance/policies/*.yaml](../governance/policies/) | [adapters/azure/maf/middleware.py](../adapters/azure/maf/middleware.py) → `agent_os.policies.PolicyEvaluator` |
 | Pre-middleware guard configs | [governance/configs/*.yaml](../governance/configs/) | the prompt-injection / egress guards |
 | AWS→Azure mapping (Analyzer grounding) | [governance/mappings/aws-azure-reference.yaml](../governance/mappings/aws-azure-reference.yaml) | [payload_agents/analyzer_agent.py](../payload_agents/analyzer_agent.py) |
-| NHI registry | [core/nhi_identity.py](../core/nhi_identity.py) | `NHIRegistry.get(agent_type)` |
-| LLM endpoint + model + key + egress | `.env` (local) / Key Vault (deployed) | [payload_agents/_base.py](../payload_agents/_base.py), [core/token_provider.py](../core/token_provider.py) |
+| NHI registry | [core/nhi_registry.py](../core/nhi_registry.py) | `NHIRegistry.get(agent_type)` |
+| LLM endpoint + model + key + egress | `.env` (local) / Key Vault (deployed) | [payload_agents/_base.py](../payload_agents/_base.py), [adapters/azure/secrets.py](../adapters/azure/secrets.py) |
 | OTel exporter routing | `.env` `APPLICATIONINSIGHTS_CONNECTION_STRING` | [core/run_tracer.py](../core/run_tracer.py) |
-| Postgres ledger schema | [infra/ledger_schema.sql](../infra/ledger_schema.sql) | (applied once against Postgres when `POSTGRES_DSN` is set) |
-| (archived) ACA job topology | [infra/aca_jobs.bicep](../infra/aca_jobs.bicep) | (archived deployment) |
+| Postgres ledger schema | [adapters/azure/infra/ledger_schema.sql](../adapters/azure/infra/ledger_schema.sql) | (applied once against Postgres when `POSTGRES_DSN` is set) |
+| (archived) ACA job topology | [adapters/azure/infra/aca_jobs.bicep](../adapters/azure/infra/aca_jobs.bicep) | (archived deployment) |
 | Python deps | [requirements.txt](../requirements.txt) | pip / uv |
 | Test fixtures | [tests/](../tests/) | `pytest` |
 

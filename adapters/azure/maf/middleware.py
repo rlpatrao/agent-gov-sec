@@ -1,10 +1,14 @@
 """
-governance.middleware — single factory that builds the full MAF
-middleware stack for any Galaxy agent.
+adapters.azure.maf.middleware — the MAF middleware-stack assembly.
 
-Delegates the heavy lifting to agent_os.integrations.maf_adapter.
-Our only additions are two AuditBackend implementations wired into
-the GovernanceAuditLogger (Postgres hash chain + OTel to App Insights).
+This is the framework-axis glue of the Azure bundle: it composes MSGK's
+``agent_os`` governance primitives into a Microsoft Agent Framework middleware
+list. The agnostic governance pieces it draws on stay in ``governance/``:
+the policy YAML set, the prompt-injection config, and the OTel audit backend.
+The Azure-specific pieces are the MAF guard wrappers (this package) and the
+Postgres hash-chain ledger (``adapters.azure.audit``).
+
+Delegates the heavy lifting to ``agent_os.integrations.maf_adapter``.
 """
 
 from __future__ import annotations
@@ -14,21 +18,24 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
+import governance
 from agent_os.audit_logger import AuditEntry, GovernanceAuditLogger, LoggingBackend
 from agent_os.context_budget import ContextScheduler
 from agent_os.integrations.maf_adapter import create_governance_middleware
+from agent_os.prompt_injection import ThreatLevel
 
 from governance.adapters.otel_audit_backend import OtelAuditBackend
-from governance.adapters.postgres_audit_backend import PostgresHashChainBackend
-from governance.guards.context_budget import ContextBudgetGuardMiddleware
-from governance.guards.credential_redactor import CredentialRedactorGuardMiddleware
-from agent_os.prompt_injection import ThreatLevel
-from governance.guards.prompt_injection import PromptInjectionGuardMiddleware
+from adapters.azure.audit import PostgresHashChainBackend
+from adapters.azure.maf.guards.context_budget import ContextBudgetGuardMiddleware
+from adapters.azure.maf.guards.credential_redactor import CredentialRedactorGuardMiddleware
+from adapters.azure.maf.guards.prompt_injection import PromptInjectionGuardMiddleware
 
 logger = logging.getLogger(__name__)
 
-_POLICY_DIR = Path(__file__).parent / "policies"
-_CONFIG_DIR = Path(__file__).parent / "configs"
+# Policy + config sets are agnostic governance assets and stay in governance/.
+_GOVERNANCE_DIR = Path(governance.__file__).parent
+_POLICY_DIR = _GOVERNANCE_DIR / "policies"
+_CONFIG_DIR = _GOVERNANCE_DIR / "configs"
 _PROMPT_INJECTION_CONFIG = _CONFIG_DIR / "prompt-injection.yaml"
 
 

@@ -21,6 +21,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# The handler logic here is agnostic and runs against a fake agent, but
+# importing payload_agents.analyzer_agent pulls the MAF chat client at module
+# load. Skip cleanly until that import is deferred (see tests/README.md) or MAF
+# is installed via '.[azure]'.
+pytest.importorskip(
+    "agent_framework",
+    reason="payload_agents.analyzer_agent imports MAF at module load — install '.[azure]'",
+)
+
 from a2a.envelope import A2ARequest
 from payload_agents.analyzer_agent import (
     AGENT_TYPE,
