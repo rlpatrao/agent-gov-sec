@@ -79,6 +79,24 @@ def hdr(t): return _c(BOLD + CYAN, t)
 def dim(t): return _c(DIM, t)
 
 
+def _content_text(content) -> str:
+    """Flatten a message's content to readable text. Modern models (Gemini,
+    AOAI Responses) return a list of typed parts; keep the human-facing 'text'
+    and drop machinery like Gemini's huge ``thought_signature`` reasoning blobs."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for p in content:
+            if isinstance(p, dict):
+                if p.get("type") in (None, "text") and p.get("text"):
+                    parts.append(p["text"])
+            elif isinstance(p, str):
+                parts.append(p)
+        return " ".join(parts)
+    return str(content or "")
+
+
 @dataclass
 class Check:
     feature: str
@@ -124,9 +142,9 @@ class _Narrator:
         for m in result.get("messages", []) if isinstance(result, dict) else []:
             cls = m.__class__.__name__
             if cls == "AIMessage":
-                txt = getattr(m, "content", "") or ""
+                txt = _content_text(getattr(m, "content", ""))
                 if txt:
-                    print(f"      LLM ⟶ {dim(repr(txt[:140]))}")
+                    print(f"      LLM ⟶ {dim(repr(txt[:200]))}")
                 for tc in (getattr(m, "tool_calls", None) or []):
                     print(dim(f"      tool ▶ {tc.get('name')}({tc.get('args')})"))
             elif cls == "ToolMessage":
@@ -591,11 +609,14 @@ def _gemini_model():
         return None, ("no GCP creds — set GOOGLE_CLOUD_PROJECT (Vertex/ADC) or "
                       "GOOGLE_API_KEY (Gemini API) in your .env")
     # Surface a missing-package case cleanly (creds are present but the client
-    # libs aren't), rather than as a build exception.
+    # libs aren't), rather than as a build exception. langchain-google-genai is
+    # the primary client (Vertex + Developer API); langchain-google-vertexai is
+    # an accepted fallback for the Vertex path.
     import importlib.util
-    needed = "langchain_google_vertexai" if project else "langchain_google_genai"
-    if importlib.util.find_spec(needed) is None:
-        return None, f"creds present but {needed.replace('_', '-')} not installed — pip install '.[gcp]'"
+    have_genai = importlib.util.find_spec("langchain_google_genai") is not None
+    have_vertexai = importlib.util.find_spec("langchain_google_vertexai") is not None
+    if not have_genai and not (project and have_vertexai):
+        return None, "creds present but langchain-google-genai not installed — pip install '.[gcp]'"
     try:
         model = build_gemini_model(model=model_name, project=project, location=location, api_key=api_key)
     except Exception as e:

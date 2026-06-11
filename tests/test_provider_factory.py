@@ -66,14 +66,23 @@ def test_factory_module_imports_no_cloud_sdk():
     # Importing the factory itself must not pull a cloud SDK. Checked in a clean
     # subprocess because the surrounding test session may already have imported
     # azure.* (the lazy import only fires when a provider accessor is called).
+    #
+    # We measure modules ADDED by importing the factory, not absolute presence:
+    # the google-cloud-* packages ship a namespace-package .pth that loads the
+    # empty `google` / `google.cloud` shims at interpreter startup (before our
+    # import runs), so an absolute check would false-positive on those shims
+    # without any real SDK having been imported.
     import subprocess
     import sys
     from pathlib import Path
 
     repo_root = Path(__file__).resolve().parent.parent
     code = (
-        "import sys, core.provider_factory; "
-        "leaked = sorted(m for m in sys.modules if m.split('.')[0] in {'azure', 'boto3', 'google'}); "
+        "import sys; "
+        "before = set(sys.modules); "
+        "import core.provider_factory; "
+        "added = set(sys.modules) - before; "
+        "leaked = sorted(m for m in added if m.split('.')[0] in {'azure', 'boto3', 'google'}); "
         "assert not leaked, leaked"
     )
     result = subprocess.run(
