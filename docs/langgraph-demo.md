@@ -13,28 +13,32 @@ env-extensible lookup) and its deps are the opt-in `.[langgraph]` extra.
 pip install '.[langgraph]'           # langchain>=1.0, langgraph>=1.0, langchain-openai>=1.0
 uv run python scripts/demo_agents.py            # azure → REAL AOAI when creds resolve (else fake)
 uv run python scripts/demo_agents.py --gcp      # gcp  → REAL Vertex/Gemini when creds resolve (needs '.[gcp]')
+uv run python scripts/demo_agents.py --aws      # aws  → REAL Bedrock via API Gateway when configured (else fake)
 uv run python scripts/demo_agents.py --fake     # deterministic 37-check assertion matrix (any cloud)
-uv run python scripts/demo_agents.py --aws      # AWS adapter set (fake model — no LLM creds wired)
 uv run python scripts/demo_agents.py --verbose  # curated narrative (agents/prompts/LLM/tools/interceptions)
 uv run python scripts/demo_agents.py --logs     # raw logger stream
 ```
 
 **Cloud adapter set.** `--azure` (default) / `--aws` / `--gcp` / `--local` (or `--cloud X`)
 selects which provider's identity / egress / audit bindings the demo exercises. `--aws`
-resolves IAM identities, the Bedrock egress allow-list, and a DynamoDB (stdout-mode)
-hash-chain ledger; `--gcp` resolves Service-Account identities, the Vertex egress
-allow-list, and a BigQuery (stdout-mode) ledger; `--local` is fully cloud-neutral (env
-identity, in-memory ledger, no cloud SDK).
+resolves IAM identities, the Bedrock egress allow-list, and a DynamoDB hash-chain ledger;
+`--gcp` resolves Service-Account identities, the Vertex egress allow-list, and a BigQuery
+ledger; `--local` is fully cloud-neutral (env identity, in-memory ledger, no cloud SDK).
 
-**Model selection is per-cloud.** `--azure` and `--gcp` call their **real model** when
-credentials resolve — Azure OpenAI for azure, Vertex AI / Gemini for gcp — read from your
-environment **or `.env`** (loaded automatically). `--aws`, `--local`, and `--fake` use the
-deterministic `FakeToolCallingModel`. Either way the ledger runs in stdout/in-memory mode
-and OTel no-ops without an exporter.
+**Model selection is per-cloud.** All three clouds call their **real model** when
+credentials resolve — Azure OpenAI for azure, Vertex AI / Gemini for gcp, and **Bedrock
+through the API Gateway egress chokepoint** for aws — read from your environment **or `.env`**
+(loaded automatically). `--local` and `--fake` use the deterministic `FakeToolCallingModel`.
+The aws path is special: rather than calling `bedrock-runtime` directly, the agent POSTs
+Bedrock **Converse** requests to an API Gateway (`x-api-key` + per-agent attribution
+headers) that proxies to Bedrock via Lambda — so the agent never holds Bedrock credentials.
+It needs the `galaxy-rp` infra applied (`adapters/aws/infra`) and `AWS_BEDROCK_GATEWAY_ENDPOINT`
++ key set; see `docs/REFACTOR_AND_GAPS_PLAN.md` WS5. Either way the ledger runs in
+stdout/persisted mode per cloud and OTel no-ops without an exporter.
 
-**The matrix has a `VERDICT` column.** In `--fake` / `--aws` / `--local` mode every row is
-an exact assertion → **PASS** / **FAIL** (the **37-check** regression matrix CI runs). In
-real-model mode (`--azure` / `--gcp`) rows are **PASS** / **N/A** / **FAIL**:
+**The matrix has a `VERDICT` column.** In `--fake` / `--local` mode every row is an exact
+assertion → **PASS** / **FAIL** (the **37-check** regression matrix CI runs). In real-model
+mode (`--azure` / `--gcp` / `--aws` when configured) rows are **PASS** / **N/A** / **FAIL**:
 
 - **PASS** — the control engaged (prompt-injection / credential / context-budget guards fire
   on the real prompts; identity, A2A, drift, reasoning, escalation, ledger all run; FGAC

@@ -208,3 +208,42 @@ def build_gemini_model(
         )
     logger.info("langgraph.model.offline", extra={"reason": "no gcp creds; using FakeToolCallingModel"})
     return offline_fallback
+
+
+def build_bedrock_model(
+    *,
+    endpoint: Optional[str] = None,
+    api_key: Optional[str] = None,
+    model_id: Optional[str] = None,
+    default_headers: Optional[dict] = None,
+    offline_fallback: Optional[FakeToolCallingModel] = None,
+) -> BaseChatModel:
+    """Return a live **Bedrock-via-API-Gateway** chat model (the AWS counterpart to
+    ``build_chat_model`` / ``build_gemini_model``), else the offline fallback.
+
+    Routes through the ``apigw-bedrock`` egress chokepoint: a
+    ``BedrockGatewayChatModel`` POSTs Converse requests to ``endpoint`` with the
+    ``x-api-key`` (from the gateway's Secrets-Manager-backed resolution) plus the
+    per-agent attribution headers. Bedrock creds stay server-side in the Lambda.
+
+    Returns ``offline_fallback`` when ``endpoint`` or ``api_key`` is absent (the
+    chokepoint refusing to hand back an egress credential offline — by design)."""
+    if not endpoint or not api_key:
+        if offline_fallback is None:
+            raise ValueError(
+                "build_bedrock_model: no gateway endpoint/key resolved and no offline_fallback. "
+                "Set AWS_BEDROCK_GATEWAY_ENDPOINT + the gateway key (Secrets Manager / "
+                "AWS_BEDROCK_GATEWAY_KEY)."
+            )
+        logger.info("langgraph.model.offline", extra={"reason": "no bedrock gateway creds; using FakeToolCallingModel"})
+        return offline_fallback
+
+    from adapters.langgraph.bedrock_gateway import BedrockGatewayChatModel
+
+    logger.info("langgraph.model.live_bedrock", extra={"endpoint": endpoint, "model": model_id})
+    return BedrockGatewayChatModel(
+        endpoint=endpoint,
+        api_key=api_key,
+        model_id=model_id or "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+        default_headers=default_headers or {},
+    )

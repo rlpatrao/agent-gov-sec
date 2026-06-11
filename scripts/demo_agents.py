@@ -57,7 +57,7 @@ from a2a.dispatcher import a2a_call
 from a2a.envelope import A2ARequest, A2AResponse
 from adapters.aws.data_fgac import AwsLakeFormationEnforcer
 from adapters.langgraph.governance import GovernanceViolation
-from adapters.langgraph.runtime import scripted_model, build_chat_model, build_gemini_model
+from adapters.langgraph.runtime import scripted_model, build_chat_model, build_gemini_model, build_bedrock_model
 from core.nhi_registry import NHIRegistry
 from governance.extensions.data_drift import DataAccessDriftDetector, InMemoryBaselineStore, DriftConfig
 from governance.extensions.reasoning_guard import ReasoningStep, ReasoningStepValidator
@@ -652,14 +652,39 @@ def _gemini_model():
     return model, f"{backend} (model={model_name}{', loc=' + location if (project and location) else ''})"
 
 
+def _bedrock_model():
+    """Build a real Bedrock model reached through the AWS apigw-bedrock chokepoint,
+    returning ``(model, description)`` — or ``(None, reason)`` when the gateway
+    isn't configured. Resolves the endpoint + x-api-key via the AWS LLMGateway
+    adapter (Secrets Manager, env fallback AWS_BEDROCK_GATEWAY_KEY), so the demo
+    exercises the same egress chokepoint it governs."""
+    from core.provider_factory import get_provider
+    model_id = os.environ.get("AWS_BEDROCK_MODEL_ID") or "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+    try:
+        res = get_provider("aws").llm_gateway().resolve(
+            agent_type="FinOps",
+            client_id=os.environ.get("NHI_CLIENT_ID_FINOPS", "galaxy-rp-finops"),
+        )
+    except Exception as e:
+        return None, f"AWS gateway unavailable: {str(e).splitlines()[0][:120]}"
+    if res.mode != "apigw-bedrock" or not res.endpoint or not res.api_key:
+        return None, ("no Bedrock gateway — set AWS_BEDROCK_GATEWAY_ENDPOINT + the gateway "
+                      "key (Secrets Manager or AWS_BEDROCK_GATEWAY_KEY) in your .env")
+    model = build_bedrock_model(endpoint=res.endpoint, api_key=res.api_key,
+                                model_id=model_id, default_headers=res.default_headers)
+    return model, f"Bedrock (model={model_id}) via API Gateway"
+
+
 def _resolve_cloud_model(cloud: str):
     """Return ``(model_or_None, message)`` for the selected cloud. A real model
     when that cloud's LLM creds resolve; ``None`` (→ deterministic fake) otherwise.
-    aws/local always use the fake model (no LLM creds are wired for those modes)."""
+    local always uses the fake model (no LLM creds are wired for it)."""
     if cloud == "azure":
         return _azure_model()
     if cloud == "gcp":
         return _gemini_model()
+    if cloud == "aws":
+        return _bedrock_model()
     return None, f"{cloud} mode uses the deterministic fake model"
 
 
@@ -708,7 +733,7 @@ async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate:
         print(_c(YELLOW, "  REAL LLM mode — governance observed around live model calls (not a deterministic assertion)."))
     else:
         print(dim(f"  FinOpsAnalyst · Auditor · Rogue   cloud={cloud}   (offline fake model, no DB)"))
-        if cloud in ("azure", "gcp"):
+        if cloud in ("azure", "gcp", "aws"):
             print(dim(f"  (real model not used: {skip_reason})"))
 
     print(hdr("\n[A] Identity & egress"));      await section_identity(tmp)

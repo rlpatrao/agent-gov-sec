@@ -38,3 +38,10 @@ migrated_aca/
 .idea/
 .vscode/*
 !.vscode/settings.json
+
+# Terraform (adapters/*/infra)
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+**/.build/
