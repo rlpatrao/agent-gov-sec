@@ -28,12 +28,23 @@ identity, in-memory ledger, no cloud SDK).
 
 **Model selection is per-cloud.** `--azure` and `--gcp` call their **real model** when
 credentials resolve — Azure OpenAI for azure, Vertex AI / Gemini for gcp — read from your
-environment **or `.env`** (loaded automatically). When a real model resolves, the *whole*
-matrix runs on it and outcomes are **observed, not asserted** (a real LLM needn't reproduce
-the exact scripted tool sequence). `--aws`, `--local`, and `--fake` use the deterministic
-`FakeToolCallingModel` and the full **37-check assertion matrix** — that's the regression
-signal and what CI runs. Either way the ledger runs in stdout/in-memory mode and OTel
-no-ops without an exporter.
+environment **or `.env`** (loaded automatically). `--aws`, `--local`, and `--fake` use the
+deterministic `FakeToolCallingModel`. Either way the ledger runs in stdout/in-memory mode
+and OTel no-ops without an exporter.
+
+**The matrix has a `VERDICT` column.** In `--fake` / `--aws` / `--local` mode every row is
+an exact assertion → **PASS** / **FAIL** (the **37-check** regression matrix CI runs). In
+real-model mode (`--azure` / `--gcp`) rows are **PASS** / **N/A** / **FAIL**:
+
+- **PASS** — the control engaged (prompt-injection / credential / context-budget guards fire
+  on the real prompts; identity, A2A, drift, reasoning, escalation, ledger all run; FGAC
+  decisions where the model requested the relevant columns).
+- **N/A** — an *adversarial tool-emission* scenario the live model didn't exercise this run
+  (e.g. it refused to call `shell_exec`, didn't emit `DROP TABLE`, or requested different
+  columns). The control isn't broken — it simply had nothing to act on. Assert these
+  deterministically with `--fake`. (Tagged `model_dep` in the demo.)
+- **FAIL** — a *model-independent* control that genuinely didn't behave as required. A real
+  FAIL exits non-zero even in real mode.
 
 - **Azure creds:** `AZURE_OPENAI_KEY` + `AZURE_OPENAI_ENDPOINT` (+ `AZURE_OPENAI_DEPLOYMENT`,
   `AZURE_OPENAI_API_VERSION`), or `OPENAI_API_KEY`.
