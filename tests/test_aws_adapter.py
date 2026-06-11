@@ -85,11 +85,16 @@ def test_aws_resolve_client_id_env_then_convention(monkeypatch):
     # 1) env (IaC-provisioned role ARN) wins
     monkeypatch.setenv("NHI_CLIENT_ID_FINOPS", "arn:aws:iam::999:role/explicit")
     assert prov.resolve_client_id(agent_type="FinOps") == "arn:aws:iam::999:role/explicit"
-    # 2) no env → galaxy-<agent> role-name convention from AWS_ACCOUNT_ID
+    # 2) convention derivation is OFF by default — an unprovisioned agent fails
+    #    closed (None) even with AWS_ACCOUNT_ID set.
     monkeypatch.delenv("NHI_CLIENT_ID_CODER", raising=False)
+    monkeypatch.delenv("NHI_DERIVE_FROM_CONVENTION", raising=False)
     monkeypatch.setenv("AWS_ACCOUNT_ID", "111122223333")
+    assert prov.resolve_client_id(agent_type="Coder") is None
+    # 3) opt in → galaxy-<agent> role-name convention from AWS_ACCOUNT_ID
+    monkeypatch.setenv("NHI_DERIVE_FROM_CONVENTION", "1")
     assert prov.resolve_client_id(agent_type="Coder") == "arn:aws:iam::111122223333:role/galaxy-coder"
-    # 3) neither → None
+    # 4) opted in but no account → None
     monkeypatch.delenv("AWS_ACCOUNT_ID", raising=False)
     monkeypatch.delenv("NHI_CLIENT_ID_NOBODY", raising=False)
     assert prov.resolve_client_id(agent_type="Nobody") is None

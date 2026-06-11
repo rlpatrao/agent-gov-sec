@@ -42,8 +42,16 @@ aws = [
     "boto3>=1.34.0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
 ]
-# WS6: google-auth, google-cloud-secret-manager, Cloud Trace exporter, BigQuery.
-gcp = []
+# WS6: google-auth (ADC/SA impersonation), Secret Manager, BigQuery (audit ledger),
+# Vertex AI / Gemini chat models for the LangGraph axis, and the OTLP→Cloud Trace exporter.
+gcp = [
+    "google-auth>=2.30.0",
+    "google-cloud-secret-manager>=2.20.0",
+    "google-cloud-bigquery>=3.25.0",
+    "langchain-google-vertexai>=2.0",
+    "langchain-google-genai>=2.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
+]
 # Framework axis: govern LangGraph agents (the non-MAF counterpart to the
 # Microsoft Agent Framework glue). Cloud-orthogonal — combine with [azure]/[aws].
 #   pip install '.[langgraph]'

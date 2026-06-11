@@ -1,16 +1,22 @@
 """
-adapters.gcp — GCP cloud bindings (SKELETON — WS6).
+adapters.gcp — GCP cloud bindings (WS6).
 
-The contract is locked: ``PROVIDER`` implements ``core.interfaces.CloudProvider``
-so ``CLOUD_PROVIDER=gcp`` resolves cleanly, but every accessor raises
-``NotImplementedError`` until WS6 fills them in:
+``PROVIDER`` implements ``core.interfaces.CloudProvider`` so ``CLOUD_PROVIDER=gcp``
+resolves the GCP bindings:
 
-  identity  → per-agent Service Account + Workload Identity Federation
-  secrets   → Secret Manager + Application Default Credentials (google-auth)
-  tracing   → OTel → Cloud Trace
-  audit     → hash-chain ledger on BigQuery / Spanner
-  gateway   → Apigee → Vertex AI (or direct Vertex AI + ADC token)
-  egress    → GCP endpoint allow-list (Vertex AI, Secret Manager, …)
+  identity  → per-agent Service Account + Workload Identity Federation   (identity.GcpIdentityProvider)
+  secrets   → Secret Manager + Application Default Credentials           (secrets.SecretManagerProvider)
+  tracing   → OTel → Collector → Cloud Trace                            (tracing.GcpTraceExporterFactory)
+  gateway   → Apigee → Vertex AI (direct-Vertex/ADC fallback)            (gateway.GcpLLMGateway)
+  audit     → SHA-256 hash-chain ledger on BigQuery (stdout fallback)    (audit.BigQueryHashChainBackend)
+  egress    → GCP endpoint allow-list                                    (egress.yaml)
+
+Every accessor lazy-imports its implementation, and each implementation
+lazy-imports its Google SDK, so importing this package (or the provider factory)
+needs no Google libraries. The framework axis (``runtime_adapter``) is
+intentionally ``None`` — GCP wires LangGraph / Google ADK, not MAF. The live
+Vertex/Gemini chat model is built by
+``adapters/langgraph/runtime.build_gemini_model``.
 
 See docs/REFACTOR_AND_GAPS_PLAN.md WS6.
 """
@@ -20,38 +26,40 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional
 
-_WS = "WS6 — adapters/gcp not yet implemented"
-
-
-def _todo(what: str):
-    raise NotImplementedError(f"{_WS}: {what}")
+_EGRESS_YAML = Path(__file__).parent / "egress.yaml"
 
 
 class GcpProvider:
+    """CloudProvider impl: GCP cloud bindings."""
+
     name = "gcp"
 
     def secret_provider(self, **kwargs: Any):
-        _todo("SecretProvider (Secret Manager + ADC)")
+        from adapters.gcp.secrets import SecretManagerProvider
+        return SecretManagerProvider(**kwargs)
 
     def identity_provider(self):
-        _todo("IdentityProvider (Service Account + Workload Identity Federation)")
+        from adapters.gcp.identity import GcpIdentityProvider
+        return GcpIdentityProvider()
 
     def trace_exporter_factory(self):
-        _todo("TraceExporterFactory (Cloud Trace)")
+        from adapters.gcp.tracing import GcpTraceExporterFactory
+        return GcpTraceExporterFactory()
 
     def llm_gateway(self):
-        _todo("LLMGateway (Apigee → Vertex AI)")
+        from adapters.gcp.gateway import GcpLLMGateway
+        return GcpLLMGateway()
 
     def runtime_adapter(self):
-        # GCP uses its own framework adapter (Google ADK), not MAF.
+        # GCP uses its own framework adapter (LangGraph / Google ADK), not MAF.
         return None
 
     async def audit_backend(self, run_id: str):
-        _todo("AuditBackend (BigQuery / Spanner hash-chain ledger)")
+        from adapters.gcp.audit import BigQueryHashChainBackend
+        return await BigQueryHashChainBackend.create(run_id=run_id)
 
     def egress_config_path(self) -> Optional[Path]:
-        path = Path(__file__).parent / "egress.yaml"
-        return path if path.exists() else None
+        return _EGRESS_YAML if _EGRESS_YAML.exists() else None
 
 
 PROVIDER = GcpProvider()

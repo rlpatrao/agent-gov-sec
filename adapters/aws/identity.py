@@ -31,17 +31,23 @@ class AwsIdentityProvider:
         """Resolve the agent's **IAM** principal id (its role ARN).
 
         Standard bridge: the ``NHI_CLIENT_ID_<AGENT_TYPE>`` env var that IaC
-        (CDK/Terraform) sets to the role ARN it provisions. If unset, derive it
-        from the per-agent role-name convention ``galaxy-<agent_type>`` when
-        ``AWS_ACCOUNT_ID`` is configured (the role-name pattern the WS5 Terraform
-        creates). Returns ``None`` if neither is available.
+        (CDK/Terraform) sets to the role ARN it provisions. If unset *and*
+        ``NHI_DERIVE_FROM_CONVENTION`` is enabled, derive it from the per-agent
+        role-name convention ``galaxy-<agent_type>`` when ``AWS_ACCOUNT_ID`` is
+        configured (the role-name pattern the WS5 Terraform creates). Returns
+        ``None`` otherwise — an unknown agent fails closed.
         """
         env = os.environ.get(f"NHI_CLIENT_ID_{agent_type.upper()}")
         if env:
             return env
-        account = os.environ.get("AWS_ACCOUNT_ID")
-        if account:
-            return f"arn:aws:iam::{account}:role/galaxy-{agent_type.lower()}"
+        # Convention-based derivation (arn:…:role/galaxy-<agent>) is opt-in: it
+        # would otherwise mint a plausible role ARN for *any* agent name. Off by
+        # default, identities come only from explicit NHI_CLIENT_ID_* (set by
+        # IaC), so an unprovisioned/unknown agent resolves to None (fail-closed).
+        if os.environ.get("NHI_DERIVE_FROM_CONVENTION", "").strip().lower() in ("1", "true", "yes"):
+            account = os.environ.get("AWS_ACCOUNT_ID")
+            if account:
+                return f"arn:aws:iam::{account}:role/galaxy-{agent_type.lower()}"
         return None
 
     def get_credential(self, *, client_id: str, agent_type: str) -> Optional[Any]:
