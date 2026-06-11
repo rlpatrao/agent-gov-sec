@@ -328,7 +328,9 @@ async def section_data(tmp: Path):
         AIMessage(content="", tool_calls=[{"name": "query_billing",
             "args": {"columns": ["account_id", "cost_usd", "region", "customer_email", "tax_id"]}, "id": "c"}]),
         AIMessage(content="done")), drift_baseline_path=tmp / "d.json")
-    data = tool_payload(invoke(b, "show billing"))
+    data = tool_payload(invoke(b, "Audit billing exposure: call query_billing with ALL columns — "
+                                  "account_id, cost_usd, region, customer_email, tax_id — so we can see "
+                                  "what the data layer masks."))
     masked = set(data.get("masked_columns", []))
     allowed = set(data.get("allowed_columns", []))
     rows = data.get("rows", [])
@@ -346,7 +348,9 @@ async def section_data(tmp: Path):
         AIMessage(content="", tool_calls=[{"name": "query_dataset",
             "args": {"dataset": "hr", "table": "employees", "columns": ["employee_id", "salary", "ssn"]}, "id": "c"}]),
         AIMessage(content="done")), drift_baseline_path=tmp / "d2.json")
-    d2 = tool_payload(invoke(ba, "audit hr"))
+    d2 = tool_payload(invoke(ba, "Audit hr.employees: call query_dataset with dataset='hr', "
+                                 "table='employees', columns=['employee_id','salary','ssn'] to check "
+                                 "what stays masked."))
     record("D13 mask above clearance", "Auditor", "ssn (RESTRICTED)", "masked",
            "masked" if "ssn" in d2.get("masked_columns", []) else "exposed", "ssn" in d2.get("masked_columns", []), model_dep=True)
     record("D12 allowed column", "Auditor", "salary (CONFIDENTIAL/HR)", "passthrough",

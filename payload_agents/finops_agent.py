@@ -12,7 +12,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
+
+# The billing table's real columns — constrains the tool's `columns` argument to a
+# JSON-schema enum so a real LLM requests catalog columns (and the FGAC masking of
+# customer_email/tax_id is exercised) instead of inventing names like "total_cost".
+BillingColumn = Literal["account_id", "cost_usd", "region", "customer_email", "tax_id"]
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import tool
@@ -40,9 +45,11 @@ def make_tools(*, mediator: DataAccessMediator, nhi_id: str):
     """Build FinOps tools as closures over the shared FGAC mediator."""
 
     @tool
-    def query_billing(columns: list[str]) -> str:
-        """Read finops.billing rows for the requested columns. Column masking and
-        US-region row-filtering are enforced by the data layer."""
+    def query_billing(columns: list[BillingColumn]) -> str:
+        """Read finops.billing rows for the requested columns. The billing table has
+        exactly these columns: account_id, cost_usd, region, customer_email, tax_id —
+        request from these (e.g. account_id, cost_usd, region). The data layer enforces
+        column masking (customer_email, tax_id) and US-region row-filtering."""
         decision, rows = mediator.read(
             agent_type=AGENT_TYPE, dataset="finops", table="billing",
             columns=columns, rows=demo_data.BILLING, nhi_id=nhi_id,
