@@ -90,6 +90,7 @@ def build_chat_model(
     api_version: Optional[str] = None,
     default_headers: Optional[dict] = None,
     offline_fallback: Optional[FakeToolCallingModel] = None,
+    use_responses_api: bool = False,
 ) -> BaseChatModel:
     """Return a live ``langchain_openai`` model when credentials resolve, else the
     offline fallback.
@@ -99,6 +100,12 @@ def build_chat_model(
     ``AZURE_OPENAI_*`` / ``OPENAI_API_KEY`` are present (resolved through the cloud
     provider's LLM gateway in ``_base.build_langgraph_agent``), a real
     ``AzureChatOpenAI`` / ``ChatOpenAI`` is constructed instead.
+
+    ``use_responses_api`` routes Azure calls through the **Responses API** instead
+    of ``/chat/completions`` — required for reasoning/codex deployments (o-series,
+    gpt-5*, *-codex) that don't support chat completions. The Responses API needs
+    ``api-version`` ``2025-03-01-preview`` or later, so the version is bumped to
+    that floor when an older/placeholder value is supplied.
     """
     if not api_key:
         if offline_fallback is None:
@@ -114,16 +121,24 @@ def build_chat_model(
     if endpoint:
         from langchain_openai import AzureChatOpenAI
 
-        logger.info("langgraph.model.live_azure", extra={"endpoint": endpoint, "deployment": deployment})
+        _RESPONSES_FLOOR = "2025-03-01-preview"
+        ver = api_version
+        if use_responses_api and (not ver or ver == "preview" or ver < _RESPONSES_FLOOR):
+            ver = _RESPONSES_FLOOR
+        logger.info("langgraph.model.live_azure",
+                    extra={"endpoint": endpoint, "deployment": deployment,
+                           "responses_api": use_responses_api, "api_version": ver})
         return AzureChatOpenAI(
             azure_endpoint=endpoint,
             azure_deployment=deployment,
             api_key=api_key,
-            api_version=api_version or "preview",
+            api_version=ver or "preview",
             default_headers=default_headers or {},
+            use_responses_api=use_responses_api,
         )
 
     from langchain_openai import ChatOpenAI
 
-    logger.info("langgraph.model.live_openai", extra={"model": deployment})
-    return ChatOpenAI(model=deployment or "gpt-4o", api_key=api_key, default_headers=default_headers or {})
+    logger.info("langgraph.model.live_openai", extra={"model": deployment, "responses_api": use_responses_api})
+    return ChatOpenAI(model=deployment or "gpt-4o", api_key=api_key,
+                      default_headers=default_headers or {}, use_responses_api=use_responses_api)

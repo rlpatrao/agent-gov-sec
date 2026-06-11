@@ -1,9 +1,9 @@
 # LangGraph governance demo
 
-A framework-agnostic demonstration: the same governance platform that wraps a MAF
-agent also governs **LangGraph** agents, end-to-end, fully offline. The demo lives
-entirely in `adapters/langgraph/` + `payload_agents/` (+ the `scripts/demo_two_agents.py`
-runner) and touches **no core-framework code** — it registers its NHIs via env
+A framework-agnostic demonstration: the same governance platform governs **LangGraph**
+agents end-to-end — offline by default, with an opt-in `--live` path that drives a real
+LLM. The demo lives entirely in `adapters/langgraph/` + `payload_agents/` (+ the
+`scripts/demo_agents.py` runner) and touches **no core-framework code** — it registers its NHIs via env
 (`payload_agents/__init__.py` → `NHI_CLIENT_ID_*`, resolved by `core.nhi_registry`'s
 env-extensible lookup) and its deps are the opt-in `.[langgraph]` extra.
 
@@ -11,11 +11,11 @@ env-extensible lookup) and its deps are the opt-in `.[langgraph]` extra.
 
 ```bash
 pip install '.[langgraph]'           # langchain>=1.0, langgraph>=1.0, langchain-openai>=1.0
-uv run python scripts/demo_two_agents.py            # results matrix only (azure adapters by default)
-uv run python scripts/demo_two_agents.py --aws      # run against the AWS adapter set
-uv run python scripts/demo_two_agents.py --verbose  # curated narrative (agents/prompts/LLM/tools/interceptions)
-uv run python scripts/demo_two_agents.py --logs     # raw logger stream
-uv run python scripts/demo_two_agents.py --live     # real LLM calls in an extra [L] section (needs creds)
+uv run python scripts/demo_agents.py            # results matrix only (azure adapters by default)
+uv run python scripts/demo_agents.py --aws      # run against the AWS adapter set
+uv run python scripts/demo_agents.py --verbose  # curated narrative (agents/prompts/LLM/tools/interceptions)
+uv run python scripts/demo_agents.py --logs     # raw logger stream
+uv run python scripts/demo_agents.py --live     # real LLM calls in an extra [L] section (needs creds)
 ```
 
 **Cloud adapter set.** `--azure` (default) / `--aws` / `--gcp` / `--local` (or `--cloud X`)
@@ -31,10 +31,18 @@ for the model, the audit ledger runs in stdout mode, and OTel no-ops.
 builds the FinOps and Rogue agents on a genuine `AzureChatOpenAI`/`ChatOpenAI` model
 (via `adapters/langgraph/runtime.build_chat_model`) and runs real prompts through the
 full guard stack — so you watch the governance middleware wrap an actual LLM call and a
-real injection attempt. It needs creds (`AZURE_OPENAI_KEY` + `AZURE_OPENAI_ENDPOINT`, or
-`OPENAI_API_KEY`); without them the `[L]` section prints a skip notice and the matrix
-runs unchanged. The model is AOAI/OpenAI regardless of `--cloud` (the cloud adapter still
-governs identity/egress/audit; only the model differs).
+real injection attempt. Creds are read from your environment **or `.env`** (loaded
+automatically): `AZURE_OPENAI_KEY` + `AZURE_OPENAI_ENDPOINT` (+ `AZURE_OPENAI_DEPLOYMENT`,
+`AZURE_OPENAI_API_VERSION`), or `OPENAI_API_KEY`. Without them the `[L]` section prints a
+skip notice and the matrix runs unchanged; a provider/config error (wrong deployment,
+api-version, endpoint) is caught and reported without aborting. The model is AOAI/OpenAI
+regardless of `--cloud` (the cloud adapter still governs identity/egress/audit; only the
+model differs).
+
+Reasoning/codex deployments (o-series, `gpt-5*`, `*-codex`) only speak the **Responses
+API**, not `/chat/completions`. The demo auto-detects these from the deployment name,
+routes them through the Responses API, and bumps `api-version` to the `2025-03-01-preview`
+floor it requires. Override the detection with `AZURE_OPENAI_USE_RESPONSES_API=1` / `0`.
 
 **Seeing what ran.** By default the demo prints only the results matrix. Two
 independent (combinable) views:
@@ -65,7 +73,7 @@ All three are built by `adapters/langgraph/_base.build_langgraph_agent()` and wr
 
 ## What the matrix covers
 
-`demo_two_agents.py` prints a **feature × agent** results matrix, exercising the **success and
+`demo_agents.py` prints a **feature × agent** results matrix, exercising the **success and
 failure path** of each control:
 
 - **Identity / egress** — per-agent NHI resolution + the LLM-egress chokepoint

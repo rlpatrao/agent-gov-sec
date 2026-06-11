@@ -12,7 +12,7 @@ A runtime, **framework-agnostic** governance & security platform for multi-agent
 
 **Offline governance demos** (no Azure credentials, no database, no LLM calls):
 - `scripts/demo_governance.py` — the minimal, framework-free guard/redaction/ledger walkthrough.
-- `scripts/demo_two_agents.py` — the **full feature × agent matrix** across the three LangGraph agents: identity/egress, the per-call guard stack, A2A authz, data-layer FGAC (mask/row-filter/deny + AWS Lake Formation pushdown), data-access drift, reasoning-step guard + CoT/CoVe trace, and hash-chained audit + tamper detection — each exercised on both its success and failure path.
+- `scripts/demo_agents.py` — the **full feature × agent matrix** across the three LangGraph agents: identity/egress, the per-call guard stack, A2A authz, data-layer FGAC (mask/row-filter/deny + AWS Lake Formation pushdown), data-access drift, reasoning-step guard + CoT/CoVe trace, and hash-chained audit + tamper detection — each exercised on both its success and failure path.
 
 ---
 
@@ -48,14 +48,14 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 ```bash
 uv run python scripts/demo_governance.py     # minimal guard/redaction/ledger walkthrough
-uv run python scripts/demo_two_agents.py            # results matrix (3 LangGraph agents)
-uv run python scripts/demo_two_agents.py --aws      # run against the AWS adapter set (--azure default / --gcp / --local)
-uv run python scripts/demo_two_agents.py --verbose  # curated narrative: agents, prompts, LLM/tool output, interceptions
-uv run python scripts/demo_two_agents.py --logs     # raw logger stream (--log-level DEBUG for per-guard detail)
-uv run python scripts/demo_two_agents.py --live     # real LLM calls in an extra [L] section (needs AOAI/OpenAI creds)
+uv run python scripts/demo_agents.py            # results matrix (3 LangGraph agents)
+uv run python scripts/demo_agents.py --aws      # run against the AWS adapter set (--azure default / --gcp / --local)
+uv run python scripts/demo_agents.py --verbose  # curated narrative: agents, prompts, LLM/tool output, interceptions
+uv run python scripts/demo_agents.py --logs     # raw logger stream (--log-level DEBUG for per-guard detail)
+uv run python scripts/demo_agents.py --live     # real LLM calls in an extra [L] section (needs AOAI/OpenAI creds)
 ```
 
-`demo_two_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`) and drives every
+`demo_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`) and drives every
 control on both its success and failure path across the three agents. Full walkthrough:
 [`docs/langgraph-demo.md`](docs/langgraph-demo.md).
 
@@ -134,7 +134,7 @@ agentic-sdlc/
 │
 ├── scripts/
 │   ├── demo_governance.py          Minimal offline governance demo (no Azure required)
-│   └── demo_two_agents.py          Full feature × agent matrix over the 3 LangGraph agents
+│   └── demo_agents.py          Full feature × agent matrix over the 3 LangGraph agents
 │
 ├── tests/                          Test suite (runs without Azure credentials)
 ├── infra/                          ledger_schema.sql, aca_jobs.bicep  (→ adapters/azure/ in WS1)
