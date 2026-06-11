@@ -155,35 +155,51 @@ def build_gemini_model(
     """Return a live Google **Gemini** chat model (the GCP counterpart to
     ``build_chat_model``), else the offline fallback.
 
-    Two backends, mirroring ``adapters/gcp/gateway`` egress modes:
+    Uses the maintained ``langchain_google_genai.ChatGoogleGenerativeAI`` for both
+    backends (it supersedes the now-deprecated ``ChatVertexAI``):
 
-      - **Vertex AI** (``ChatVertexAI``) when ``project`` is set — authorized by
-        ADC / the agent's Service-Account token (no api key). This is the
-        ``vertex-direct`` path.
-      - **Gemini Developer API** (``ChatGoogleGenerativeAI``) when only an
-        ``api_key`` (``GOOGLE_API_KEY``) is available.
+      - **Vertex AI** when ``project`` is set — authorized by ADC / the agent's
+        Service-Account token (no api key). Selected via the google-genai client's
+        ``GOOGLE_GENAI_USE_VERTEXAI=True`` + ``GOOGLE_CLOUD_PROJECT`` /
+        ``GOOGLE_CLOUD_LOCATION``, which this sets from the args when absent.
+      - **Gemini Developer API** when only an ``api_key`` (``GOOGLE_API_KEY``) is
+        available.
 
-    Returns ``offline_fallback`` when neither a project nor an api key resolves,
-    or when the corresponding ``langchain-google-*`` package is not installed.
+    Falls back to ``ChatVertexAI`` if only ``langchain-google-vertexai`` is
+    installed, and to ``offline_fallback`` when no creds resolve or no
+    ``langchain-google-*`` package is present.
     """
-    model = model or "gemini-2.5-pro"
-    if project:
-        try:
-            from langchain_google_vertexai import ChatVertexAI
-        except ImportError:
-            logger.warning("langgraph.model.vertex_missing — pip install '.[gcp]'")
-        else:
-            logger.info("langgraph.model.live_vertex", extra={"project": project, "location": location, "model": model})
-            return ChatVertexAI(model=model, project=project, location=location or "us-central1")
+    import os
 
-    if api_key:
+    model = model or "gemini-2.5-pro"
+    use_vertex = bool(project)
+
+    if use_vertex or api_key:
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
         except ImportError:
-            logger.warning("langgraph.model.genai_missing — pip install '.[gcp]'")
-        else:
+            ChatGoogleGenerativeAI = None
+        if ChatGoogleGenerativeAI is not None:
+            if use_vertex:
+                # The google-genai client reads these from the environment.
+                os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "True"
+                os.environ.setdefault("GOOGLE_CLOUD_PROJECT", project)
+                os.environ.setdefault("GOOGLE_CLOUD_LOCATION", location or "us-central1")
+                logger.info("langgraph.model.live_vertex_genai",
+                            extra={"project": project, "location": location, "model": model})
+                return ChatGoogleGenerativeAI(model=model)
             logger.info("langgraph.model.live_genai", extra={"model": model})
             return ChatGoogleGenerativeAI(model=model, google_api_key=api_key)
+
+    # Fallback: only the (deprecated) Vertex SDK is installed.
+    if use_vertex:
+        try:
+            from langchain_google_vertexai import ChatVertexAI
+        except ImportError:
+            logger.warning("langgraph.model.gcp_missing — pip install '.[gcp]'")
+        else:
+            logger.info("langgraph.model.live_vertex", extra={"project": project, "location": location, "model": model})
+            return ChatVertexAI(model=model, project=project, location=location or "us-central1")
 
     if offline_fallback is None:
         raise ValueError(

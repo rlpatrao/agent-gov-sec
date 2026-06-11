@@ -232,7 +232,7 @@ adapters/
 - [ ] **6.8** *(optional, framework axis)* GCP framework adapter — wire `agent_framework`'s **Google ADK** adapter as the `AgentRuntimeAdapter`. *(LangGraph already governs GCP via the framework-agnostic adapter; ADK is an alternative.)*
 - [x] **6.9** Tests: factory loads `gcp` provider and resolves every accessor (`test_provider_factory.test_gcp_provider_implemented`); offline smoke verified for identity/secrets/tracing/audit/gateway/egress.
 
-**Acceptance:** `CLOUD_PROVIDER=gcp` resolves all cloud-binding interfaces with real impls (identity/secrets/tracing/audit/gateway/egress + Vertex/Gemini model); `--gcp` runs the demo end-to-end (real model when creds + `.[gcp]` present, else deterministic fake). **Verified offline** (stdout-mode ledger, lazy SDKs); live GCP (real ADC/Vertex/BigQuery) requires project creds + `.[gcp]` and is **stubbed** here. Terraform (6.6) and ADK framework axis (6.8) deferred.
+**Acceptance:** `CLOUD_PROVIDER=gcp` resolves all cloud-binding interfaces with real impls (identity/secrets/tracing/audit/gateway/egress + Vertex/Gemini model); `--gcp` runs the demo end-to-end (real model when creds + `.[gcp]` present, else deterministic fake). **Verified live (2026-06-11)** against project `ailab-etg` / `us-central1` — `gemini-2.5-flash` on Vertex AI (ADC) drove the full agent matrix with tool-calling, the guard stack intercepting on the real prompts (prompt-injection / credential / context-budget) and FGAC masking columns. The audit ledger ran in **stdout mode** (live BigQuery persistence not exercised). Terraform (6.6) and ADK framework axis (6.8) deferred.
 
 > **Note:** WS6 also lays the groundwork for the GCP-flavored gap modules in WS7 (BigQuery FGAC for Gap 1, Firestore/Bigtable baseline store for Gap 3).
 
