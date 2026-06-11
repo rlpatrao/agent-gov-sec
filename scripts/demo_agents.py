@@ -57,6 +57,7 @@ from a2a.dispatcher import a2a_call
 from a2a.envelope import A2ARequest, A2AResponse
 from adapters.aws.data_fgac import AwsLakeFormationEnforcer
 from adapters.langgraph.governance import GovernanceViolation
+from adapters.contract import RunResult
 from adapters.langgraph.runtime import scripted_model, build_chat_model, build_gemini_model, build_bedrock_model
 from core.nhi_registry import NHIRegistry
 from governance.extensions.data_drift import DataAccessDriftDetector, InMemoryBaselineStore, DriftConfig
@@ -77,24 +78,6 @@ def _c(col, t):
 
 def hdr(t): return _c(BOLD + CYAN, t)
 def dim(t): return _c(DIM, t)
-
-
-def _content_text(content) -> str:
-    """Flatten a message's content to readable text. Modern models (Gemini,
-    AOAI Responses) return a list of typed parts; keep the human-facing 'text'
-    and drop machinery like Gemini's huge ``thought_signature`` reasoning blobs."""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = []
-        for p in content:
-            if isinstance(p, dict):
-                if p.get("type") in (None, "text") and p.get("text"):
-                    parts.append(p["text"])
-            elif isinstance(p, str):
-                parts.append(p)
-        return " ".join(parts)
-    return str(content or "")
 
 
 @dataclass
@@ -143,16 +126,14 @@ class _Narrator:
     def turn(self, result) -> None:
         if not self.on:
             return
-        for m in result.get("messages", []) if isinstance(result, dict) else []:
-            cls = m.__class__.__name__
-            if cls == "AIMessage":
-                txt = _content_text(getattr(m, "content", ""))
-                if txt:
-                    print(f"      LLM ⟶ {dim(repr(txt[:200]))}")
-                for tc in (getattr(m, "tool_calls", None) or []):
-                    print(dim(f"      tool ▶ {tc.get('name')}({tc.get('args')})"))
-            elif cls == "ToolMessage":
-                print(dim(f"      tool result ⟵ {str(m.content)[:200]}"))
+        for t in result.turns:   # result is a framework-neutral RunResult
+            if t.role == "ai":
+                if t.text:
+                    print(f"      LLM ⟶ {dim(repr(t.text[:200]))}")
+                for tc in t.tool_calls:
+                    print(dim(f"      tool ▶ {tc.name}({tc.args})"))
+            elif t.role == "tool":
+                print(dim(f"      tool result ⟵ {str(t.text)[:200]}"))
 
     def intercept(self, agent: str, code: str, reason: str) -> None:
         if self.on:
@@ -199,7 +180,7 @@ def invoke(bundle, prompt):
     _N.agent(bundle)
     _N.prompt(bundle, prompt)
     try:
-        result = bundle.agent.invoke({"messages": [{"role": "user", "content": prompt}]})
+        result = bundle.invoke(prompt)   # framework-neutral RunResult
     except GovernanceViolation as e:
         _N.intercept(bundle.config.agent_type, e.code, str(e))
         raise
@@ -208,16 +189,14 @@ def invoke(bundle, prompt):
         # the run — narrate it and return empty so model-independent checks proceed.
         if is_real():
             _real_call_error(bundle.config.agent_type, e)
-            return {"messages": []}
+            return RunResult(turns=[])
         raise
     _N.turn(result)
     return result
 
 def tool_payload(result):
-    for m in result["messages"]:
-        if m.__class__.__name__ == "ToolMessage":
-            return json.loads(m.content)
-    return {}
+    raw = result.first_tool_result()
+    return json.loads(raw) if raw else {}
 
 
 # ── A. Identity & egress ──────────────────────────────────────────────────────
@@ -709,13 +688,24 @@ def _real_call_error(agent: str, e: Exception) -> None:
     print(dim("        (check the cloud's model deployment / api-version / creds in .env)"))
 
 
-async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate: bool = False, fake: bool = False):
+async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate: bool = False,
+               fake: bool = False, framework: str = "langgraph"):
     # --logs / --log-level → the raw logger stream (guard decisions, audit writes…).
     # --verbose → the curated narrative (agents, prompts, LLM/tool output, guardrail
     # interceptions, per-check outcomes). They're independent and can combine.
     global _REAL_MODEL, _REAL_DESC
     logging.basicConfig(level=log_level, format="  log %(levelname)-7s %(name)s :: %(message)s")
     _N.on = narrate
+    # Select the framework binding (orthogonal to the cloud). The agnostic
+    # GuardPipeline runs under whichever framework is chosen.
+    os.environ["GALAXY_FRAMEWORK"] = framework
+    try:
+        from core.framework_factory import get_framework
+        get_framework(framework)
+    except ImportError as e:
+        print(_c(YELLOW, f"\n  '--framework {framework}' adapter is not implemented yet "
+                         f"({str(e).splitlines()[0][:80]}). Use --framework langgraph."))
+        sys.exit(2)
     # Select the cloud adapter set BEFORE any agent is built (the factory caches).
     os.environ["CLOUD_PROVIDER"] = cloud
     from core.provider_factory import get_provider
@@ -742,10 +732,10 @@ async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate:
     print()
     print(_c(BOLD + WHITE, "  Galaxy Governance — 3 LangGraph agents, every control, success + failure"))
     if is_real():
-        print(dim(f"  FinOpsAnalyst · Auditor · Rogue   cloud={cloud}   model={_REAL_DESC}"))
+        print(dim(f"  FinOpsAnalyst · Auditor · Rogue   framework={framework}  cloud={cloud}   model={_REAL_DESC}"))
         print(_c(YELLOW, "  REAL LLM mode — governance observed around live model calls (not a deterministic assertion)."))
     else:
-        print(dim(f"  FinOpsAnalyst · Auditor · Rogue   cloud={cloud}   (offline fake model, no DB)"))
+        print(dim(f"  FinOpsAnalyst · Auditor · Rogue   framework={framework}  cloud={cloud}   (offline fake model, no DB)"))
         if cloud in ("azure", "gcp", "aws"):
             print(dim(f"  (real model not used: {skip_reason})"))
 
@@ -788,6 +778,10 @@ def _parse_args() -> tuple[int, str, bool, bool]:
     p.add_argument("--fake", action="store_true",
                    help="force the deterministic offline model on any cloud (the 37-check "
                         "assertion matrix). Default: azure/gcp call their REAL model when creds resolve")
+    # Framework axis — orthogonal to the cloud flags; selects how agents are
+    # orchestrated. The same governance (GuardPipeline) runs under each.
+    p.add_argument("--framework", default="langgraph", choices=["langgraph", "raw", "pydantic"],
+                   help="agent framework binding (default langgraph). Composes with the cloud flags.")
     args = p.parse_args()
     if args.log_level:
         level = getattr(logging, args.log_level)
@@ -795,9 +789,9 @@ def _parse_args() -> tuple[int, str, bool, bool]:
         level = logging.INFO
     else:
         level = logging.CRITICAL
-    return level, args.cloud, args.verbose, args.fake
+    return level, args.cloud, args.verbose, args.fake, args.framework
 
 
 if __name__ == "__main__":
-    _level, _cloud, _narrate, _fake = _parse_args()
-    asyncio.run(main(_level, _cloud, _narrate, _fake))
+    _level, _cloud, _narrate, _fake, _framework = _parse_args()
+    asyncio.run(main(_level, _cloud, _narrate, _fake, framework=_framework))
