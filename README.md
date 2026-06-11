@@ -52,6 +52,7 @@ uv run python scripts/demo_two_agents.py            # results matrix (3 LangGrap
 uv run python scripts/demo_two_agents.py --aws      # run against the AWS adapter set (--azure default / --gcp / --local)
 uv run python scripts/demo_two_agents.py --verbose  # curated narrative: agents, prompts, LLM/tool output, interceptions
 uv run python scripts/demo_two_agents.py --logs     # raw logger stream (--log-level DEBUG for per-guard detail)
+uv run python scripts/demo_two_agents.py --live     # real LLM calls in an extra [L] section (needs AOAI/OpenAI creds)
 ```
 
 `demo_two_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`) and drives every
