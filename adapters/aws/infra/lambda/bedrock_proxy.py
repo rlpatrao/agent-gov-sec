@@ -10,7 +10,7 @@ and returns the Converse JSON. Bedrock credentials (the Lambda execution role's
 Request body (JSON) = Converse arguments minus ``modelId``:
     {"messages": [...], "system": [...], "toolConfig": {...}, "inferenceConfig": {...}}
 The model id is injected from the ``BEDROCK_MODEL_ID`` env var (an inference
-profile id such as ``us.anthropic.claude-3-5-sonnet-20241022-v2:0``), so callers
+profile id such as ``us.anthropic.claude-sonnet-4-6``), so callers
 can't pick an arbitrary model.
 
 Response body (JSON):
@@ -25,7 +25,7 @@ import os
 
 import boto3
 
-_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-3-5-sonnet-20241022-v2:0")
+_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-6")
 _REGION = os.environ.get("BEDROCK_REGION") or os.environ.get("AWS_REGION", "us-east-1")
 
 # Reused across warm invocations.

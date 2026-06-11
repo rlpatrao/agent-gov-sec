@@ -526,6 +526,19 @@ async def section_ledger(tmp: Path):
     for entry, h, valid in rows[:6]:
         print(dim(f"        [{ '✓' if valid else '✗' }] {entry.event_type:<22} {entry.decision:<6} {h[:12]}…"))
 
+    # Persist the verified (clean) chain to the cloud backend if one is connected
+    # (DynamoDB / Postgres / BigQuery). No-op for local/stdout mode. Done BEFORE
+    # the tamper mutation so we never persist tampered rows; flush_async clears
+    # the buffer on cloud backends, so snapshot + restore it for the tamper demo.
+    _saved = list(pg._buffer)
+    try:
+        await pg.flush_async()
+        if not pg._buffer and _saved:
+            print(dim(f"      persisted {len(_saved)} entries to the {type(pg).__name__} store"))
+    except Exception as e:
+        print(dim(f"      (ledger flush skipped: {str(e).splitlines()[0][:80]})"))
+    pg._buffer = _saved  # restore for the in-memory tamper demo
+
     # tamper: flip a historical decision; downstream hashes must fail
     if pg._buffer:
         entry0 = pg._buffer[0][0]
@@ -659,7 +672,7 @@ def _bedrock_model():
     adapter (Secrets Manager, env fallback AWS_BEDROCK_GATEWAY_KEY), so the demo
     exercises the same egress chokepoint it governs."""
     from core.provider_factory import get_provider
-    model_id = os.environ.get("AWS_BEDROCK_MODEL_ID") or "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+    model_id = os.environ.get("AWS_BEDROCK_MODEL_ID") or "us.anthropic.claude-sonnet-4-6"
     try:
         res = get_provider("aws").llm_gateway().resolve(
             agent_type="FinOps",
