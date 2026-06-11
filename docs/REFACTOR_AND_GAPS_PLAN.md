@@ -42,7 +42,7 @@ We treat **Azure + MAF as one Microsoft bundle** and move **both** behind the ad
 
 > **Consequence to accept:** once MAF glue lives in `adapters/azure/maf/`, the cloud-agnostic core has **no working agent-framework binding for AWS/GCP** until an equivalent framework adapter is written (e.g. LangGraph / Bedrock Agents / Google ADK, all of which `agent_os` already supports upstream). WS1 ships the Azure/MAF binding fully; AWS/GCP framework bindings are stubbed/follow-on.
 
-**No GCP/AWS runtime code exists today** (only test fixtures + the `legacy/aws_legacy` migration *input* sample).
+*(Original WS1 framing — superseded.)* AWS (WS5) and GCP (WS6) cloud-binding adapters now exist: identity / secrets / tracing / gateway / audit / egress, plus the LangGraph framework axis and per-cloud live models. Terraform and the optional native framework adapters (Bedrock Agents / Google ADK) remain deferred.
 
 ### Decisions to confirm before WS3
 - Latest package names + whether `agent_os.*` / `agentmesh.*` / `agent_sre.*` still import or were renamed.
@@ -137,7 +137,7 @@ adapters/
 - [x] **1.13** MAF-free guards (`escalation.py`, `egress.py`) and `policies/*.yaml` stay in agnostic `governance/`.
 
 ### Tasks — wiring + adapter contracts
-- [x] **1.14** `adapters/aws/` + `adapters/gcp/` skeletons: `PROVIDER` resolves; every accessor raises `NotImplementedError` with a `WS5`/`WS6` marker.
+- [x] **1.14** `adapters/aws/` + `adapters/gcp/`: `PROVIDER` resolves against the WS1 interfaces. *(Originally interface-locked skeletons; both are now fully implemented — see WS5 / WS6.)*
 - [x] **1.15** Imports updated across `core/`, `governance/`, `a2a/`, `payload_agents/`, `tests/`. (`scripts/demo_governance.py` is self-contained — unaffected.)
 - [x] **1.16** Optional deps split in `pyproject.toml`: `.[azure]` (incl. MAF), `.[aws]`, `.[gcp]`; agnostic deps in base.
 - [x] **1.17** 35 agnostic tests green; factory loads azure (full) + aws/gcp (`NotImplementedError`). ⚠️ MAF/Azure-dependent tests + live `CLOUD_PROVIDER=azure` pipeline not run in this env (deps absent) — verify with `.[azure]` installed.
@@ -220,18 +220,19 @@ adapters/
 
 **Objective:** Fill in `adapters/gcp/` against the WS1 interfaces so the platform runs with `CLOUD_PROVIDER=gcp`. Mirrors the Azure cloud-binding surface (GCP uses its own framework adapter).
 
-- [ ] **6.1** `identity.py` — `IdentityProvider`: per-agent **Service Account** + **Workload Identity Federation**; map agent-type → SA email → trace-ledger `nhi_id`. (This realizes the gap-analysis "FinOps SAs get scoped IAM" framing.)
-- [ ] **6.2** `secrets.py` — `SecretProvider`: **Secret Manager** + **Application Default Credentials** (google-auth); env-var fallback retained.
-- [ ] **6.3** `tracing.py` — `TraceExporterFactory`: OTel → **Cloud Trace**.
-- [ ] **6.4** `audit.py` — `agent_os` `AuditBackend`: hash-chain ledger on **BigQuery** (or **Spanner**), with **Cloud Logging** mirror for deny/block events.
-- [ ] **6.5** `egress.yaml` — GCP endpoint allow-list (Vertex AI, Secret Manager, etc.).
-- [ ] **6.5a** `gateway.py` — `LLMGateway`: **Apigee → Vertex AI** as the managed egress chokepoint (or direct **Vertex AI** endpoint with ADC token); resolve endpoint + auth from `SecretProvider`/WIF. Pairs with `egress.yaml`.
-- [ ] **6.6** `infra/` — **Terraform**: per-agent SAs + IAM bindings, job runtime (**Cloud Run jobs**), BigQuery/Spanner ledger.
-- [ ] **6.7** `orchestrator.py` — job orchestration via **Cloud Run jobs / Workflows** (the GCP analogue of `run_pipeline_aca.py`).
-- [ ] **6.8** *(optional, framework axis)* GCP framework adapter — wire `agent_framework`'s **Google ADK** adapter as the `AgentRuntimeAdapter`, replacing MAF for GCP runs. (LLM egress is handled by the gateway in 6.5a.)
-- [ ] **6.9** Tests: factory loads `gcp` provider; mocked-SDK unit tests for identity/secrets/tracing/audit; document runtime-verified vs stubbed.
+- [x] **6.1** `identity.py` — `IdentityProvider`: per-agent **Service Account** + **Workload Identity Federation**; agent-type → SA email → trace-ledger `nhi_id`. Convention derivation (`galaxy-<agent>@<project>`) is opt-in via `NHI_DERIVE_FROM_CONVENTION` (fail-closed by default); ADC + IAM-Credentials impersonation for `get_credential`.
+- [x] **6.2** `secrets.py` — `SecretProvider`: **Secret Manager** + **Application Default Credentials** (lazy `google-cloud-secret-manager`); env-var fallback retained.
+- [x] **6.3** `tracing.py` — `TraceExporterFactory`: OTLP → collector → **Cloud Trace** (lazy OTLP exporter).
+- [x] **6.4** `audit.py` — `agent_os` `AuditBackend`: hash-chain ledger on **BigQuery** with **stdout-mode** fallback; identical buffer shape to the Azure/AWS/local backends so the chain verifier is portable.
+- [x] **6.5** `egress.yaml` — GCP endpoint allow-list (Vertex AI, Secret Manager, IAM Credentials, OAuth2, Cloud Trace).
+- [x] **6.5a** `gateway.py` — `LLMGateway`: **Apigee → Vertex AI** managed egress chokepoint (`apigee-vertex`), or direct **Vertex AI** endpoint with ADC token (`vertex-direct`); resolves endpoint + auth from `SecretProvider`. Pairs with `egress.yaml`.
+- [x] **6.5b** Live model: `adapters/langgraph/runtime.build_gemini_model` — **Vertex AI** (`ChatVertexAI`, ADC) or **Gemini Developer API** (`ChatGoogleGenerativeAI`, key). `demo_agents.py --gcp` drives the whole matrix on it when creds + the `.[gcp]` extra resolve.
+- [ ] **6.6** `infra/` — **Terraform**: per-agent SAs + IAM bindings, job runtime (**Cloud Run jobs**), BigQuery/Spanner ledger. *(deferred — IaC)*
+- [ ] **6.7** `orchestrator.py` — job orchestration via **Cloud Run jobs / Workflows** (the GCP analogue of `run_pipeline_aca.py`). *(deferred)*
+- [ ] **6.8** *(optional, framework axis)* GCP framework adapter — wire `agent_framework`'s **Google ADK** adapter as the `AgentRuntimeAdapter`. *(LangGraph already governs GCP via the framework-agnostic adapter; ADK is an alternative.)*
+- [x] **6.9** Tests: factory loads `gcp` provider and resolves every accessor (`test_provider_factory.test_gcp_provider_implemented`); offline smoke verified for identity/secrets/tracing/audit/gateway/egress.
 
-**Acceptance:** `CLOUD_PROVIDER=gcp` resolves all cloud-binding interfaces; identity/secrets/tracing/audit have real impls + tests; Terraform applies; framework adapter status documented.
+**Acceptance:** `CLOUD_PROVIDER=gcp` resolves all cloud-binding interfaces with real impls (identity/secrets/tracing/audit/gateway/egress + Vertex/Gemini model); `--gcp` runs the demo end-to-end (real model when creds + `.[gcp]` present, else deterministic fake). **Verified offline** (stdout-mode ledger, lazy SDKs); live GCP (real ADC/Vertex/BigQuery) requires project creds + `.[gcp]` and is **stubbed** here. Terraform (6.6) and ADK framework axis (6.8) deferred.
 
 > **Note:** WS6 also lays the groundwork for the GCP-flavored gap modules in WS7 (BigQuery FGAC for Gap 1, Firestore/Bigtable baseline store for Gap 3).
 

@@ -142,3 +142,53 @@ def build_chat_model(
     logger.info("langgraph.model.live_openai", extra={"model": deployment, "responses_api": use_responses_api})
     return ChatOpenAI(model=deployment or "gpt-4o", api_key=api_key,
                       default_headers=default_headers or {}, use_responses_api=use_responses_api)
+
+
+def build_gemini_model(
+    *,
+    model: Optional[str] = None,
+    project: Optional[str] = None,
+    location: Optional[str] = None,
+    api_key: Optional[str] = None,
+    offline_fallback: Optional[FakeToolCallingModel] = None,
+) -> BaseChatModel:
+    """Return a live Google **Gemini** chat model (the GCP counterpart to
+    ``build_chat_model``), else the offline fallback.
+
+    Two backends, mirroring ``adapters/gcp/gateway`` egress modes:
+
+      - **Vertex AI** (``ChatVertexAI``) when ``project`` is set — authorized by
+        ADC / the agent's Service-Account token (no api key). This is the
+        ``vertex-direct`` path.
+      - **Gemini Developer API** (``ChatGoogleGenerativeAI``) when only an
+        ``api_key`` (``GOOGLE_API_KEY``) is available.
+
+    Returns ``offline_fallback`` when neither a project nor an api key resolves,
+    or when the corresponding ``langchain-google-*`` package is not installed.
+    """
+    model = model or "gemini-2.5-pro"
+    if project:
+        try:
+            from langchain_google_vertexai import ChatVertexAI
+        except ImportError:
+            logger.warning("langgraph.model.vertex_missing — pip install '.[gcp]'")
+        else:
+            logger.info("langgraph.model.live_vertex", extra={"project": project, "location": location, "model": model})
+            return ChatVertexAI(model=model, project=project, location=location or "us-central1")
+
+    if api_key:
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+        except ImportError:
+            logger.warning("langgraph.model.genai_missing — pip install '.[gcp]'")
+        else:
+            logger.info("langgraph.model.live_genai", extra={"model": model})
+            return ChatGoogleGenerativeAI(model=model, google_api_key=api_key)
+
+    if offline_fallback is None:
+        raise ValueError(
+            "build_gemini_model: no Vertex project or GOOGLE_API_KEY resolved and no "
+            "offline_fallback supplied. Set GOOGLE_CLOUD_PROJECT or GOOGLE_API_KEY."
+        )
+    logger.info("langgraph.model.offline", extra={"reason": "no gcp creds; using FakeToolCallingModel"})
+    return offline_fallback

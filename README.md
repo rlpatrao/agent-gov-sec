@@ -44,20 +44,24 @@ uv venv --python 3.14 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
 ```
 
-### Run the offline governance demos (no Azure required)
+### Run the governance demos
 
 ```bash
 uv run python scripts/demo_governance.py     # minimal guard/redaction/ledger walkthrough
-uv run python scripts/demo_agents.py            # results matrix (3 LangGraph agents)
-uv run python scripts/demo_agents.py --aws      # run against the AWS adapter set (--azure default / --gcp / --local)
+uv run python scripts/demo_agents.py            # azure → REAL Azure OpenAI when creds resolve (else fake)
+uv run python scripts/demo_agents.py --gcp      # gcp  → REAL Vertex/Gemini when creds resolve (needs '.[gcp]')
+uv run python scripts/demo_agents.py --fake     # deterministic 37-check assertion matrix (any cloud)
+uv run python scripts/demo_agents.py --aws      # AWS adapter set (fake model — no LLM creds wired)
 uv run python scripts/demo_agents.py --verbose  # curated narrative: agents, prompts, LLM/tool output, interceptions
 uv run python scripts/demo_agents.py --logs     # raw logger stream (--log-level DEBUG for per-guard detail)
-uv run python scripts/demo_agents.py --live     # real LLM calls in an extra [L] section (needs AOAI/OpenAI creds)
 ```
 
 `demo_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`) and drives every
-control on both its success and failure path across the three agents. Full walkthrough:
-[`docs/langgraph-demo.md`](docs/langgraph-demo.md).
+control on both its success and failure path across the three agents. **azure** and **gcp**
+call their real model when credentials resolve (read from your environment / `.env`) — the
+whole matrix then runs on the live model, observed rather than asserted. `--fake` / `--aws`
+/ `--local` use the deterministic fake model and the full 37-check assertion matrix (what CI
+runs). Full walkthrough: [`docs/langgraph-demo.md`](docs/langgraph-demo.md).
 
 ### Run the tests
 

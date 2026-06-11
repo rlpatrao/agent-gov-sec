@@ -11,35 +11,41 @@ env-extensible lookup) and its deps are the opt-in `.[langgraph]` extra.
 
 ```bash
 pip install '.[langgraph]'           # langchain>=1.0, langgraph>=1.0, langchain-openai>=1.0
-uv run python scripts/demo_agents.py            # results matrix only (azure adapters by default)
-uv run python scripts/demo_agents.py --aws      # run against the AWS adapter set
+uv run python scripts/demo_agents.py            # azure → REAL AOAI when creds resolve (else fake)
+uv run python scripts/demo_agents.py --gcp      # gcp  → REAL Vertex/Gemini when creds resolve (needs '.[gcp]')
+uv run python scripts/demo_agents.py --fake     # deterministic 37-check assertion matrix (any cloud)
+uv run python scripts/demo_agents.py --aws      # AWS adapter set (fake model — no LLM creds wired)
 uv run python scripts/demo_agents.py --verbose  # curated narrative (agents/prompts/LLM/tools/interceptions)
 uv run python scripts/demo_agents.py --logs     # raw logger stream
-uv run python scripts/demo_agents.py --live     # real LLM calls in an extra [L] section (needs creds)
 ```
 
 **Cloud adapter set.** `--azure` (default) / `--aws` / `--gcp` / `--local` (or `--cloud X`)
-selects which provider's identity / egress / audit bindings the demo exercises — all
-offline. `--aws` resolves IAM identities, the Bedrock egress allow-list, and a DynamoDB
-(stdout-mode) hash-chain ledger; `--local` is fully cloud-neutral (env identity, in-memory
-ledger, no cloud SDK). `--gcp` is a WS6 skeleton and exits with a notice.
+selects which provider's identity / egress / audit bindings the demo exercises. `--aws`
+resolves IAM identities, the Bedrock egress allow-list, and a DynamoDB (stdout-mode)
+hash-chain ledger; `--gcp` resolves Service-Account identities, the Vertex egress
+allow-list, and a BigQuery (stdout-mode) ledger; `--local` is fully cloud-neutral (env
+identity, in-memory ledger, no cloud SDK).
 
-No Azure credentials, no database, no live LLM — a `FakeToolCallingModel` stands in
-for the model, the audit ledger runs in stdout mode, and OTel no-ops.
+**Model selection is per-cloud.** `--azure` and `--gcp` call their **real model** when
+credentials resolve — Azure OpenAI for azure, Vertex AI / Gemini for gcp — read from your
+environment **or `.env`** (loaded automatically). When a real model resolves, the *whole*
+matrix runs on it and outcomes are **observed, not asserted** (a real LLM needn't reproduce
+the exact scripted tool sequence). `--aws`, `--local`, and `--fake` use the deterministic
+`FakeToolCallingModel` and the full **37-check assertion matrix** — that's the regression
+signal and what CI runs. Either way the ledger runs in stdout/in-memory mode and OTel
+no-ops without an exporter.
 
-**`--live`** adds a real-LLM section **[L]** *on top of* the deterministic matrix: it
-builds the FinOps and Rogue agents on a genuine `AzureChatOpenAI`/`ChatOpenAI` model
-(via `adapters/langgraph/runtime.build_chat_model`) and runs real prompts through the
-full guard stack — so you watch the governance middleware wrap an actual LLM call and a
-real injection attempt. Creds are read from your environment **or `.env`** (loaded
-automatically): `AZURE_OPENAI_KEY` + `AZURE_OPENAI_ENDPOINT` (+ `AZURE_OPENAI_DEPLOYMENT`,
-`AZURE_OPENAI_API_VERSION`), or `OPENAI_API_KEY`. Without them the `[L]` section prints a
-skip notice and the matrix runs unchanged; a provider/config error (wrong deployment,
-api-version, endpoint) is caught and reported without aborting. The model is AOAI/OpenAI
-regardless of `--cloud` (the cloud adapter still governs identity/egress/audit; only the
-model differs).
+- **Azure creds:** `AZURE_OPENAI_KEY` + `AZURE_OPENAI_ENDPOINT` (+ `AZURE_OPENAI_DEPLOYMENT`,
+  `AZURE_OPENAI_API_VERSION`), or `OPENAI_API_KEY`.
+- **GCP creds:** `GOOGLE_CLOUD_PROJECT` (+ `VERTEX_AI_LOCATION`, `VERTEX_AI_MODEL`) for
+  Vertex/ADC, or `GOOGLE_API_KEY` for the Gemini Developer API. Needs the `.[gcp]` extra
+  (`langchain-google-vertexai` / `langchain-google-genai`).
 
-Reasoning/codex deployments (o-series, `gpt-5*`, `*-codex`) only speak the **Responses
+When no real model resolves for azure/gcp (missing creds or client libs), the demo prints
+the reason and falls back to the deterministic fake model. A provider/creds error on a
+single real call is caught and narrated — the model-independent governance checks still run.
+
+Reasoning/codex deployments (o-series, `gpt-5*`, `*-codex`) only speak the Azure **Responses
 API**, not `/chat/completions`. The demo auto-detects these from the deployment name,
 routes them through the Responses API, and bumps `api-version` to the `2025-03-01-preview`
 floor it requires. Override the detection with `AZURE_OPENAI_USE_RESPONSES_API=1` / `0`.

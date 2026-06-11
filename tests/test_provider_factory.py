@@ -2,8 +2,8 @@
 tests/test_provider_factory.py — the WS1 cloud-adapter seam (agnostic).
 
 Verifies provider selection by CLOUD_PROVIDER, the azure default, lazy import,
-and that the aws/gcp skeletons resolve but raise NotImplementedError from every
-accessor (locking the WS5/WS6 contract). No cloud SDK / MAF required.
+and that the azure/aws/gcp providers resolve every accessor (WS1/WS5/WS6 are all
+implemented). No cloud SDK / MAF required.
 """
 
 from __future__ import annotations
@@ -48,15 +48,18 @@ def test_azure_provider_resolves_accessors():
     assert az.egress_config_path() is not None and az.egress_config_path().name == "egress.yaml"
 
 
-@pytest.mark.parametrize("cloud", ["gcp"])  # aws implemented in WS5 (see test_aws_adapter.py)
-def test_skeleton_providers_resolve_but_not_implemented(cloud):
-    p = get_provider(cloud)
-    assert p.name == cloud
-    for accessor in ("identity_provider", "secret_provider", "trace_exporter_factory", "llm_gateway"):
-        with pytest.raises(NotImplementedError):
-            getattr(p, accessor)()
+def test_gcp_provider_implemented():
+    # GCP implemented in WS6: every accessor resolves (no NotImplementedError),
+    # each lazy-importing its Google SDK only when actually used.
+    p = get_provider("gcp")
+    assert p.name == "gcp"
+    assert p.identity_provider() is not None
+    assert p.secret_provider() is not None
+    assert p.trace_exporter_factory() is not None
+    assert p.llm_gateway() is not None
     # The framework axis is intentionally absent (AWS/GCP use their own, not MAF).
     assert p.runtime_adapter() is None
+    assert p.egress_config_path() is not None and p.egress_config_path().name == "egress.yaml"
 
 
 def test_factory_module_imports_no_cloud_sdk():

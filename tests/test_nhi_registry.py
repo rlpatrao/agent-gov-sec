@@ -63,9 +63,11 @@ def test_unknown_agent_without_env_still_raises(monkeypatch):
 def test_get_routes_id_through_cloud_provider(monkeypatch):
     # The id is sourced from the selected cloud IdentityProvider — not just a raw
     # env read. Here AWS derives the IAM role ARN from the galaxy-<agent>
-    # convention, proving core delegates resolution to the cloud identity system.
+    # convention (opt-in via NHI_DERIVE_FROM_CONVENTION), proving core delegates
+    # resolution to the cloud identity system.
     monkeypatch.setenv("CLOUD_PROVIDER", "aws")
     monkeypatch.setenv("AWS_ACCOUNT_ID", "111122223333")
+    monkeypatch.setenv("NHI_DERIVE_FROM_CONVENTION", "1")
     monkeypatch.delenv("NHI_CLIENT_ID_CODER", raising=False)
     nhi = _reload_registry()
     ident = nhi.NHIRegistry.get("Coder")
