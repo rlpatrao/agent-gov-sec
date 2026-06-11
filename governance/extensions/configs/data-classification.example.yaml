@@ -1,9 +1,13 @@
-# Example data-classification catalog + per-agent data scopes (Gap 1).
-# Loaded by governance.extensions.data_classification.DataClassificationCatalog.
+# Schema classification catalog + per-agent ABAC policies (Gap 1).
+# Loaded by governance.extensions.data_classification.DataClassificationCatalog,
+# which turns this into MSGK objects:
+#   classification → agent_os.policies.data_classification.DataLabel
+#   agent_policies → agent_os.policies.data_classification.ABACPolicy
+# The decision is MSGK's DataAccessEvaluator (most-restrictive-wins). Only the
+# `enforcement:` block is ours (how to mask/filter the rows that come back).
 #
-# Sensitivity ladder (ascending): PUBLIC < INTERNAL < CONFIDENTIAL < RESTRICTED.
-# Unclassified columns and unknown labels fail CLOSED (treated as RESTRICTED).
-# Unknown agents get an empty (deny-all) scope.
+# Sensitivity ladder (ascending): PUBLIC < INTERNAL < CONFIDENTIAL < RESTRICTED < TOP_SECRET.
+# Unclassified columns fail CLOSED (RESTRICTED). Agents with no policy → deny-all.
 
 classification:
   datasets:
@@ -11,37 +15,39 @@ classification:
       tables:
         billing:
           columns:
-            account_id: INTERNAL
-            cost_usd: INTERNAL
-            region: INTERNAL
-            customer_email: CONFIDENTIAL
-            tax_id: RESTRICTED
+            account_id:     {classification: INTERNAL,     categories: [finops]}
+            cost_usd:       {classification: INTERNAL,     categories: [finops]}
+            region:         {classification: INTERNAL,     categories: [finops]}
+            customer_email: {classification: CONFIDENTIAL, categories: [PII, finops]}
+            tax_id:         {classification: RESTRICTED,   categories: [PII, finops]}
     hr:
       tables:
         employees:
           columns:
-            employee_id: INTERNAL
-            department: INTERNAL
-            salary: CONFIDENTIAL
-            ssn: RESTRICTED
+            employee_id: {classification: INTERNAL,     categories: [HR]}
+            salary:      {classification: CONFIDENTIAL, categories: [HR]}
+            ssn:         {classification: RESTRICTED,   categories: [PII, HR]}
 
-agent_scopes:
-  # FinOps agent: only the finops dataset, up to CONFIDENTIAL, but email is
-  # always masked, and it may only see rows for its own region.
+agent_policies:
+  # FinOps: up to CONFIDENTIAL, finops + PII categories. tax_id (RESTRICTED) is
+  # above clearance → MSGK denies it → masked; customer_email is masked by the
+  # enforcement override below even though clearance allows it.
   FinOps:
-    allowed_datasets: [finops]
-    max_sensitivity: CONFIDENTIAL
+    max_classification: CONFIDENTIAL
+    allowed_categories: [finops, PII]
+  # Analyzer (demo payload): INTERNAL only, finops category.
+  Analyzer:
+    max_classification: INTERNAL
+    allowed_categories: [finops]
+  # Auditor: read across finops + hr up to CONFIDENTIAL (RESTRICTED still denied).
+  Auditor:
+    max_classification: CONFIDENTIAL
+    allowed_categories: [finops, HR, PII]
+
+enforcement:
+  # Ours: always-mask overrides + row scoping (MSGK decides access; we decide how
+  # to enforce on the returned rows).
+  FinOps:
     masked_columns: [customer_email]
     row_filter:
       region: [us-east-1, us-west-2]
-
-  # Analyzer (the demo payload): INTERNAL-only, no sensitive data.
-  Analyzer:
-    allowed_datasets: [finops]
-    max_sensitivity: INTERNAL
-    masked_columns: []
-
-  # Auditor: read-only across datasets up to CONFIDENTIAL (RESTRICTED masked).
-  Auditor:
-    allowed_datasets: [finops, hr]
-    max_sensitivity: CONFIDENTIAL

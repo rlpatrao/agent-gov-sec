@@ -15,6 +15,7 @@ uv run python scripts/demo_two_agents.py            # results matrix only (azure
 uv run python scripts/demo_two_agents.py --aws      # run against the AWS adapter set
 uv run python scripts/demo_two_agents.py --verbose  # curated narrative (agents/prompts/LLM/tools/interceptions)
 uv run python scripts/demo_two_agents.py --logs     # raw logger stream
+uv run python scripts/demo_two_agents.py --live     # real LLM calls in an extra [L] section (needs creds)
 ```
 
 **Cloud adapter set.** `--azure` (default) / `--aws` / `--gcp` / `--local` (or `--cloud X`)
@@ -25,6 +26,15 @@ ledger, no cloud SDK). `--gcp` is a WS6 skeleton and exits with a notice.
 
 No Azure credentials, no database, no live LLM — a `FakeToolCallingModel` stands in
 for the model, the audit ledger runs in stdout mode, and OTel no-ops.
+
+**`--live`** adds a real-LLM section **[L]** *on top of* the deterministic matrix: it
+builds the FinOps and Rogue agents on a genuine `AzureChatOpenAI`/`ChatOpenAI` model
+(via `adapters/langgraph/runtime.build_chat_model`) and runs real prompts through the
+full guard stack — so you watch the governance middleware wrap an actual LLM call and a
+real injection attempt. It needs creds (`AZURE_OPENAI_KEY` + `AZURE_OPENAI_ENDPOINT`, or
+`OPENAI_API_KEY`); without them the `[L]` section prints a skip notice and the matrix
+runs unchanged. The model is AOAI/OpenAI regardless of `--cloud` (the cloud adapter still
+governs identity/egress/audit; only the model differs).
 
 **Seeing what ran.** By default the demo prints only the results matrix. Two
 independent (combinable) views:
