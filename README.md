@@ -10,9 +10,10 @@ A runtime, **framework-agnostic** governance & security platform for multi-agent
 
 **Demonstration payload** (`payload_agents/`): three governed **LangGraph** agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). They prove the governance stack is **framework-agnostic**: the same `governance/` + `core/` + `a2a/` primitives and WS7 extensions wrap a LangGraph `create_agent` via a thin LangChain `AgentMiddleware` shim (`adapters/langgraph/`) — exactly as they'd wrap any agent framework.
 
-**Offline governance demos** (no Azure credentials, no database, no LLM calls):
-- `scripts/demo_governance.py` — the minimal, framework-free guard/redaction/ledger walkthrough.
-- `scripts/demo_agents.py` — the **full feature × agent matrix** across the three LangGraph agents: identity/egress, the per-call guard stack, A2A authz, data-layer FGAC (mask/row-filter/deny + AWS Lake Formation pushdown), data-access drift, reasoning-step guard + CoT/CoVe trace, and hash-chained audit + tamper detection — each exercised on both its success and failure path.
+**Governance demos** — run fully offline (deterministic fake model) *or* against a **real
+per-cloud LLM** (Azure OpenAI / Vertex·Gemini / Bedrock) when credentials resolve:
+- `scripts/demo_governance.py` — the minimal, framework-free guard/redaction/ledger walkthrough (no creds).
+- `scripts/demo_agents.py` — the **full feature × agent matrix** across the three LangGraph agents: identity/egress, the per-call guard stack, A2A authz, data-layer FGAC (mask/row-filter/deny + AWS Lake Formation pushdown), data-access drift, reasoning-step guard + CoT/CoVe trace, and hash-chained audit + tamper detection — each exercised on both its success and failure path. All three clouds have been **live-verified** (azure → AOAI, gcp → Vertex, aws → Bedrock through an API Gateway chokepoint).
 
 ---
 
@@ -33,7 +34,9 @@ The planned cloud-agnostic restructure (Azure bindings → `adapters/azure/`, pl
 
 - Python 3.13 or 3.14
 - `uv` (or `pip`)
-- For cloud runs: `az` CLI logged into your Azure tenant (local/offline runs need nothing)
+- Offline runs need nothing. For **live cloud runs**, the matching CLI logged in: `az`
+  (Azure), `gcloud` (GCP — `gcloud auth application-default login`), or `aws` (AWS — `aws sso
+  login` / `aws configure`).
 
 ### Install
 
@@ -42,63 +45,88 @@ git clone <repo>
 cd agentic-sdlc
 uv venv --python 3.14 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
+
+# The agent demo needs the LangGraph extra; add a cloud extra for live runs:
+uv pip install --python .venv/bin/python -e '.[langgraph]'   # required for demo_agents.py
+uv pip install --python .venv/bin/python -e '.[gcp]'         # live --gcp (Vertex/Gemini)
+uv pip install --python .venv/bin/python -e '.[aws]'         # live --aws (boto3: Bedrock gateway key + DynamoDB ledger)
 ```
 
 ### Run the governance demos
 
+> **Invocation:** call the project venv directly — `.venv/bin/python …`. Avoid `uv run` /
+> `uv run --active` here unless no other virtualenv is activated: `uv run` resyncs the env to
+> the base deps and an activated venv from another project shadows it, both of which drop the
+> `langchain` / cloud extras and cause `ModuleNotFoundError`. The `uv run python` forms below
+> work when `.venv` is the active/only environment.
+
 ```bash
-uv run python scripts/demo_governance.py     # minimal guard/redaction/ledger walkthrough
-uv run python scripts/demo_agents.py            # azure → REAL Azure OpenAI when creds resolve (else fake)
-uv run python scripts/demo_agents.py --gcp      # gcp  → REAL Vertex/Gemini when creds resolve (needs '.[gcp]')
-uv run python scripts/demo_agents.py --aws      # aws  → REAL Bedrock via API Gateway when configured (else fake)
-uv run python scripts/demo_agents.py --fake     # deterministic 37-check assertion matrix (any cloud)
-uv run python scripts/demo_agents.py --verbose  # curated narrative: agents, prompts, LLM/tool output, interceptions
-uv run python scripts/demo_agents.py --logs     # raw logger stream (--log-level DEBUG for per-guard detail)
+# Model selection is per-cloud: azure/gcp/aws call their REAL model when creds resolve, else fake.
+.venv/bin/python scripts/demo_governance.py        # minimal guard/redaction/ledger walkthrough (no creds)
+.venv/bin/python scripts/demo_agents.py            # azure → REAL Azure OpenAI (creds in .env, else fake)
+.venv/bin/python scripts/demo_agents.py --gcp      # gcp  → REAL Vertex/Gemini   (needs '.[gcp]' + creds)
+.venv/bin/python scripts/demo_agents.py --aws      # aws  → REAL Bedrock via API Gateway (needs infra + '.[aws]')
+.venv/bin/python scripts/demo_agents.py --fake     # force the deterministic 37-check matrix on any cloud
+.venv/bin/python scripts/demo_agents.py --local    # cloud-neutral, fake model, in-memory ledger
+.venv/bin/python scripts/demo_agents.py --verbose  # curated narrative: agents, prompts, LLM/tool output, interceptions
+.venv/bin/python scripts/demo_agents.py --logs     # raw logger stream (--log-level DEBUG for per-guard detail)
 ```
 
 `demo_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`) and drives every
-control on both its success and failure path across the three agents. **azure**, **gcp**, and
-**aws** call their real model when credentials resolve (read from your environment / `.env`) —
-the whole matrix then runs on the live model, observed rather than asserted. The aws path
-reaches Bedrock through a governed **API Gateway** chokepoint (provision `adapters/aws/infra`,
-tagged `galaxy-rp`). `--fake` / `--local` use the deterministic fake model and the full
-37-check assertion matrix (what CI runs). Full walkthrough:
-[`docs/langgraph-demo.md`](docs/langgraph-demo.md).
+control on both its success and failure path across the three agents.
+
+- **Real-model mode** (`--azure` / `--gcp` / `--aws` with creds): the whole matrix runs on the
+  live model, so outcomes are **observed, not asserted** — the `VERDICT` column reads
+  `PASS` / `N/A` (an adversarial scenario the real model didn't attempt) / `FAIL` (a genuine
+  control failure; exits non-zero).
+- **Deterministic mode** (`--fake` / `--local`, or any cloud without creds): the full **37-check
+  assertion matrix** (`PASS` / `FAIL`) — this is what CI runs.
+
+**Per-cloud setup** (creds are read from your shell **or `.env`**, loaded automatically):
+
+| Cloud | Real model | What to set |
+|---|---|---|
+| `--azure` (default) | Azure OpenAI | `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_KEY` + `AZURE_OPENAI_DEPLOYMENT` (reasoning/codex deployments auto-route through the Responses API) |
+| `--gcp` | Vertex AI / Gemini | `pip install '.[gcp]'`; `GOOGLE_CLOUD_PROJECT` (+ `gcloud auth application-default login`), or `GOOGLE_API_KEY` |
+| `--aws` | Bedrock via API Gateway | `pip install '.[aws]'`; provision `adapters/aws/infra` (`terraform apply`, tagged `galaxy-rp`), then set `AWS_BEDROCK_GATEWAY_ENDPOINT` + `AWS_BEDROCK_GATEWAY_KEY` from `terraform output`. The agent reaches Bedrock only through the gateway (`x-api-key`) — it never holds Bedrock creds. **Tear down:** `cd adapters/aws/infra && terraform destroy`. |
+
+See [`.env.example`](.env.example) for every variable and [`docs/langgraph-demo.md`](docs/langgraph-demo.md) for the full walkthrough.
 
 ### Run the tests
 
 ```bash
-uv run python -m pytest tests/ -q
+.venv/bin/python -m pytest tests/ -q
 ```
 
-All tests run without Azure credentials.
+All tests run without cloud credentials (cloud/LangChain-dependent tests skip cleanly when
+the extra isn't installed).
 
 ### Configure `.env` (only needed for live LLM / cloud runs)
 
-```bash
-# LLM egress via APIM (recommended) — agents route through APIM which injects the real AOAI key
-APIM_ENDPOINT=https://<your-apim>.azure-api.net
-APIM_SUBSCRIPTION_KEY=<from keyvault: apim-subscription-key>
+Copy `.env.example` to `.env` and fill in the block for the cloud you're running. The demo
+loads `.env` automatically. The essentials per cloud (full set + comments in
+[`.env.example`](.env.example)):
 
-# Direct AOAI (used when APIM_ENDPOINT is unset)
+```bash
+# Azure (default) — direct AOAI; reasoning/codex deployments auto-route through the Responses API.
 AZURE_OPENAI_ENDPOINT=https://<your-aoai>.openai.azure.com/
 AZURE_OPENAI_DEPLOYMENT=<deployment-name>
-AZURE_OPENAI_API_VERSION=preview
-AZURE_OPENAI_KEY=<from keyvault: azure-openai-key>
+AZURE_OPENAI_API_VERSION=2025-03-01-preview      # use a dated version, not "preview"
+AZURE_OPENAI_KEY=<your-aoai-key>
 
-# Observability
-APPLICATIONINSIGHTS_CONNECTION_STRING=<from keyvault: appinsights-connection-string>
-OTEL_SERVICE_NAME=galaxy-governance-local
+# GCP — Vertex (ADC) or the Gemini Developer API.
+GOOGLE_CLOUD_PROJECT=<your-gcp-project>           # + `gcloud auth application-default login`
+VERTEX_AI_MODEL=gemini-2.5-pro
 
-# Key Vault + ledger (leave blank locally — env-var / stdout fallback activates)
-AZURE_KEY_VAULT_URL=
-POSTGRES_DSN=
+# AWS — Bedrock through the API Gateway chokepoint (from `terraform output`).
+AWS_PROFILE=<your-sso-profile>                     # or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+AWS_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-6
+AWS_BEDROCK_GATEWAY_ENDPOINT=https://<api-id>.execute-api.us-east-1.amazonaws.com/prod/invoke
+AWS_BEDROCK_GATEWAY_KEY=<gateway-x-api-key>
 
-# Per-agent NHI identity (placeholder is fine for local dev)
-NHI_CLIENT_ID_ANALYZER=local-analyzer-nhi
+# Per-agent NHI identity (placeholders fine for local dev; real cloud principal ids in prod).
+NHI_CLIENT_ID_FINOPS=local-finops-nhi
 ```
-
-See [`.env.example`](.env.example) for the full set.
 
 ---
 
