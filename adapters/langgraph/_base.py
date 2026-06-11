@@ -30,6 +30,7 @@ from typing import Any, Callable, Optional
 from langchain.agents import create_agent
 from langchain_core.language_models.chat_models import BaseChatModel
 
+from adapters.contract import RunResult, ToolCall, Turn
 from adapters.langgraph.governance import build_langgraph_governance
 from agent_os.audit_logger import GovernanceAuditLogger
 from core.interfaces import SecretProvider
@@ -54,6 +55,38 @@ class LangGraphAgentBundle:
     agent_id: str
     nhi_id: str
     egress: str
+
+    def invoke(self, prompt: str) -> RunResult:
+        """Run the agent on ``prompt`` and return a framework-neutral ``RunResult``.
+        A blocking guard raises ``GovernanceViolation`` (propagated) exactly as in
+        the raw/pydantic adapters — the demo handles it uniformly."""
+        raw = self.agent.invoke({"messages": [{"role": "user", "content": prompt}]})
+        return _normalize(raw)
+
+
+def _normalize(raw: Any) -> RunResult:
+    """Convert a LangGraph result dict (``{"messages": [...]}``) into a RunResult."""
+    turns: list[Turn] = []
+    for m in (raw.get("messages", []) if isinstance(raw, dict) else []):
+        cls = m.__class__.__name__
+        if cls == "AIMessage":
+            tool_calls = [
+                ToolCall(name=tc.get("name", ""), args=tc.get("args", {}) or {}, id=tc.get("id", ""))
+                for tc in (getattr(m, "tool_calls", None) or [])
+            ]
+            turns.append(Turn(role="ai", text=_flatten(getattr(m, "content", "")), tool_calls=tool_calls))
+        elif cls == "ToolMessage":
+            turns.append(Turn(role="tool", text=str(m.content), tool_name=getattr(m, "name", "") or ""))
+    return RunResult(turns=turns)
+
+
+def _flatten(content: Any) -> str:
+    """LangChain message content (str | list of typed parts) → human-facing text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in content)
+    return str(content or "")
 
 
 def _resolve_egress(agent_type: str, client_id: str, token_provider: Optional[SecretProvider]) -> str:
