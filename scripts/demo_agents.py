@@ -96,6 +96,38 @@ class Check:
 CHECKS: list[Check] = []
 
 
+# Feature code → the governance control / security primitive that enforces it.
+# Surfaced per check in --verbose so each line names the guardrail applied.
+_CONTROL: dict[str, str] = {
+    "A1": "NHI registry — per-agent Non-Human Identity (Entra/IAM/SA id)",
+    "A2": "LLM-egress chokepoint — provider gateway resolution",
+    "A3": "Egress allow-list — agent_os EgressPolicy",
+    "B4": "Prompt-injection guard — agent_os PromptInjectionDetector (GuardPipeline.before_model)",
+    "B5": "Credential redactor — agent_os CredentialRedactor (GuardPipeline.before_model)",
+    "B6": "Context-budget guard — agent_os ContextScheduler (GuardPipeline.before_model)",
+    "B7": "Capability guard — reasoning-step allow-list (GuardPipeline.before_tool)",
+    "B8": "Blocked-pattern scan — tool-arg policy (GuardPipeline.before_tool)",
+    "C10": "A2A recipient allow-list — a2a dispatcher",
+    "C11": "A2A audited dispatch — hash-chain + OTel span",
+    "D12": "Data FGAC — ABAC allow (agent_os DataAccessEvaluator)",
+    "D13": "Data FGAC — classification masking (above clearance)",
+    "D14": "Data FGAC — enforcement mask override",
+    "D15": "Data FGAC — row-level filter",
+    "D16": "Data FGAC — store-side pushdown (Lake Formation / Athena SQL)",
+    "D-authz": "Data FGAC — deny-all (no ABAC policy)",
+    "F18": "Data-access drift detector (agent_sre anomaly)",
+    "G19": "Reasoning-step validator — pre-execution CoT step check",
+    "G20": "Reasoning trace — CoT/CoVe capture + mandatory redaction (GuardPipeline.after_model)",
+    "H21": "Hash-chained audit ledger — SHA-256 tamper-evident chain",
+    "I23": "HITL escalation manager — human-in-the-loop approval",
+}
+
+
+def _control_for(feature: str) -> str:
+    code = feature.split(" ", 1)[0]
+    return _CONTROL.get(code, "")
+
+
 # ── Narrator: the curated, human-readable story (--verbose) ────────────────────
 # Distinct from --logs (the raw logger stream). Narrates agent identities, the
 # prompts sent, what the model/tools returned, guardrail interceptions, and each
@@ -148,7 +180,9 @@ class _Narrator:
             mark = dim("·")
         else:
             mark = _c(GREEN, "✓") if ok else _c(RED, "✗")
-        print(f"    {mark}{_c(YELLOW, gi)} {feature} [{agent}] {dim(scenario)} → {_c(BOLD, str(actual))}")
+        control = _control_for(feature)
+        ctrl = dim(f"   ⮡ control: {control}") if control else ""
+        print(f"    {mark}{_c(YELLOW, gi)} {feature} [{agent}] {dim(scenario)} → {_c(BOLD, str(actual))}{ctrl}")
 
 
 _N = _Narrator()
@@ -413,11 +447,20 @@ def section_reasoning():
     record("G19 reasoning guard", "Rogue", "out-of-scope data step", "deny",
            "deny" if not ddeny.allowed else "allow", not ddeny.allowed)
 
-    # G20 reasoning trace — mandatory redaction
+    # G20 reasoning trace — chain-of-thought (CoT) + chain-of-verification (CoVe)
+    # are captured and redacted before they hit the ledger. (Live agent runs do the
+    # same in GuardPipeline.after_model, capturing each model response as a CoT.)
     tracer = ReasoningTraceLogger()
+    raw_cot = "I will call the API with key sk-abc123def456ghijkl789mnop to read billing."
+    raw_cove = "Q: is the key valid? A: it parses."
     rec = tracer.capture(run_id="run-g20", agent_type="FinOps", nhi_id="local-finops-nhi",
-                         cot="I will call the API with key sk-abc123def456ghijkl789mnop to read billing.",
-                         cove="Q: is the key valid? A: it parses.", decision="allow")
+                         cot=raw_cot, cove=raw_cove, decision="allow")
+    if _N.on and rec is not None:
+        print(dim(f"      CoT  (raw)      ⟵ {raw_cot!r}"))
+        print(dim(f"      CoT  (stored)   ⟶ {rec.cot!r}"))
+        print(dim(f"      CoVe (raw)      ⟵ {raw_cove!r}"))
+        print(dim(f"      CoVe (stored)   ⟶ {rec.cove!r}"))
+        print(dim(f"      redaction_applied={rec.redaction_applied}  → persisted to the hash-chain ledger"))
     leaked = rec is not None and "sk-abc123def456ghijkl789mnop" in (rec.cot + rec.cove)
     record("G20 reasoning trace", "FinOps", "CoT carries a secret", "redacted before persist",
            "redacted" if (rec and rec.redaction_applied and not leaked) else "LEAKED",
