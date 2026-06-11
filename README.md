@@ -50,18 +50,20 @@ uv pip install --python .venv/bin/python -r requirements.txt
 uv run python scripts/demo_governance.py     # minimal guard/redaction/ledger walkthrough
 uv run python scripts/demo_agents.py            # azure → REAL Azure OpenAI when creds resolve (else fake)
 uv run python scripts/demo_agents.py --gcp      # gcp  → REAL Vertex/Gemini when creds resolve (needs '.[gcp]')
+uv run python scripts/demo_agents.py --aws      # aws  → REAL Bedrock via API Gateway when configured (else fake)
 uv run python scripts/demo_agents.py --fake     # deterministic 37-check assertion matrix (any cloud)
-uv run python scripts/demo_agents.py --aws      # AWS adapter set (fake model — no LLM creds wired)
 uv run python scripts/demo_agents.py --verbose  # curated narrative: agents, prompts, LLM/tool output, interceptions
 uv run python scripts/demo_agents.py --logs     # raw logger stream (--log-level DEBUG for per-guard detail)
 ```
 
 `demo_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`) and drives every
-control on both its success and failure path across the three agents. **azure** and **gcp**
-call their real model when credentials resolve (read from your environment / `.env`) — the
-whole matrix then runs on the live model, observed rather than asserted. `--fake` / `--aws`
-/ `--local` use the deterministic fake model and the full 37-check assertion matrix (what CI
-runs). Full walkthrough: [`docs/langgraph-demo.md`](docs/langgraph-demo.md).
+control on both its success and failure path across the three agents. **azure**, **gcp**, and
+**aws** call their real model when credentials resolve (read from your environment / `.env`) —
+the whole matrix then runs on the live model, observed rather than asserted. The aws path
+reaches Bedrock through a governed **API Gateway** chokepoint (provision `adapters/aws/infra`,
+tagged `galaxy-rp`). `--fake` / `--local` use the deterministic fake model and the full
+37-check assertion matrix (what CI runs). Full walkthrough:
+[`docs/langgraph-demo.md`](docs/langgraph-demo.md).
 
 ### Run the tests
 
