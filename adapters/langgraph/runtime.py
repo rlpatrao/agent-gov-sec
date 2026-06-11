@@ -244,6 +244,6 @@ def build_bedrock_model(
     return BedrockGatewayChatModel(
         endpoint=endpoint,
         api_key=api_key,
-        model_id=model_id or "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+        model_id=model_id or "us.anthropic.claude-sonnet-4-6",
         default_headers=default_headers or {},
     )

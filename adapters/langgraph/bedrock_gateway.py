@@ -40,7 +40,7 @@ class BedrockGatewayChatModel(BaseChatModel):
 
     endpoint: str
     api_key: str
-    model_id: str = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+    model_id: str = "us.anthropic.claude-sonnet-4-6"
     max_tokens: int = 1024
     temperature: float = 0.0
     default_headers: dict = {}

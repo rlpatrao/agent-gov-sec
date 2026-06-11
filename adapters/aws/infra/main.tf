@@ -38,7 +38,7 @@ variable "agent_types" {
 
 variable "bedrock_model_id" {
   type    = string
-  default = "us.anthropic.claude-3-5-sonnet-20241022-v2:0" # us-east-1 inference profile (Converse)
+  default = "us.anthropic.claude-sonnet-4-6" # us-east-1 inference profile (Converse)
 }
 
 variable "project_tag" {
