@@ -28,6 +28,46 @@ AGENT_NAME = "auditor"
 AGENT_TYPE = "Auditor"
 
 
+def _dataset_fns(*, mediator: DataAccessMediator, nhi_id: str):
+    """The persona's tool *logic* (framework-neutral plain functions)."""
+
+    def query_dataset(dataset: str, table: str, columns: list[str]) -> str:
+        """Read rows from a governed dataset.table. Classification/category
+        masking is enforced; RESTRICTED columns remain masked."""
+        decision, rows = mediator.read(
+            agent_type=AGENT_TYPE, dataset=dataset, table=table,
+            columns=list(columns), rows=demo_data.rows_for(dataset, table), nhi_id=nhi_id,
+        )
+        return json.dumps({
+            "denied": decision.denied,
+            "masked_columns": list(decision.masked_columns),
+            "allowed_columns": list(decision.allowed_columns),
+            "rows": rows,
+        })
+
+    def summarize_costs(text: str) -> str:
+        """Summarize fetched data into a one-line audit note."""
+        return f"Audit note: {text[:160]}"
+
+    return query_dataset, summarize_costs
+
+
+def make_tool_specs(*, mediator: DataAccessMediator, nhi_id: str):
+    """Framework-neutral ToolSpecs (used by the raw / pydantic adapters)."""
+    from adapters.contract import ToolSpec
+    query_dataset, summarize_costs = _dataset_fns(mediator=mediator, nhi_id=nhi_id)
+    return [
+        ToolSpec(name="query_dataset", description=query_dataset.__doc__ or "Read a governed dataset.table.",
+                 parameters={"type": "object",
+                             "properties": {"dataset": {"type": "string"}, "table": {"type": "string"},
+                                            "columns": {"type": "array", "items": {"type": "string"}}},
+                             "required": ["dataset", "table", "columns"]}, fn=query_dataset),
+        ToolSpec(name="summarize_costs", description="Summarize fetched data into a one-line audit note.",
+                 parameters={"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+                 fn=summarize_costs),
+    ]
+
+
 def make_tools(*, mediator: DataAccessMediator, nhi_id: str):
     @tool
     def query_dataset(dataset: str, table: str, columns: list[str]) -> str:

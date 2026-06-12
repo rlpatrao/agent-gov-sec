@@ -20,6 +20,7 @@ survives. A blocking guard raises ``GovernanceViolation``, which propagates out 
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -97,8 +98,33 @@ class PydanticAgentBundle:
     egress: str
 
     def invoke(self, prompt: str) -> RunResult:
-        result = self.agent.run_sync(prompt)
-        return _normalize(result)
+        """Run the agent synchronously and return a framework-neutral RunResult.
+
+        Pydantic AI's ``run_sync`` drives its own event loop, which raises if one is
+        already running (the demo invokes bundles synchronously from inside an async
+        ``main``). When a loop is already running we run the agent's coroutine on a
+        dedicated worker thread so the call stays synchronous regardless of caller
+        context — and a blocking ``GovernanceViolation`` still propagates out."""
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return _normalize(self.agent.run_sync(prompt))
+
+        out: dict[str, Any] = {}
+
+        def _worker() -> None:
+            try:
+                out["result"] = asyncio.run(self.agent.run(prompt))
+            except BaseException as e:  # propagate GovernanceViolation et al.
+                out["error"] = e
+
+        import threading
+        t = threading.Thread(target=_worker)
+        t.start()
+        t.join()
+        if "error" in out:
+            raise out["error"]
+        return _normalize(out["result"])
 
 
 def _normalize(result: Any) -> RunResult:

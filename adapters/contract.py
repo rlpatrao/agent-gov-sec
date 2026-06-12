@@ -77,6 +77,25 @@ class ScriptStep:
 AgentScript = list[ScriptStep]
 
 
+@dataclass
+class ModelResult:
+    """One model generation in the framework-neutral raw loop: the assistant text
+    plus any tool calls it emitted this turn (the counterpart, at the client level,
+    to a single ``ScriptStep``)."""
+    text: str = ""
+    tool_calls: list[ToolCall] = field(default_factory=list)
+
+
+@runtime_checkable
+class ChatModelClient(Protocol):
+    """A provider-native chat client for the raw adapter's tool loop. ``messages``
+    are neutral dicts — ``{role: 'user'|'assistant'|'tool', content, tool_calls?,
+    tool_call_id?}`` — and ``tool_specs`` carry the JSON-schema tool definitions the
+    client should advertise. Returns a single ``ModelResult``."""
+
+    def generate(self, messages: list[dict], tool_specs: list[ToolSpec]) -> ModelResult: ...
+
+
 @runtime_checkable
 class AgentBundle(Protocol):
     """What every framework adapter's ``build_agent`` returns. Same fields the
