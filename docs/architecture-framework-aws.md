@@ -18,7 +18,8 @@ is built on two independent axes:
 - **Framework axis** — *how* an agent is orchestrated, via a thin adapter over the
   shared `GuardPipeline`: **LangGraph** (LangChain `create_agent` + middleware; drives
   the full demo matrix) and **Pydantic AI** (`adapters/pydantic_ai/`; governance wired
-  through a model wrapper, with parity tests). A **raw** provider-native loop is planned.
+  through a model wrapper, with parity tests), and an unopinionated **raw** provider-native
+  tool loop (`adapters/raw/`, no framework deps). All three run the full demo matrix.
 - **Cloud axis** — *where* identity, secrets, egress, tracing, and audit are
   resolved. Today: **AWS**, **Azure**, **GCP**, plus a cloud-neutral **local**.
 
@@ -97,7 +98,7 @@ thin shim that maps its own hooks onto `before_model` / `after_model` / `before_
 the *same* governance logic runs unchanged across LangGraph + AWS, the raw loop + GCP, etc.
 (**langgraph** drives the full demo matrix; **pydantic** has an implemented, unit-tested
 adapter — `adapters/pydantic_ai/` + `tests/test_pydantic_framework.py` — wired through the
-same pipeline via a model wrapper; **raw** is planned — see
+same pipeline via a model wrapper; **raw** is implemented (provider-native loop) — see
 [`REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md).)
 
 > **Layered view:** for the stacked "payload → framework → core → cloud-adapters →
@@ -206,7 +207,7 @@ text and calls the three hooks around model/tool execution:
 | Framework | Binding | Maps to |
 |-----------|---------|---------|
 | **langgraph** *(implemented)* | `GalaxyGuardMiddleware` (LangChain `AgentMiddleware`) — [`adapters/langgraph/governance.py`](../adapters/langgraph/governance.py) | `wrap_model_call` → `before_model` + `after_model`; `wrap_tool_call` → `before_tool` |
-| **raw** *(planned)* | provider-native tool loop wrapping the same hooks | the same three calls |
+| **raw** *(implemented)* | provider-native tool loop wrapping the same hooks | the same three calls |
 | **pydantic** *(planned)* | Pydantic AI agent hooks | the same three calls |
 
 `GalaxyGuardMiddleware` is intentionally thin: it extracts the prompt text, calls
@@ -247,7 +248,7 @@ single `GalaxyGuardMiddleware`, preserving its original return surface.
 ## 5. The framework axis & the LangGraph adapter
 
 The framework axis is selected with `--framework langgraph|raw|pydantic`. Today
-**langgraph** drives the full demo matrix; **pydantic** has an implemented, unit-tested adapter (model-wrapper governance); **raw** is planned.
+**langgraph** drives the full demo matrix; **pydantic** (model-wrapper governance) and **raw** (provider-native loop) are implemented + unit-tested; all three run the full demo matrix at 37/37.
 All three return the same neutral shape, so the demo and tests don't care which
 framework actually ran.
 

@@ -58,16 +58,15 @@ from a2a.envelope import A2ARequest, A2AResponse
 from adapters.aws.data_fgac import AwsLakeFormationEnforcer
 from adapters.langgraph.governance import GovernanceViolation
 from adapters.contract import RunResult
-from adapters.langgraph.runtime import scripted_model, build_chat_model, build_gemini_model, build_bedrock_model
+from adapters.langgraph.runtime import build_chat_model, build_gemini_model, build_bedrock_model
 from core.nhi_registry import NHIRegistry
 from governance.extensions.data_drift import DataAccessDriftDetector, InMemoryBaselineStore, DriftConfig
 from governance.extensions.reasoning_guard import ReasoningStep, ReasoningStepValidator
 from governance.extensions.reasoning_trace import ReasoningTraceLogger
 from governance.guards.egress import check_outbound, load_egress_policy
 from governance.guards.escalation import build_escalation_manager, maybe_escalate
-from payload_agents.auditor_agent import build_auditor_agent
-from payload_agents.finops_agent import build_finops_agent, load_catalog
-from payload_agents.rogue_agent import build_rogue_agent
+from payload_agents import framework as fw
+from payload_agents.finops_agent import load_catalog
 
 # ── colour ──────────────────────────────────────────────────────────────────
 RESET, BOLD, GREEN, RED, YELLOW, CYAN, DIM, WHITE = (
@@ -195,6 +194,10 @@ _N = _Narrator()
 # deterministic scripted_model and the 37-check matrix asserts exact outcomes.
 _REAL_MODEL = None
 _REAL_DESC = ""
+# The active framework binding (langgraph | raw | pydantic), set by main().
+# make_model() and the build_* wrappers dispatch on it; the same shared
+# GuardPipeline governs every framework, so the 37-check matrix is identical.
+_FRAMEWORK = "langgraph"
 
 
 def is_real() -> bool:
@@ -202,8 +205,25 @@ def is_real() -> bool:
 
 
 def make_model(*scripted):
-    """The model every agent build uses (see module note above)."""
-    return _REAL_MODEL if _REAL_MODEL is not None else scripted_model(*scripted)
+    """The deterministic offline model every agent build uses for the chosen
+    framework (or the shared real model in live mode). ``scripted`` is the single
+    source of scripted turns (LangChain ``AIMessage``); the framework dispatcher
+    translates it to that framework's native scripted model."""
+    if _REAL_MODEL is not None:
+        return _REAL_MODEL
+    return fw.make_model(_FRAMEWORK, *scripted)
+
+
+async def build_finops_agent(run_id, model, *, drift_baseline_path=None):
+    return await fw.build_finops_agent(_FRAMEWORK, run_id, model, drift_baseline_path=drift_baseline_path)
+
+
+async def build_auditor_agent(run_id, model, *, drift_baseline_path=None):
+    return await fw.build_auditor_agent(_FRAMEWORK, run_id, model, drift_baseline_path=drift_baseline_path)
+
+
+async def build_rogue_agent(run_id, model, *, drift_baseline_path=None):
+    return await fw.build_rogue_agent(_FRAMEWORK, run_id, model, drift_baseline_path=drift_baseline_path)
 
 
 def record(feature, agent, scenario, expected, actual, ok, model_dep=False):
@@ -481,8 +501,11 @@ async def section_a2a(tmp: Path):
         AIMessage(content="audited")), drift_baseline_path=tmp / "a2a-aud.json")
 
     async def handler(req: A2ARequest) -> A2AResponse:
-        out = aud.agent.invoke({"messages": [{"role": "user", "content": req.payload.get("ask", "audit")}]})
-        return A2AResponse.ok(request=req, payload={"note": out["messages"][-1].content},
+        # Framework-neutral: drive the callee through the shared bundle contract
+        # (RunResult), not a framework-specific agent object.
+        out = aud.invoke(req.payload.get("ask", "audit"))
+        note = next((t.text for t in reversed(out.turns) if t.role == "ai" and t.text), "")
+        return A2AResponse.ok(request=req, payload={"note": note},
                               payload_schema="AuditNote/v1", latency_ms=0.0)
 
     allowed_recipients = fin.config.a2a.allowed_recipients
@@ -740,23 +763,14 @@ async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate:
     # --logs / --log-level → the raw logger stream (guard decisions, audit writes…).
     # --verbose → the curated narrative (agents, prompts, LLM/tool output, guardrail
     # interceptions, per-check outcomes). They're independent and can combine.
-    global _REAL_MODEL, _REAL_DESC
+    global _REAL_MODEL, _REAL_DESC, _FRAMEWORK
     logging.basicConfig(level=log_level, format="  log %(levelname)-7s %(name)s :: %(message)s")
     _N.on = narrate
     # Select the framework binding (orthogonal to the cloud). The agnostic
-    # GuardPipeline runs under whichever framework is chosen.
+    # GuardPipeline runs under whichever framework is chosen — the same 37-check
+    # matrix is exercised on langgraph, raw, and pydantic.
     os.environ["GALAXY_FRAMEWORK"] = framework
-    # The full feature×agent matrix is wired to langgraph today. The pydantic
-    # adapter is implemented + unit-tested (tests/test_pydantic_framework.py) but
-    # not yet wired into every matrix section; the raw adapter is not built.
-    _DEMO_WIRED = {"langgraph"}
-    if framework not in _DEMO_WIRED:
-        impl = {"pydantic": "implemented & unit-tested (tests/test_pydantic_framework.py)",
-                "raw": "not yet built"}.get(framework, "not available")
-        print(_c(YELLOW, f"\n  The '{framework}' framework adapter is {impl}, but the demo "
-                         f"matrix is currently wired to --framework langgraph.\n  Run the "
-                         f"governance-parity tests for it, or use --framework langgraph here."))
-        sys.exit(0)
+    _FRAMEWORK = framework
     # Select the cloud adapter set BEFORE any agent is built (the factory caches).
     os.environ["CLOUD_PROVIDER"] = cloud
     from core.provider_factory import get_provider
