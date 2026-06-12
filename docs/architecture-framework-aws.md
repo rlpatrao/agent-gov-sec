@@ -15,8 +15,10 @@ The platform runs **governed AI agents** behind a single controlled LLM-egress
 path, with every governance decision written to a tamper-evident audit ledger. It
 is built on two independent axes:
 
-- **Framework axis** — *how* an agent is orchestrated. Today: **LangGraph**
-  (LangChain `create_agent` + middleware).
+- **Framework axis** — *how* an agent is orchestrated, via a thin adapter over the
+  shared `GuardPipeline`: **LangGraph** (LangChain `create_agent` + middleware; drives
+  the full demo matrix) and **Pydantic AI** (`adapters/pydantic_ai/`; governance wired
+  through a model wrapper, with parity tests). A **raw** provider-native loop is planned.
 - **Cloud axis** — *where* identity, secrets, egress, tracing, and audit are
   resolved. Today: **AWS**, **Azure**, **GCP**, plus a cloud-neutral **local**.
 
@@ -93,8 +95,14 @@ flowchart TB
 `import langchain`. The `GuardPipeline` is the proof point: each framework adapter is a
 thin shim that maps its own hooks onto `before_model` / `after_model` / `before_tool`, so
 the *same* governance logic runs unchanged across LangGraph + AWS, the raw loop + GCP, etc.
-(Today **langgraph** is implemented; **raw** and **pydantic** are the framework-axis
-members being added — see [`REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md).)
+(**langgraph** drives the full demo matrix; **pydantic** has an implemented, unit-tested
+adapter — `adapters/pydantic_ai/` + `tests/test_pydantic_framework.py` — wired through the
+same pipeline via a model wrapper; **raw** is planned — see
+[`REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md).)
+
+> **Layered view:** for the stacked "payload → framework → core → cloud-adapters →
+> cloud-services" picture, open [`architecture-stack.html`](architecture-stack.html)
+> (standalone HTML/SVG, with the LangGraph + AWS focus path highlighted).
 
 ---
 
@@ -165,43 +173,53 @@ order; any tampered field breaks every downstream link.
 
 ## 4. Governance layer
 
-The governance logic is cloud- and framework-neutral; the LangGraph adapter only
-*adapts* it to LangChain's middleware hooks.
+All governance orchestration is cloud- **and** framework-neutral. It lives in one
+place — `GuardPipeline` — and every framework adapter is a thin shim that maps its
+own hooks onto it. No governance *logic* lives in any adapter.
 
-### 4.1 The guard stack — [`adapters/langgraph/governance.py`](../adapters/langgraph/governance.py)
+### 4.1 The shared guard pipeline — [`governance/pipeline.py`](../governance/pipeline.py)
 
-`GalaxyGuardMiddleware` is a LangChain `AgentMiddleware`. It wraps the **same
-`agent_os` primitives** the MAF guards use (`PromptInjectionDetector`,
-`CredentialRedactor`, `ContextScheduler`) plus this repo's WS7 extensions. No
-governance *logic* is reimplemented — only the adaptation.
+`GuardPipeline` composes the **same `agent_os` primitives** the MAF guards use
+(`PromptInjectionDetector`, `CredentialRedactor`, `ContextScheduler`) plus this
+repo's WS7 extensions, and runs the fixed governance sequence at **three
+framework-agnostic hooks**:
 
-**`wrap_model_call` — per LLM request:**
-
-| # | Guard | Behaviour | Block code |
-|---|-------|-----------|------------|
-| 1 | Prompt injection | Detect; block at/above the configured threat threshold | `prompt_injection` |
-| 2 | Credential redactor | `redact` mode rewrites the message in place; `deny` mode blocks | `credential_leak` |
-| 3 | Context budget | Allocate from a token window; block oversized prompts | `context_budget` |
-| 4 | Reasoning trace (G20) | After the call, capture CoT/CoVe with mandatory redaction → ledger | — |
-
-**`wrap_tool_call` — per tool execution:**
-
-| # | Guard | Behaviour | Block code |
-|---|-------|-----------|------------|
-| 5 | Capability / reasoning-step | Tool must be on the `allowed_tools` list | `capability_violation` |
-| 6 | Blocked patterns | Reject forbidden substrings in tool args (e.g. `DROP TABLE`) | `blocked_pattern` |
+| Hook | Guards (in order) | Block code(s) |
+|------|-------------------|---------------|
+| `before_model(text) -> bool` | prompt-injection (B4) → credential redactor (B5) → context budget (B6). Returns `True` when the caller should redact credentials in the outgoing messages in place. | `prompt_injection`, `credential_leak`, `context_budget` |
+| `after_model(response_text)` | reasoning-trace capture (CoT/CoVe, G20) with mandatory redaction → ledger | — |
+| `before_tool(name, args)` | capability / reasoning-step check (B7/G19) → blocked-pattern scan (B8) | `capability_violation`, `blocked_pattern` |
 
 Data-scope authorization + masking + drift are enforced **inside the data tool
-itself** via the shared `DataAccessMediator`, so the pre-execution guard is
+itself** via the shared `DataAccessMediator`, so the `before_tool` guard is
 capability-only — one decision point per concern, no double-counting.
 
 Every decision (`allow` / `audit` / `deny`) is written through the shared
 `GovernanceAuditLogger`. Blocks raise `GovernanceViolation(code, message)`, which
 the agent runner / demo catches to assert *which* control fired.
 
-### 4.2 Audit fan-out — `build_langgraph_governance(...)`
+### 4.2 How each framework adapter binds to the pipeline
 
-This factory assembles the middleware and wires the audit logger to four backends:
+A framework adapter only translates its own request/response objects to/from plain
+text and calls the three hooks around model/tool execution:
+
+| Framework | Binding | Maps to |
+|-----------|---------|---------|
+| **langgraph** *(implemented)* | `GalaxyGuardMiddleware` (LangChain `AgentMiddleware`) — [`adapters/langgraph/governance.py`](../adapters/langgraph/governance.py) | `wrap_model_call` → `before_model` + `after_model`; `wrap_tool_call` → `before_tool` |
+| **raw** *(planned)* | provider-native tool loop wrapping the same hooks | the same three calls |
+| **pydantic** *(planned)* | Pydantic AI agent hooks | the same three calls |
+
+`GalaxyGuardMiddleware` is intentionally thin: it extracts the prompt text, calls
+`before_model` (redacting in place if it returns `True`), runs the model, calls
+`after_model`, and on each tool call invokes `before_tool`. Because the logic is in
+the pipeline, the raw and Pydantic AI adapters inherit identical governance for
+free. `GovernanceViolation` is defined in `governance.pipeline` and re-exported
+from the LangGraph module for backward-compatible imports.
+
+### 4.3 Audit fan-out — `build_guard_pipeline(...)`
+
+The factory in [`governance/pipeline.py`](../governance/pipeline.py) assembles the
+pipeline and wires the audit logger to four backends:
 
 - `InMemoryBackend` — introspection for demo/tests
 - `LoggingBackend` — stdout
@@ -209,7 +227,11 @@ This factory assembles the middleware and wires the audit logger to four backend
 - the **cloud ledger**, resolved via `get_provider().audit_backend(run_id)` — so
   `CLOUD_PROVIDER=aws` selects the DynamoDB backend with no cloud hard-coded here.
 
-### 4.3 Agnostic guards & extensions
+It returns `(pipeline, ledger, audit_logger, mediator)`. The LangGraph wrapper
+`build_langgraph_governance(...)` simply calls this and wraps the pipeline in a
+single `GalaxyGuardMiddleware`, preserving its original return surface.
+
+### 4.4 Agnostic guards & extensions
 
 - [`governance/guards/egress.py`](../governance/guards/egress.py) — framework-free
   egress allow-list. `load_egress_policy()` defaults to
@@ -222,9 +244,50 @@ This factory assembles the middleware and wires the audit logger to four backend
 
 ---
 
-## 5. The LangGraph framework adapter
+## 5. The framework axis & the LangGraph adapter
 
-### 5.1 Model factory — [`adapters/langgraph/runtime.py`](../adapters/langgraph/runtime.py)
+The framework axis is selected with `--framework langgraph|raw|pydantic`. Today
+**langgraph** drives the full demo matrix; **pydantic** has an implemented, unit-tested adapter (model-wrapper governance); **raw** is planned.
+All three return the same neutral shape, so the demo and tests don't care which
+framework actually ran.
+
+### 5.1 The neutral agent contract — [`adapters/contract.py`](../adapters/contract.py)
+
+Pure dataclasses, no framework imports — the shape every framework adapter speaks:
+
+- **`ToolSpec`** — a tool defined once (`name`, `description`, JSON-schema
+  `parameters`, `fn`); each adapter renders it natively (LangChain `@tool`, an
+  OpenAI tools array, a Pydantic AI tool).
+- **`ToolCall` / `Turn` / `RunResult`** — the normalized transcript that
+  `AgentBundle.invoke(prompt)` returns, so the narrator + assertions are
+  framework-blind. `RunResult` exposes `ai_texts()`, `tool_calls()`,
+  `first_tool_result()`.
+- **`ScriptStep` / `AgentScript`** — a deterministic, framework-neutral script for
+  `--fake` runs (the counterpart to LangGraph's scripted `AIMessage` list).
+- **`AgentBundle`** *(Protocol)* — what every adapter's `build_agent` returns:
+  `agent_id`, `nhi_id`, `egress`, `config`, `mediator`, `pg_backend`, and a neutral
+  `invoke(prompt) -> RunResult`.
+
+### 5.2 The LangGraph factory — [`adapters/langgraph/_base.py`](../adapters/langgraph/_base.py)
+
+`build_langgraph_agent(agent_name, run_id, *, model, tools, …)` wires the full
+governance posture around a LangGraph `create_agent`, driven entirely by the
+per-agent YAML (`payload_agents/config/<name>.yaml`) — no per-agent branching:
+
+1. **Identity (A1)** — `NHIRegistry.get(cfg.agent_type)` (raises for an
+   unregistered type).
+2. **Egress (A2)** — consults the cloud LLM gateway; offline it returns
+   `offline-no-egress` (the chokepoint refusing to hand back a key), and the
+   supplied offline model is used.
+3. **Governance (B–G)** — `build_langgraph_governance(...)` → the shared
+   `GuardPipeline` wrapped in `GalaxyGuardMiddleware`.
+4. **Audit ledger (H)** — the cloud hash-chain backend is returned in the bundle
+   for end-of-run flush + verify.
+
+It returns a `LangGraphAgentBundle` whose `invoke(prompt)` normalizes the
+LangGraph result dict into a `RunResult`.
+
+### 5.3 Model factory — [`adapters/langgraph/runtime.py`](../adapters/langgraph/runtime.py)
 
 Two model sources, offline-first:
 
@@ -237,7 +300,7 @@ Two model sources, offline-first:
   and GCP counterparts, `build_chat_model` / `build_gemini_model`, live in the same
   file.)
 
-### 5.2 Bedrock client model — [`adapters/langgraph/bedrock_gateway.py`](../adapters/langgraph/bedrock_gateway.py)
+### 5.4 Bedrock client model — [`adapters/langgraph/bedrock_gateway.py`](../adapters/langgraph/bedrock_gateway.py)
 
 `BedrockGatewayChatModel` is a LangChain `BaseChatModel` that reaches Bedrock
 **through the API Gateway chokepoint**, not `bedrock-runtime` directly. (It can't
@@ -511,8 +574,11 @@ LangGraph via `GalaxyGuardMiddleware`.
 | [`core/nhi_registry.py`](../core/nhi_registry.py) | Generic NHI resolution |
 | [`core/run_tracer.py`](../core/run_tracer.py) | Agnostic OTel setup, `pipeline_span` |
 | [`core/trace_ledger.py`](../core/trace_ledger.py) | Hash-chain schema + verify logic |
+| [`governance/pipeline.py`](../governance/pipeline.py) | `GuardPipeline` — shared, framework-neutral guard orchestration |
 | [`governance/guards/egress.py`](../governance/guards/egress.py) | Egress allow-list |
-| [`adapters/langgraph/governance.py`](../adapters/langgraph/governance.py) | `GalaxyGuardMiddleware`, guard stack |
+| [`adapters/contract.py`](../adapters/contract.py) | Neutral agent contract (`ToolSpec`, `RunResult`, `AgentBundle`) |
+| [`adapters/langgraph/governance.py`](../adapters/langgraph/governance.py) | `GalaxyGuardMiddleware` — thin LangChain shim onto `GuardPipeline` |
+| [`adapters/langgraph/_base.py`](../adapters/langgraph/_base.py) | `build_langgraph_agent` → `LangGraphAgentBundle` |
 | [`adapters/langgraph/runtime.py`](../adapters/langgraph/runtime.py) | Model factory |
 | [`adapters/langgraph/bedrock_gateway.py`](../adapters/langgraph/bedrock_gateway.py) | `BedrockGatewayChatModel` |
 | [`adapters/aws/__init__.py`](../adapters/aws/__init__.py) | `AwsProvider` |

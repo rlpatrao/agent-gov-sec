@@ -41,6 +41,47 @@ def load_catalog() -> DataClassificationCatalog:
     return DataClassificationCatalog.load(_CATALOG_PATH)
 
 
+def _billing_fns(*, mediator: DataAccessMediator, nhi_id: str):
+    """The persona's tool *logic* (framework-neutral plain functions)."""
+
+    def query_billing(columns: list[BillingColumn]) -> str:
+        """Read finops.billing rows for the requested columns. The billing table has
+        exactly these columns: account_id, cost_usd, region, customer_email, tax_id —
+        request from these. The data layer masks customer_email/tax_id and US-filters rows."""
+        decision, rows = mediator.read(
+            agent_type=AGENT_TYPE, dataset="finops", table="billing",
+            columns=list(columns), rows=demo_data.BILLING, nhi_id=nhi_id,
+        )
+        return json.dumps({
+            "denied": decision.denied,
+            "masked_columns": list(decision.masked_columns),
+            "allowed_columns": list(decision.allowed_columns),
+            "rows": rows,
+        })
+
+    def summarize_costs(text: str) -> str:
+        """Summarize fetched cost data into a one-line report."""
+        return f"FinOps summary: {text[:160]}"
+
+    return query_billing, summarize_costs
+
+
+def make_tool_specs(*, mediator: DataAccessMediator, nhi_id: str):
+    """Framework-neutral ToolSpecs (used by the raw / pydantic adapters)."""
+    from adapters.contract import ToolSpec
+    query_billing, summarize_costs = _billing_fns(mediator=mediator, nhi_id=nhi_id)
+    cols = ["account_id", "cost_usd", "region", "customer_email", "tax_id"]
+    return [
+        ToolSpec(name="query_billing", description=query_billing.__doc__ or "Read finops.billing.",
+                 parameters={"type": "object",
+                             "properties": {"columns": {"type": "array", "items": {"type": "string", "enum": cols}}},
+                             "required": ["columns"]}, fn=query_billing),
+        ToolSpec(name="summarize_costs", description="Summarize fetched cost data into a one-line report.",
+                 parameters={"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+                 fn=summarize_costs),
+    ]
+
+
 def make_tools(*, mediator: DataAccessMediator, nhi_id: str):
     """Build FinOps tools as closures over the shared FGAC mediator."""
 

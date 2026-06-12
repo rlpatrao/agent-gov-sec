@@ -746,13 +746,17 @@ async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate:
     # Select the framework binding (orthogonal to the cloud). The agnostic
     # GuardPipeline runs under whichever framework is chosen.
     os.environ["GALAXY_FRAMEWORK"] = framework
-    try:
-        from core.framework_factory import get_framework
-        get_framework(framework)
-    except ImportError as e:
-        print(_c(YELLOW, f"\n  '--framework {framework}' adapter is not implemented yet "
-                         f"({str(e).splitlines()[0][:80]}). Use --framework langgraph."))
-        sys.exit(2)
+    # The full feature×agent matrix is wired to langgraph today. The pydantic
+    # adapter is implemented + unit-tested (tests/test_pydantic_framework.py) but
+    # not yet wired into every matrix section; the raw adapter is not built.
+    _DEMO_WIRED = {"langgraph"}
+    if framework not in _DEMO_WIRED:
+        impl = {"pydantic": "implemented & unit-tested (tests/test_pydantic_framework.py)",
+                "raw": "not yet built"}.get(framework, "not available")
+        print(_c(YELLOW, f"\n  The '{framework}' framework adapter is {impl}, but the demo "
+                         f"matrix is currently wired to --framework langgraph.\n  Run the "
+                         f"governance-parity tests for it, or use --framework langgraph here."))
+        sys.exit(0)
     # Select the cloud adapter set BEFORE any agent is built (the factory caches).
     os.environ["CLOUD_PROVIDER"] = cloud
     from core.provider_factory import get_provider
