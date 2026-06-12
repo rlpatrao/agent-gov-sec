@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent-Gov-Sec — Layered Architecture (Framework × Cloud)</title>
+<style>
+  :root { --ink:#263238; --muted:#607d8b; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 48px;
+    background: #f5f7f9;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lede { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+  .card {
+    background: #fff; border: 1px solid #e0e6ea; border-radius: 14px;
+    padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  svg { width: 100%; height: auto; display: block; }
+  .foot { margin-top: 14px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+  code { background: #eceff1; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+  /* SVG element styles */
+  .band   { fill:#eceff1; stroke:#cfd8dc; stroke-width:1.5; }
+  .box    { fill:#ffffff; stroke:#b0bec5; stroke-width:1.5; }
+  .box.focus   { fill:#e3f2fd; stroke:#1565c0; stroke-width:2; }
+  .box.planned { fill:#fafafa; stroke:#b0bec5; stroke-width:1.5; stroke-dasharray:5 4; }
+  .pipe   { fill:#fff3e0; stroke:#ef6c00; stroke-width:2; }
+
+  text { font-family: inherit; }
+  .band-title { font-size:15px; font-weight:700; fill:#37474f; }
+  .sub        { font-size:11.5px; fill:#78909c; }
+  .box-t      { font-size:14px; font-weight:600; fill:#263238; }
+  .box-t.foc  { fill:#0d47a1; }
+  .box-t.pln  { fill:#90a4ae; font-style:italic; }
+  .box-s      { font-size:10.5px; fill:#607d8b; }
+  .pipe-t     { font-size:12.5px; font-weight:700; fill:#e65100; }
+  .pipe-s     { font-size:11px; fill:#bf360c; }
+  .mod-h      { font-size:13px; font-weight:700; fill:#37474f; }
+  .bullet     { font-size:10.5px; fill:#546e7a; }
+  .leg        { font-size:12px; fill:#546e7a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Agent-Gov-Sec — Layered Architecture</h1>
+  <p class="lede">Two orthogonal, pluggable axes — <strong>framework</strong> (how an agent is orchestrated) and <strong>cloud</strong> (where identity / secrets / egress / tracing / audit resolve) — meeting at an agnostic core. Focus path highlighted: <strong>LangGraph + AWS</strong>.</p>
+  <div class="card">
+  <svg viewBox="0 0 1000 812" role="img" aria-label="Layered architecture diagram">
+    <defs>
+      <marker id="arr" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto">
+        <path d="M0,0 L7,5 L0,10 Z" fill="#90a4ae"/>
+      </marker>
+    </defs>
+
+    <!-- flow arrows down the center -->
+    <g stroke="#90a4ae" stroke-width="2" marker-end="url(#arr)">
+      <line x1="500" y1="166" x2="500" y2="178"/>
+      <line x1="500" y1="286" x2="500" y2="298"/>
+      <line x1="500" y1="522" x2="500" y2="534"/>
+      <line x1="500" y1="642" x2="500" y2="654"/>
+    </g>
+
+    <!-- ───────────── Band 1: Payload ───────────── -->
+    <rect class="band" x="40" y="70" width="920" height="94" rx="14"/>
+    <text class="band-title" x="500" y="92" text-anchor="middle">Payload agents</text>
+    <text class="sub" x="500" y="108" text-anchor="middle">framework-neutral personas — prompt + ToolSpecs + NHI</text>
+    <g>
+      <rect class="box" x="60"  y="120" width="273" height="36" rx="8"/>
+      <text class="box-t" x="196"  y="143" text-anchor="middle">FinOpsAnalyst</text>
+      <rect class="box" x="363" y="120" width="273" height="36" rx="8"/>
+      <text class="box-t" x="499"  y="143" text-anchor="middle">Auditor</text>
+      <rect class="box" x="666" y="120" width="273" height="36" rx="8"/>
+      <text class="box-t" x="802"  y="143" text-anchor="middle">Rogue</text>
+    </g>
+
+    <!-- ───────────── Band 2: Framework axis ───────────── -->
+    <rect class="band" x="40" y="180" width="920" height="104" rx="14"/>
+    <text class="band-title" x="500" y="202" text-anchor="middle">Framework axis · &#8209;&#8209;framework (adapters/&lt;fw&gt;/)</text>
+    <text class="sub" x="500" y="218" text-anchor="middle">each adapter maps its own hooks onto the shared GuardPipeline</text>
+    <g>
+      <rect class="box focus" x="60"  y="230" width="273" height="44" rx="8"/>
+      <text class="box-t foc" x="196" y="250" text-anchor="middle">langgraph</text>
+      <text class="box-s"     x="196" y="266" text-anchor="middle">create_agent + GalaxyGuardMiddleware</text>
+
+      <rect class="box planned" x="363" y="230" width="273" height="44" rx="8"/>
+      <text class="box-t pln" x="499" y="250" text-anchor="middle">raw  (planned)</text>
+      <text class="box-s"     x="499" y="266" text-anchor="middle">provider-native tool loop</text>
+
+      <rect class="box planned" x="666" y="230" width="273" height="44" rx="8"/>
+      <text class="box-t pln" x="802" y="250" text-anchor="middle">pydantic  (planned)</text>
+      <text class="box-s"     x="802" y="266" text-anchor="middle">Pydantic AI agent</text>
+    </g>
+
+    <!-- ───────────── Band 3: Agnostic core / Kit ───────────── -->
+    <rect class="band" x="40" y="300" width="920" height="220" rx="14"/>
+    <text class="band-title" x="500" y="322" text-anchor="middle">Agent-Gov-Sec Kit — agnostic core</text>
+    <text class="sub" x="500" y="338" text-anchor="middle">core imports no cloud SDK or agent framework</text>
+
+    <!-- shared pipeline strip -->
+    <rect class="pipe" x="60" y="350" width="879" height="38" rx="8"/>
+    <text class="pipe-t" x="500" y="368" text-anchor="middle">governance/pipeline.py · GuardPipeline (shared)</text>
+    <text class="pipe-s" x="500" y="382" text-anchor="middle">before_model → after_model → before_tool   ·   raises GovernanceViolation</text>
+
+    <!-- three module boxes -->
+    <g>
+      <!-- core/ -->
+      <rect class="box" x="60" y="400" width="277" height="108" rx="8"/>
+      <text class="mod-h" x="74" y="421">core/</text>
+      <text class="bullet" x="74" y="442">• interfaces.py — the 6 Protocols</text>
+      <text class="bullet" x="74" y="459">• provider_factory.py — CLOUD_PROVIDER</text>
+      <text class="bullet" x="74" y="476">• nhi_registry.py — NHI resolution</text>
+      <text class="bullet" x="74" y="493">• run_tracer · trace_ledger (OTel, hash chain)</text>
+
+      <!-- governance/ -->
+      <rect class="box" x="361" y="400" width="277" height="108" rx="8"/>
+      <text class="mod-h" x="375" y="421">governance/</text>
+      <text class="bullet" x="375" y="442">• guards/egress.py — allow-list</text>
+      <text class="bullet" x="375" y="459">• extensions: FGAC · data-drift</text>
+      <text class="bullet" x="375" y="476">• reasoning guard · CoT/CoVe trace</text>
+      <text class="bullet" x="375" y="493">• policies · classification catalog</text>
+
+      <!-- a2a/ -->
+      <rect class="box" x="662" y="400" width="277" height="108" rx="8"/>
+      <text class="mod-h" x="676" y="421">a2a/</text>
+      <text class="bullet" x="676" y="442">• envelope.py — typed A2A messages</text>
+      <text class="bullet" x="676" y="459">• dispatcher.py — audited dispatch</text>
+      <text class="bullet" x="676" y="476">• recipient allow-list</text>
+      <text class="bullet" x="676" y="493">• schema validation</text>
+    </g>
+
+    <!-- ───────────── Band 4: Cloud axis ───────────── -->
+    <rect class="band" x="40" y="536" width="920" height="104" rx="14"/>
+    <text class="band-title" x="500" y="558" text-anchor="middle">Cloud axis · CLOUD_PROVIDER (adapters/&lt;cloud&gt;/)</text>
+    <text class="sub" x="500" y="574" text-anchor="middle">get_provider() lazy-imports only the selected adapter</text>
+    <g>
+      <rect class="box focus" x="60"  y="586" width="205" height="44" rx="8"/>
+      <text class="box-t foc" x="162" y="606" text-anchor="middle">aws</text>
+      <text class="box-s"     x="162" y="622" text-anchor="middle">IAM · Bedrock GW · DynamoDB</text>
+
+      <rect class="box" x="285" y="586" width="205" height="44" rx="8"/>
+      <text class="box-t" x="387" y="606" text-anchor="middle">azure</text>
+      <text class="box-s" x="387" y="622" text-anchor="middle">Entra · AOAI · Postgres</text>
+
+      <rect class="box" x="510" y="586" width="205" height="44" rx="8"/>
+      <text class="box-t" x="612" y="606" text-anchor="middle">gcp</text>
+      <text class="box-s" x="612" y="622" text-anchor="middle">SA · Vertex · BigQuery</text>
+
+      <rect class="box" x="735" y="586" width="204" height="44" rx="8"/>
+      <text class="box-t" x="837" y="606" text-anchor="middle">local</text>
+      <text class="box-s" x="837" y="622" text-anchor="middle">env · in-memory</text>
+    </g>
+
+    <!-- ───────────── Band 5: Cloud services (AWS) ───────────── -->
+    <rect class="band" x="40" y="656" width="920" height="120" rx="14"/>
+    <text class="band-title" x="500" y="678" text-anchor="middle">AWS cloud services — the egress chokepoint + ledger</text>
+    <g>
+      <!-- 6 service boxes, two-line labels -->
+      <rect class="box focus" x="60"    y="692" width="137" height="72" rx="8"/>
+      <text class="box-t foc" x="128.5" y="724" text-anchor="middle">IAM + STS</text>
+      <text class="box-s"     x="128.5" y="740" text-anchor="middle">identity</text>
+
+      <rect class="box focus" x="208.6" y="692" width="137" height="72" rx="8"/>
+      <text class="box-t foc" x="277.1" y="724" text-anchor="middle">Secrets Mgr</text>
+      <text class="box-s"     x="277.1" y="740" text-anchor="middle">/ SSM</text>
+
+      <rect class="box focus" x="357.2" y="692" width="137" height="72" rx="8"/>
+      <text class="box-t foc" x="425.7" y="718" text-anchor="middle">API Gateway</text>
+      <text class="box-s"     x="425.7" y="734" text-anchor="middle">→ Lambda</text>
+      <text class="box-s"     x="425.7" y="748" text-anchor="middle">→ Bedrock</text>
+
+      <rect class="box focus" x="505.8" y="692" width="137" height="72" rx="8"/>
+      <text class="box-t foc" x="574.3" y="724" text-anchor="middle">DynamoDB</text>
+      <text class="box-s"     x="574.3" y="740" text-anchor="middle">hash-chain ledger</text>
+
+      <rect class="box focus" x="654.4" y="692" width="137" height="72" rx="8"/>
+      <text class="box-t foc" x="722.9" y="724" text-anchor="middle">X-Ray / ADOT</text>
+      <text class="box-s"     x="722.9" y="740" text-anchor="middle">tracing</text>
+
+      <rect class="box focus" x="803"   y="692" width="136" height="72" rx="8"/>
+      <text class="box-t foc" x="871"   y="724" text-anchor="middle">S3</text>
+      <text class="box-s"     x="871"   y="740" text-anchor="middle">run artifacts</text>
+    </g>
+
+    <!-- ───────────── Legend ───────────── -->
+    <g>
+      <rect class="box focus" x="60"  y="788" width="16" height="14" rx="3"/>
+      <text class="leg" x="84"  y="800">AWS / LangGraph — focus path</text>
+      <rect class="pipe"       x="320" y="788" width="16" height="14" rx="3"/>
+      <text class="leg" x="344" y="800">shared GuardPipeline</text>
+      <rect class="box planned" x="540" y="788" width="16" height="14" rx="3"/>
+      <text class="leg" x="564" y="800">planned (raw, pydantic)</text>
+    </g>
+  </svg>
+  </div>
+  <p class="foot">
+    <strong>How to read it:</strong> a request flows top→bottom. A payload persona is built by the selected
+    <strong>framework adapter</strong>, which calls the shared <code>GuardPipeline</code> in the agnostic core at
+    three hooks (<code>before_model</code> / <code>after_model</code> / <code>before_tool</code>). The core resolves
+    identity, egress, tracing, and audit through the selected <strong>cloud adapter</strong>, which talks to the
+    concrete cloud services. The two axes compose freely (e.g. <code>--framework langgraph --aws</code>); the
+    governance is identical regardless of which framework or cloud is chosen.
+    See <a href="architecture-framework-aws.md">architecture-framework-aws.md</a> for the full write-up.
+  </p>
+</div>
+</body>
+</html>

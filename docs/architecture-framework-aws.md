@@ -15,11 +15,11 @@ The platform runs **governed AI agents** behind a single controlled LLM-egress
 path, with every governance decision written to a tamper-evident audit ledger. It
 is built on two independent axes:
 
-- **Framework axis** — *how* an agent is orchestrated, via a thin adapter over the
-  shared `GuardPipeline`: **LangGraph** (LangChain `create_agent` + middleware; drives
-  the full demo matrix) and **Pydantic AI** (`adapters/pydantic_ai/`; governance wired
-  through a model wrapper, with parity tests), and an unopinionated **raw** provider-native
-  tool loop (`adapters/raw/`, no framework deps). All three run the full demo matrix.
+- **Framework axis** — how an agent is orchestrated, via an adapter over the shared
+  `GuardPipeline`. Three are implemented and run the full demo matrix: LangGraph
+  (LangChain `create_agent` + middleware), Pydantic AI (`adapters/pydantic_ai/`, governance
+  via a model wrapper), and a raw provider-native tool loop (`adapters/raw/`, which imports
+  no agent framework).
 - **Cloud axis** — *where* identity, secrets, egress, tracing, and audit are
   resolved. Today: **AWS**, **Azure**, **GCP**, plus a cloud-neutral **local**.
 
@@ -48,12 +48,11 @@ framework-specific concern is expressed as a `Protocol` in
 
 ## 2. System at a glance
 
-Two **orthogonal, pluggable axes** meet at an agnostic core. The **framework axis**
-decides *how* an agent is orchestrated; the **cloud axis** decides *where* identity /
-secrets / egress / tracing / audit resolve. They compose freely (e.g. `--framework raw
---aws`). The single thing every framework adapter shares is the neutral
-[`GuardPipeline`](../governance/pipeline.py) — so the governance is identical no matter
-which framework or cloud is selected.
+Two orthogonal axes meet at an agnostic core. The framework axis selects how an agent is
+orchestrated; the cloud axis selects where identity, secrets, egress, tracing, and audit
+resolve. The two can be combined (e.g. `--framework raw --aws`). Every framework adapter
+calls the same [`GuardPipeline`](../governance/pipeline.py), so the governance behaviour is
+the same regardless of which framework or cloud is selected.
 
 ```mermaid
 flowchart TB
@@ -68,7 +67,7 @@ flowchart TB
 
     GP["governance/pipeline.py — GuardPipeline (SHARED, framework-neutral)<br/>before_model · after_model · before_tool → GovernanceViolation"]
 
-    subgraph CORE["AGNOSTIC CORE — no cloud SDK, no framework import"]
+    subgraph CORE["AGNOSTIC CORE (core / governance / a2a)"]
       direction LR
       C1["core/ interfaces · provider_factory · nhi_registry · run_tracer · trace_ledger"]
       C2["governance/ guards + extensions (FGAC · drift · reasoning · CoT/CoVe)"]
@@ -92,14 +91,14 @@ flowchart TB
     CL --> EXT
 ```
 
-**Design invariant:** `core/` and `governance/` never `import boto3` or
-`import langchain`. The `GuardPipeline` is the proof point: each framework adapter is a
-thin shim that maps its own hooks onto `before_model` / `after_model` / `before_tool`, so
-the *same* governance logic runs unchanged across LangGraph + AWS, the raw loop + GCP, etc.
-(**langgraph** drives the full demo matrix; **pydantic** has an implemented, unit-tested
-adapter — `adapters/pydantic_ai/` + `tests/test_pydantic_framework.py` — wired through the
-same pipeline via a model wrapper; **raw** is implemented (provider-native loop) — see
-[`REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md).)
+Design invariant: the `core/` and `governance/` modules do not `import boto3` or
+`import langchain`. Each framework adapter maps its own hooks onto `before_model` /
+`after_model` / `before_tool`, so the governance logic is the same across frameworks and
+clouds (LangGraph on AWS, the raw loop on GCP, and so on). All three framework adapters
+are implemented and run the full demo matrix: `langgraph` (`adapters/langgraph/`),
+`pydantic` (`adapters/pydantic_ai/`, model-wrapper governance), and `raw`
+(`adapters/raw/`, a provider-native loop). Governance-parity tests:
+`tests/test_pydantic_framework.py` and `tests/test_raw_framework.py`.
 
 > **Layered view:** for the stacked "payload → framework → core → cloud-adapters →
 > cloud-services" picture, open [`architecture-stack.html`](architecture-stack.html)
@@ -247,10 +246,11 @@ single `GalaxyGuardMiddleware`, preserving its original return surface.
 
 ## 5. The framework axis & the LangGraph adapter
 
-The framework axis is selected with `--framework langgraph|raw|pydantic`. Today
-**langgraph** drives the full demo matrix; **pydantic** (model-wrapper governance) and **raw** (provider-native loop) are implemented + unit-tested; all three run the full demo matrix at 37/37.
-All three return the same neutral shape, so the demo and tests don't care which
-framework actually ran.
+The framework axis is selected with `--framework langgraph|raw|pydantic`. All three are
+implemented and unit-tested, and each runs the full demo matrix (37/37 in deterministic
+mode): `langgraph` (LangChain middleware), `pydantic` (model-wrapper governance), and `raw`
+(provider-native loop). Each adapter returns the same neutral result shape, so the demo and
+tests do not depend on which framework ran.
 
 ### 5.1 The neutral agent contract — [`adapters/contract.py`](../adapters/contract.py)
 
