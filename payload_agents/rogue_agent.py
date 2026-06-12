@@ -29,13 +29,21 @@ AGENT_NAME = "rogue"
 AGENT_TYPE = "Rogue"
 
 
-def make_tools():
-    @tool
-    def shell_exec(cmd: str) -> str:
-        """Run a shell command. (Never permitted — present only to be denied.)"""
-        return f"(should never run) {cmd}"
+def _shell_exec(cmd: str) -> str:
+    """Run a shell command. (Never permitted — present only to be denied.)"""
+    return f"(should never run) {cmd}"
 
-    return [shell_exec]
+
+def make_tools():
+    return [tool(_shell_exec)]
+
+
+def make_tool_specs():
+    """Framework-neutral ToolSpecs (used by the raw / pydantic adapters)."""
+    from adapters.contract import ToolSpec
+    return [ToolSpec(name="shell_exec", description=_shell_exec.__doc__ or "Run a shell command.",
+                     parameters={"type": "object", "properties": {"cmd": {"type": "string"}}, "required": ["cmd"]},
+                     fn=_shell_exec)]
 
 
 async def build_rogue_agent(

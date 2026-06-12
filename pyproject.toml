@@ -60,6 +60,13 @@ langgraph = [
     "langgraph>=1.0",
     "langchain-openai>=1.0",
 ]
+# Framework axis: Pydantic AI binding (minimal, typed, model-agnostic agent
+# framework). Native models reuse the cloud-resolved creds; governance via the
+# shared GuardPipeline wired through a model wrapper.
+#   pip install '.[pydantic]'
+pydantic = [
+    "pydantic-ai-slim>=1.0",
+]
 
 [tool.pytest.ini_options]
 # The repo's tests only — never recurse into the local-only archive/.
