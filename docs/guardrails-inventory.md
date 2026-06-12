@@ -1,6 +1,6 @@
 # Guardrails inventory — what `agent_os` / `agent_sre` ship and what this platform wires
 
-The **`agent_os` + `agent_sre`** packages ship ~40 governance modules. This platform wires a subset. This doc shows exactly which modules the **Galaxy Agentic Governance Platform** wires today, which are available to wire next, the OWASP mapping, and how the roadmap aligns with [`REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md).
+The **`agent_os` + `agent_sre`** packages ship ~40 governance modules. This platform wires a subset. This doc shows exactly which modules the **Galaxy Agentic Governance Platform** wires today, which are available to wire next, the OWASP mapping (with a NIST AI RMF / ISO/IEC 42001 / EU AI Act / MITRE ATLAS crosswalk in [`standards-crosswalk.md`](standards-crosswalk.md)), and how the roadmap aligns with [`REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md).
 
 > **Scope.** This repo is the **governance platform** (`core/`, `governance/`, `a2a/`, `infra/`). The agents are a **minimal demonstration payload** — a single MAF `Analyzer` agent in [`payload_agents/`](../payload_agents/). The full multi-agent AWS→Azure migration product (18 agents, migration/discovery/scanner pipelines, per-stack Coder prompts, ACA deployment) has been moved to a **local-only, gitignored `archive/`** and is **not part of this repo**. Where this doc illustrates a guard "per pipeline stage", that is reframed to **per governed agent invocation / per A2A hop** — there is one agent and the A2A `Analyzer` leaf today; multi-agent topology is archived context only.
 >
@@ -46,6 +46,37 @@ Stack ordering, fail-fast first. Built by [`adapters/azure/maf/middleware.py`](.
 | **A2A allow-list** | [`a2a/dispatcher.py`](../a2a/dispatcher.py) + per-agent YAML | Two-layer allow-list (compile-time + runtime) on every A2A hop. The shipped `Analyzer` is a leaf (`allowed_recipients: []`), so the dispatcher governs inbound only. |
 
 **Per-agent tuning** lives in `payload_agents/config/<agent>.yaml`. For the shipped `Analyzer` ([`payload_agents/config/analyzer.yaml`](../payload_agents/config/analyzer.yaml)): `context_budget_tokens: 40000`, `prompt_injection_block_threshold: high`, `credential_mode: redact`, `enable_rogue_detection: true`, `allowed_tools: []` (read-only, no tools).
+
+---
+
+## Standards crosswalk (NIST AI RMF · ISO/IEC 42001 · EU AI Act · MITRE ATLAS)
+
+The OWASP column above is the primary mapping. The table below extends each guard to the
+other frameworks. These columns are an indicative crosswalk and should be confirmed by the
+relevant compliance owner before use in an audit or filing; the controls **support**
+conformance, they are not a certification. NIST AI RMF is referenced at the function level
+(GOVERN / MAP / MEASURE / MANAGE), ISO/IEC 42001 at the Annex A theme level, the EU AI Act by
+article, and MITRE ATLAS by technique name. A control-code view (the demo's A1–I23) is in
+[`standards-crosswalk.md`](standards-crosswalk.md).
+
+| # | Guard | NIST AI RMF | ISO/IEC 42001 | EU AI Act | MITRE ATLAS |
+|---|---|---|---|---|---|
+| 1 | PromptInjectionGuard | MEASURE, MANAGE | A.6 | Art.15 | Prompt injection (direct/indirect) |
+| 2 | CredentialRedactor | MAP, MEASURE | A.7 data | Art.10 | LLM data leakage |
+| 3 | ContextBudgetGuard | MANAGE | A.6 | Art.15 | Denial of ML service / cost |
+| 4 | AuditTrail (+ hash-chain ledger) | GOVERN | A.9 logging | Art.12 record-keeping | — |
+| 5 | GovernancePolicy (YAML rules) | MANAGE | A.6 | Art.15 | — |
+| 6 | CapabilityGuard | MANAGE | A.6 | Art.14 human oversight | LLM plugin/tool compromise |
+| 7 | RogueDetection (behavioral drift) | MEASURE (monitoring) | A.6 | Art.15; Art.72 monitoring | Discover ML model behavior |
+| — | APIM / LLM-egress chokepoint | MANAGE | A.6 | Art.15 | Exfiltration over web service |
+| — | A2A allow-list + audited dispatch | GOVERN, MANAGE | A.6, A.9 | Art.12, Art.15 | — |
+| — | Data-layer FGAC (Gap 1) | MAP, MANAGE | A.7 data governance | Art.10 | LLM data leakage |
+| — | Reasoning guard + CoT/CoVe trace (Gap 4) | MEASURE (explainability) | A.6 | Art.12 logging; Art.13 transparency; Art.14 oversight | — |
+| — | HITL escalation | GOVERN, MANAGE | A.9 | Art.14 human oversight | ASI — human-in-the-loop |
+
+Versions: OWASP LLM Top 10 (2025) + OWASP ASI; NIST AI RMF 1.0; ISO/IEC 42001:2023; EU AI Act
+(Regulation (EU) 2024/1689); MITRE ATLAS. EU AI Act article applicability depends on the
+system's risk classification, which is the deployer's determination.
 
 ---
 
@@ -223,6 +254,6 @@ Built under `governance/extensions/`, **feature-flagged off by default** (`gover
 | **Gap 3 — Data-access drift** | ASI — rogue/behavioral; LLM10:2025 (Unbounded Consumption — volume) | ✅ **Wired (flag).** `DataAccessDriftDetector` adds data-access features (volume z-score, first-seen table, sensitivity escalation, table entropy, denial rate) → risk + quarantine; **persistent** baselines (`JsonFileBaselineStore`) survive cold starts. Complements the action-level `RogueAgentDetector` (guard 7). | `data_drift.py` · `GALAXY_GAP_DATA_DRIFT` |
 | **Gap 4 — Reasoning-chain guards** | LLM06:2025 (Excessive Agency); ASI — tool misuse / intent-breaking | ✅ **Wired (flag).** (a) **Enforcement:** `ReasoningStepValidator` gates plan/tool-selection/data-access steps against the capability allow-list + Gap-1 mediator *before* execution. (b) **Observability (Gap 4+):** `ReasoningTraceLogger` mandatorily redacts (CredentialRedactor + PII), then emits `reasoning.cot`/`reasoning.cove` span events keyed to `nhi_id` + a hash-stamped `reasoning_trace` audit entry (supports LLM02 detection). Semantic CoT analysis (consistency/goal-drift) is deferred. | `reasoning_guard.py` · `reasoning_trace.py` · `GALAXY_GAP_REASONING_GUARD` / `GALAXY_GAP_REASONING_TRACE` |
 
-OWASP IDs reference the **OWASP LLM Top 10 (2025)** plus the **OWASP Agentic Security Initiative (ASI)** threat classes. See `docs/observability-governance-showcase.md` for the CoT/CoVe query examples (incl. AWS CloudWatch Logs Insights).
+OWASP IDs reference the **OWASP LLM Top 10 (2025)** plus the **OWASP Agentic Security Initiative (ASI)** threat classes. The NIST AI RMF / ISO/IEC 42001 / EU AI Act / MITRE ATLAS crosswalk is in [`standards-crosswalk.md`](standards-crosswalk.md). See `docs/observability-governance-showcase.md` for the CoT/CoVe query examples (incl. AWS CloudWatch Logs Insights).
 
 For deferred 🔴 items (circuit breaker) and 🟡 situational modules (sandbox, reversibility, secure-codegen, diff-policy, MCP gateway), pick them up when the corresponding agent shape or operational concern materialises — don't pre-wire.
