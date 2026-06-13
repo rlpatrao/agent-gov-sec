@@ -48,6 +48,20 @@ intercept case. `tests/test_extended_guardrails.py` is the regression gate.
 # 47/47 checks passed across 28 controls (27 interceptions demonstrated)
 ```
 
+For a single unified count alongside the baseline 37-check matrix, run the main
+demo with `--extended`:
+
+```bash
+.venv/bin/python scripts/demo_agents.py --fake --extended
+#   baseline matrix   37/37 checks · 21 controls
+#   extended sweep    47/47 checks · 28 controls
+#   total             84/84 checks · 49 controls
+```
+
+The baseline matrix stays at 37/37 (the no-regression anchor — the sweep guards
+are off by default, so they do not appear there); the sweep walk is deterministic
+and runs the same under any cloud/framework selection.
+
 Four enforcement modes, by how the guard binds:
 
 - **WIRED** — the pipeline auto-registers the guard and runs it on every governed

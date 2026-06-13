@@ -71,16 +71,20 @@ uv pip install --python .venv/bin/python -e '.[aws]'         # live --aws (boto3
 .venv/bin/python scripts/demo_agents.py --verbose  # curated narrative: agents, prompts, LLM/tool output, interceptions
 .venv/bin/python scripts/demo_agents.py --logs     # raw logger stream (--log-level DEBUG for per-guard detail)
 
-.venv/bin/python scripts/demo_extended_guardrails.py  # full-sweep guardrail walk: 28 controls, pass + intercept each
+.venv/bin/python scripts/demo_agents.py --fake --extended   # unified: baseline 37 + sweep 47 = 84 checks · 49 controls
+.venv/bin/python scripts/demo_extended_guardrails.py        # the sweep walk on its own (28 controls)
 ```
 
 `demo_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`) and drives every
 control on both its success and failure path across the three agents.
 
-`demo_extended_guardrails.py` walks the ~28 controls added in the full sweep — the
-previously-unwired `agent_os` / `agent_sre` modules plus output content-safety and
-PII redaction — each flag-gated and off by default, with a pass case and an
-intercept case. See [`docs/extended-guardrails.md`](docs/extended-guardrails.md).
+`--extended` appends the full-sweep guardrail walk and reports a **unified total**:
+the 37-check baseline matrix (identity/egress/FGAC/A2A/reasoning/ledger) plus the
+~28 controls added in the sweep — the previously-unwired `agent_os` / `agent_sre`
+modules plus output content-safety and PII redaction, each flag-gated and off by
+default, with a pass case and an intercept case. The sweep walk is deterministic
+and runs the same under any cloud/framework. See
+[`docs/extended-guardrails.md`](docs/extended-guardrails.md).
 
 - **Real-model mode** (`--azure` / `--gcp` / `--aws` with creds): the whole matrix runs on the
   live model, so outcomes are **observed, not asserted** — the `VERDICT` column reads

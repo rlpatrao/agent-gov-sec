@@ -417,9 +417,15 @@ def section_ops() -> None:
            f"defense_rate={rate}", rate is not None, True)
 
 
-async def main() -> int:
-    print(_c(_BOLD, "\nGalaxy — extended guardrail conformance walk (full sweep)"))
-    print(_DIM + "each control: pass case + intercept case; guards off by default, enabled per-scenario" + _RST)
+async def run_walk(print_header: bool = True) -> tuple[int, int, int, int]:
+    """Run the full extended-guardrail walk and return
+    ``(passed, total, intercepts, controls)``. Clears RESULTS first so it is
+    safe to call repeatedly (the unified ``demo_agents.py --extended`` path and
+    the standalone entrypoint both go through here)."""
+    RESULTS.clear()
+    if print_header:
+        print(_c(_BOLD, "\nGalaxy — extended guardrail conformance walk (full sweep)"))
+        print(_DIM + "each control: pass case + intercept case; guards off by default, enabled per-scenario" + _RST)
     await section_wired()
     await section_registered()
     await section_direct()
@@ -428,13 +434,18 @@ async def main() -> int:
     total = len(RESULTS)
     passed = sum(1 for r in RESULTS if r.ok)
     intercepts = sum(1 for r in RESULTS if r.intercepted and r.ok)
-    guards = len({r.code for r in RESULTS})
-    print(_c(_BOLD, f"\n{passed}/{total} checks passed across {guards} controls "
-                    f"({intercepts} interceptions demonstrated)"))
+    controls = len({r.code for r in RESULTS})
     if passed != total:
         for r in RESULTS:
             if not r.ok:
                 print(_c(_RED, f"  FAIL {r.code} {r.guard} [{r.mode}] {r.scenario} → {r.outcome}"))
+    return passed, total, intercepts, controls
+
+
+async def main() -> int:
+    passed, total, intercepts, controls = await run_walk()
+    print(_c(_BOLD, f"\n{passed}/{total} checks passed across {controls} controls "
+                    f"({intercepts} interceptions demonstrated)"))
     return 0 if passed == total else 1
 
 
