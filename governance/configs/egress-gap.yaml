@@ -1,0 +1,15 @@
+# Egress allow-list for the network-resilience guard (Gap: GALAXY_GAP_EGRESS_POLICY).
+#
+# Parsed by agent_os.egress_policy.EgressPolicy.load_from_yaml, a stdlib-only
+# mini-parser (not PyYAML). It understands only this flat "rules:" shape and
+# silently ignores anything else. The policy is built with default_action='deny',
+# so any host not matched by a rule below is blocked (fail-closed).
+rules:
+  - domain: "*.anthropic.com"
+    ports: [443]
+    protocol: tcp
+    action: allow
+  - domain: "api.anthropic.com"
+    ports: [443]
+    protocol: tcp
+    action: allow

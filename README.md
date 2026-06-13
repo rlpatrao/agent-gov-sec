@@ -70,10 +70,17 @@ uv pip install --python .venv/bin/python -e '.[aws]'         # live --aws (boto3
 .venv/bin/python scripts/demo_agents.py --local    # cloud-neutral, fake model, in-memory ledger
 .venv/bin/python scripts/demo_agents.py --verbose  # curated narrative: agents, prompts, LLM/tool output, interceptions
 .venv/bin/python scripts/demo_agents.py --logs     # raw logger stream (--log-level DEBUG for per-guard detail)
+
+.venv/bin/python scripts/demo_extended_guardrails.py  # full-sweep guardrail walk: 28 controls, pass + intercept each
 ```
 
 `demo_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`) and drives every
 control on both its success and failure path across the three agents.
+
+`demo_extended_guardrails.py` walks the ~28 controls added in the full sweep — the
+previously-unwired `agent_os` / `agent_sre` modules plus output content-safety and
+PII redaction — each flag-gated and off by default, with a pass case and an
+intercept case. See [`docs/extended-guardrails.md`](docs/extended-guardrails.md).
 
 - **Real-model mode** (`--azure` / `--gcp` / `--aws` with creds): the whole matrix runs on the
   live model, so outcomes are **observed, not asserted** — the `VERDICT` column reads
@@ -233,5 +240,6 @@ Without `POSTGRES_DSN`, the hash chain runs in stdout mode — full chain logic 
 | [`docs/user-guide.md`](docs/user-guide.md) | How-to guide — running the platform, adding agents, debugging |
 | [`docs/services-and-tech.md`](docs/services-and-tech.md) | Azure resource inventory, package versions, env var reference |
 | [`docs/guardrails-inventory.md`](docs/guardrails-inventory.md) | What governance modules are wired vs. available, with the OWASP mapping |
+| [`docs/extended-guardrails.md`](docs/extended-guardrails.md) | Full-sweep guardrail catalogue: ~28 flag-gated controls, their hooks and `agent_os`/`agent_sre` primitives |
 | [`docs/standards-crosswalk.md`](docs/standards-crosswalk.md) | Control → OWASP / NIST AI RMF / ISO/IEC 42001 / EU AI Act / MITRE ATLAS crosswalk |
 | [`docs/observability-governance-showcase.md`](docs/observability-governance-showcase.md) | KQL queries, App Insights diagnostics, traceability walkthrough |
