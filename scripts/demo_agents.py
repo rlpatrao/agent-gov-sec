@@ -759,7 +759,7 @@ def _real_call_error(agent: str, e: Exception) -> None:
 
 
 async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate: bool = False,
-               fake: bool = False, framework: str = "langgraph"):
+               fake: bool = False, framework: str = "langgraph", extended: bool = False):
     # --logs / --log-level → the raw logger stream (guard decisions, audit writes…).
     # --verbose → the curated narrative (agents, prompts, LLM/tool output, guardrail
     # interceptions, per-check outcomes). They're independent and can combine.
@@ -814,6 +814,36 @@ async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate:
     print(hdr("[H] Hash-chained audit ledger")); await section_ledger(tmp)
 
     all_ok = print_matrix(real=is_real())
+
+    if extended:
+        # Append the full-sweep guardrail walk and report a unified total. The walk
+        # is deterministic (it builds its own pipelines with the local provider and
+        # scripted clients), so it is independent of the cloud/framework/real-model
+        # mode of the baseline matrix above.
+        from demo_extended_guardrails import run_walk
+        base_total = len(CHECKS)
+        base_passed = sum(1 for c in CHECKS if c.ok)
+        base_controls = len({c.feature.split(" ", 1)[0] for c in CHECKS})
+        ext_passed, ext_total, ext_intercepts, ext_controls = await run_walk()
+        ext_ok = ext_passed == ext_total
+
+        width = 104
+        print(_c(BOLD + CYAN, "━" * width))
+        base_label = f"{base_passed} PASS" if is_real() else f"{base_passed}/{base_total}"
+        print(_c(BOLD + WHITE, "  Unified governance coverage"))
+        print(f"    baseline matrix   {base_label:<10} checks · {base_controls} controls   "
+              + dim("(identity/egress/FGAC/A2A/reasoning/ledger)"))
+        print(f"    extended sweep    {ext_passed}/{ext_total:<8} checks · {ext_controls} controls   "
+              + dim(f"({ext_intercepts} interceptions; flag-gated guards)"))
+        total_checks = base_total + ext_total
+        total_passed = base_passed + ext_passed
+        total_controls = base_controls + ext_controls
+        colour = GREEN if (all_ok and ext_ok) else RED
+        print(_c(BOLD + colour, f"    total             {total_passed}/{total_checks} checks · "
+                                f"{total_controls} controls"))
+        print(_c(BOLD + CYAN, "━" * width))
+        all_ok = all_ok and ext_ok
+
     sys.exit(0 if all_ok else 1)
 
 
@@ -847,6 +877,9 @@ def _parse_args() -> tuple[int, str, bool, bool]:
     # orchestrated. The same governance (GuardPipeline) runs under each.
     p.add_argument("--framework", default="langgraph", choices=["langgraph", "raw", "pydantic"],
                    help="agent framework binding (default langgraph). Composes with the cloud flags.")
+    p.add_argument("--extended", action="store_true",
+                   help="also run the full-sweep guardrail walk (~28 flag-gated controls, pass + "
+                        "intercept each) and report a unified total. Deterministic, cloud/framework-independent.")
     args = p.parse_args()
     if args.log_level:
         level = getattr(logging, args.log_level)
@@ -854,9 +887,9 @@ def _parse_args() -> tuple[int, str, bool, bool]:
         level = logging.INFO
     else:
         level = logging.CRITICAL
-    return level, args.cloud, args.verbose, args.fake, args.framework
+    return level, args.cloud, args.verbose, args.fake, args.framework, args.extended
 
 
 if __name__ == "__main__":
-    _level, _cloud, _narrate, _fake, _framework = _parse_args()
-    asyncio.run(main(_level, _cloud, _narrate, _fake, framework=_framework))
+    _level, _cloud, _narrate, _fake, _framework, _extended = _parse_args()
+    asyncio.run(main(_level, _cloud, _narrate, _fake, framework=_framework, extended=_extended))

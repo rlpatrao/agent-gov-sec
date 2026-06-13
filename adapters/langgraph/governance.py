@@ -72,13 +72,22 @@ class GalaxyGuardMiddleware(AgentMiddleware):
         self._pipeline.after_model(_response_text(response))
         return response
 
-    # ── per-tool-call governance (B7/G19 + B8) ──────────────────────────────
+    # ── per-tool-call governance (B7/G19 + B8 + sweep before_tool/after_tool) ─
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         tool_call = getattr(request, "tool_call", {}) or {}
         name = tool_call.get("name", "<unknown>") if isinstance(tool_call, dict) else str(tool_call)
         args = tool_call.get("args", {}) if isinstance(tool_call, dict) else {}
         self._pipeline.before_tool(name, args)
-        return handler(request)
+        try:
+            result = handler(request)
+        except Exception:
+            self._pipeline.on_tool_error(name)   # circuit-breaker failure record
+            raise
+        # after_tool: inbound tool-output governance (MCP response scan) +
+        # circuit-breaker success record. A blocking output guard raises; the
+        # sanitized text is applied on the text-carrying axes (raw / pydantic).
+        self._pipeline.after_tool(name, _response_text(result))
+        return result
 
     def _redact_in_place(self, request: Any) -> None:
         redactor = self._pipeline.redactor
