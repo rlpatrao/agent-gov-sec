@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import governance
 from agent_os.audit_logger import (
@@ -35,6 +35,7 @@ from agent_os.credential_redactor import CredentialRedactor
 from agent_os.prompt_injection import PromptInjectionDetector, ThreatLevel, load_prompt_injection_config
 
 from governance.adapters.otel_audit_backend import OtelAuditBackend
+from governance.extensions.decision import GuardDecision
 from governance.extensions.data_classification import DataClassificationCatalog
 from governance.extensions.data_drift import DataAccessDriftDetector, JsonFileBaselineStore
 from governance.extensions.data_fgac import DataAccessMediator
@@ -127,6 +128,41 @@ class GuardPipeline:
         self._reasoning = reasoning_validator
         self._trace = reasoning_trace
 
+        # Sweep-era guard registries. Each entry is (label, callable->GuardDecision).
+        # ``build_guard_pipeline`` populates these from the enabled GALAXY_* flags;
+        # an unconfigured pipeline keeps them empty, so behaviour is unchanged.
+        # before_tool: fn(name, args) -> GuardDecision
+        self._before_tool_guards: list[tuple[str, Callable[[str, Any], GuardDecision]]] = []
+        # after_model: fn(text) -> GuardDecision (may set .output to transform text)
+        self._after_model_guards: list[tuple[str, Callable[[str], GuardDecision]]] = []
+        # after_tool: fn(name, result_text) -> GuardDecision (may set .output)
+        self._after_tool_guards: list[tuple[str, Callable[[str, str], GuardDecision]]] = []
+        # Circuit breaker is special: it records success/failure outcomes, so it is
+        # held by reference (not just a before_tool callable) — see after_tool / on_tool_error.
+        self._circuit_breaker: Any = None
+
+    # ── sweep guard registration (called by build_guard_pipeline) ────────────
+    def register_before_tool(self, label: str, fn: Callable[[str, Any], GuardDecision]) -> None:
+        self._before_tool_guards.append((label, fn))
+
+    def register_after_model(self, label: str, fn: Callable[[str], GuardDecision]) -> None:
+        self._after_model_guards.append((label, fn))
+
+    def register_after_tool(self, label: str, fn: Callable[[str, str], GuardDecision]) -> None:
+        self._after_tool_guards.append((label, fn))
+
+    def set_circuit_breaker(self, cb: Any) -> None:
+        """Register the circuit-breaker guard. allow_call gates before_tool; the
+        breaker's record_success/record_failure fire from after_tool / on_tool_error."""
+        self._circuit_breaker = cb
+        self.register_before_tool("circuit_breaker", lambda name, args: cb.allow_call(name))
+
+    def _apply_guard_decision(self, event_type: str, action: str, decision: GuardDecision) -> None:
+        """Audit + raise for a sweep guard verdict (block path)."""
+        self._log(event_type, action, "deny", decision.reason,
+                  {"code": decision.code, "signals": decision.signals, **decision.metadata})
+        raise GovernanceViolation(decision.code or "policy_denied", decision.reason)
+
     # ── per-model-call governance (B4/B5/B6) ────────────────────────────────
     def before_model(self, text: str) -> bool:
         """Run the pre-call guards. Returns ``True`` if the caller should redact
@@ -195,8 +231,13 @@ class GuardPipeline:
 
         return should_redact
 
-    # ── post-model-call (G20) ───────────────────────────────────────────────
-    def after_model(self, response_text: str) -> None:
+    # ── post-model-call (G20 + output guards) ───────────────────────────────
+    def after_model(self, response_text: str) -> str:
+        """Capture the CoT/CoVe trace (G20) and run output guards (content
+        quality, output PII). Returns the response text, possibly redacted by an
+        output guard; raises ``GovernanceViolation`` if an output guard blocks.
+        Adapters that forward the model's text downstream should use the return
+        value so output redaction takes effect."""
         if self._trace is not None:
             try:
                 self._trace.capture(
@@ -205,6 +246,47 @@ class GuardPipeline:
                 )
             except Exception as e:  # observability must never break the run
                 logger.warning("governance.reasoning_trace_failed", extra={"error": str(e)})
+
+        text = response_text
+        for label, guard in self._after_model_guards:
+            decision = guard(text)
+            if not decision.allowed:
+                self._apply_guard_decision("output_check", f"after_model:{label}", decision)
+            if decision.output is not None and decision.output != text:
+                self._log("output_check", f"after_model:{label}", "audit",
+                          f"{label} transformed output", {"code": decision.code, **decision.metadata})
+                text = decision.output
+        return text
+
+    # ── post-tool-call (after_tool: inbound result governance) ───────────────
+    def after_tool(self, name: str, result: str) -> str:
+        """Govern a tool's *output* before it re-enters the model context
+        (e.g. MCP response scan). Records circuit-breaker success. Returns the
+        result text, possibly sanitized; raises on a block."""
+        if self._circuit_breaker is not None:
+            try:
+                self._circuit_breaker.record_success(name)
+            except Exception as e:
+                logger.debug("circuit_breaker.record_success_failed", extra={"error": str(e)})
+        text = result if result is not None else ""
+        for label, guard in self._after_tool_guards:
+            decision = guard(name, text)
+            if not decision.allowed:
+                self._apply_guard_decision("tool_output_check", f"after_tool:{name}:{label}", decision)
+            if decision.output is not None and decision.output != text:
+                self._log("tool_output_check", f"after_tool:{name}:{label}", "audit",
+                          f"{label} sanitized tool output", {"tool": name, "code": decision.code, **decision.metadata})
+                text = decision.output
+        return text
+
+    def on_tool_error(self, name: str) -> None:
+        """Adapters call this when a tool raises, so the circuit breaker records a
+        failure (and opens after the configured threshold)."""
+        if self._circuit_breaker is not None:
+            try:
+                self._circuit_breaker.record_failure(name)
+            except Exception as e:
+                logger.debug("circuit_breaker.record_failure_failed", extra={"error": str(e)})
 
     # ── per-tool-call governance (B7/G19, B8) ───────────────────────────────
     def before_tool(self, name: str, args: Any) -> None:
@@ -225,6 +307,15 @@ class GuardPipeline:
                 self._log("policy_check", f"tool:{name}", "deny",
                           f"blocked pattern '{pat}' in tool args", {"tool": name, "pattern": pat})
                 raise GovernanceViolation("blocked_pattern", f"Blocked pattern '{pat}' in tool '{name}' arguments")
+
+        # Sweep-era before_tool guards (egress, circuit breaker, transparency,
+        # semantic policy, code/diff/exec review, reversibility, constraint graph,
+        # memory-write, MCP gateway/rate-limit, cost, escalation gate). Each is
+        # registered only when its GALAXY_* flag is on; absent flags → no-op.
+        for label, guard in self._before_tool_guards:
+            decision = guard(name, args)
+            if not decision.allowed:
+                self._apply_guard_decision("policy_check", f"tool:{name}:{label}", decision)
 
         self._log("capability_check", f"tool:{name}", "allow", "tool permitted", {"tool": name})
 
@@ -302,7 +393,95 @@ async def build_guard_pipeline(
         mediator=mediator, reasoning_validator=reasoning_validator, reasoning_trace=reasoning_trace,
     )
 
+    sweep = _register_sweep_guards(pipeline, agent_id)
+
     logger.info("governance.pipeline.built",
                 extra={"agent_id": agent_id, "fgac": enable_data_fgac, "drift": enable_data_drift,
-                       "reasoning_guard": enable_reasoning_guard, "reasoning_trace": enable_reasoning_trace})
+                       "reasoning_guard": enable_reasoning_guard, "reasoning_trace": enable_reasoning_trace,
+                       "sweep_guards": sweep})
     return pipeline, ledger, audit, mediator
+
+
+def _register_sweep_guards(pipeline: "GuardPipeline", agent_id: str) -> list[str]:
+    """Register the shape-safe sweep guards whose GALAXY_* flag is enabled.
+
+    Only guards that no-op on non-matching tool shapes (or block clearly-malicious
+    input while passing benign input) are wired here, so enabling a flag never
+    breaks an unrelated tool call. The context-specific guards — reversibility
+    (fail-closed on unknown actions), content quality (heuristic scorer),
+    transparency (fail-closed until confirmed), constraint graph and MCP
+    gateway/rate-limit/session/signer/screen (deny-by-default / identity / transport),
+    and human escalation (async approval) — are exercised in their dedicated demo
+    sections, not blanket-applied to every agent. Returns the list of guards wired."""
+    from governance.extensions import flags
+
+    wired: list[str] = []
+
+    def on(flag: str) -> bool:
+        return flags.is_enabled(flag)
+
+    def _args(a: Any) -> dict:
+        return a if isinstance(a, dict) else {}
+
+    # ── before_tool (shape-safe) ──────────────────────────────────────────────
+    # Each closure binds its guard via a default arg (``_g=...``) so it captures
+    # that specific instance, not whatever the loop variable ends up pointing at.
+    if on(flags.EGRESS_POLICY):
+        from governance.extensions.egress_guard import EgressGuard
+        eg = EgressGuard()
+        pipeline.register_before_tool("egress", lambda name, args, _g=eg: _g.check_tool(name, _args(args)))
+        wired.append("egress")
+    if on(flags.CIRCUIT_BREAKER):
+        from governance.extensions.circuit_breaker_guard import CircuitBreakerGuard
+        pipeline.set_circuit_breaker(CircuitBreakerGuard())
+        wired.append("circuit_breaker")
+    if on(flags.SEMANTIC_POLICY):
+        from governance.extensions.semantic_policy_guard import SemanticPolicyGuard
+        sp = SemanticPolicyGuard()
+        pipeline.register_before_tool("semantic_policy", lambda name, args, _g=sp: _g.check_tool(name, args))
+        wired.append("semantic_policy")
+    if on(flags.SECURE_CODEGEN):
+        from governance.extensions.secure_codegen_guard import SecureCodegenGuard
+        sc = SecureCodegenGuard()
+        pipeline.register_before_tool("secure_codegen", lambda name, args, _g=sc: _g.check_code(name, _args(args)))
+        wired.append("secure_codegen")
+    if on(flags.SECURE_EXEC):
+        from governance.extensions.secure_exec import SecureExecGuard
+        se = SecureExecGuard()
+        pipeline.register_before_tool("secure_exec", lambda name, args, _g=se: _g.check_exec(name, _args(args)))
+        wired.append("secure_exec")
+    if on(flags.DIFF_POLICY):
+        from governance.extensions.diff_policy_guard import DiffPolicyGuard
+        dp = DiffPolicyGuard(blocked_paths=["*.env", "secrets/**"])
+        pipeline.register_before_tool("diff_policy", lambda name, args, _g=dp: _g.check_diff(name, _args(args)))
+        wired.append("diff_policy")
+    if on(flags.MEMORY_GUARD):
+        from governance.extensions.memory_guard import MemoryWriteGuard
+        mg = MemoryWriteGuard()
+        pipeline.register_before_tool("memory_guard", lambda name, args, _g=mg: _g.check_write(name, _args(args), source=agent_id))
+        wired.append("memory_guard")
+    if on(flags.COST_GUARD):
+        from governance.extensions.cost_guard import CostGuard
+        cg = CostGuard()
+        def _cost(name: str, args: Any, _g: Any = cg) -> GuardDecision:
+            a = _args(args)
+            est = float(a.get("estimated_cost", a.get("cost_usd", 0.0)) or 0.0)
+            return _g.check(agent_id, est)
+        pipeline.register_before_tool("cost", _cost)
+        wired.append("cost")
+
+    # ── after_model (output-side) ─────────────────────────────────────────────
+    if on(flags.OUTPUT_PII):
+        from governance.extensions.output_pii import OutputPiiGuard
+        op = OutputPiiGuard()
+        pipeline.register_after_model("output_pii", lambda text, _g=op: _g.redact_output(text))
+        wired.append("output_pii")
+
+    # ── after_tool (inbound tool output) ──────────────────────────────────────
+    if on(flags.MCP_RESPONSE_SCAN):
+        from governance.extensions.mcp_response_guard import McpResponseGuard
+        mr = McpResponseGuard()
+        pipeline.register_after_tool("mcp_response", lambda name, text, _g=mr: _g.scan_result(name, text))
+        wired.append("mcp_response")
+
+    return wired

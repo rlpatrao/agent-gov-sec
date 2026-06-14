@@ -100,10 +100,12 @@ class RawAgentBundle:
             self.pipeline.before_model(text)          # B4/B5/B6 — raises to block
 
             res = self.client.generate(msgs, self.tool_specs)
-            self.pipeline.after_model(res.text or "")  # G20 CoT/CoVe trace
+            # after_model returns the (possibly output-redacted) text — G20 trace
+            # plus output guards (content quality, output PII).
+            res_text = self.pipeline.after_model(res.text or "")
 
-            if res.text:
-                turns.append(Turn(role="ai", text=res.text))
+            if res_text:
+                turns.append(Turn(role="ai", text=res_text))
 
             if res.tool_calls:
                 turns.append(Turn(role="ai", tool_calls=list(res.tool_calls)))
@@ -113,12 +115,19 @@ class RawAgentBundle:
                     "tool_calls": [{"id": tc.id, "name": tc.name, "args": tc.args} for tc in res.tool_calls],
                 })
                 for tc in res.tool_calls:
-                    self.pipeline.before_tool(tc.name, tc.args)   # B7/G19/B8 — raises to block
+                    self.pipeline.before_tool(tc.name, tc.args)   # B7/G19/B8 + sweep before_tool guards
                     fn = fns.get(tc.name)
                     if fn is None:
                         out = f"(no such tool: {tc.name})"
                     else:
-                        out = fn(**(tc.args or {}))
+                        try:
+                            out = fn(**(tc.args or {}))
+                        except Exception:
+                            self.pipeline.on_tool_error(tc.name)   # circuit-breaker failure record
+                            raise
+                    # after_tool: inbound tool-output governance (e.g. MCP response
+                    # scan) + circuit-breaker success record; may sanitize the result.
+                    out = self.pipeline.after_tool(tc.name, str(out))
                     turns.append(Turn(role="tool", text=str(out), tool_name=tc.name))
                     msgs.append({"role": "tool", "content": str(out), "tool_call_id": tc.id})
                 continue

@@ -57,6 +57,43 @@ and MITRE ATLAS columns are an indicative crosswalk.
 - **MITRE ATLAS** — referenced by technique name; confirm exact technique IDs against the
   current ATLAS matrix before citing them in a report.
 
+## Full-sweep controls (EG01–AD28)
+
+The controls added in the full sweep ([`extended-guardrails.md`](extended-guardrails.md))
+extend the crosswalk below. Same caveat: indicative, to be confirmed by the
+compliance owner.
+
+| Control | Guard | OWASP | NIST AI RMF | ISO/IEC 42001 | EU AI Act | MITRE ATLAS |
+|---|---|---|---|---|---|---|
+| EG01 | egress policy | LLM05 / ASI | MANAGE | A.6 | Art.15 | Exfiltration over web service |
+| CB02 | circuit breaker | LLM10 (unbounded consumption) | MANAGE | A.6 | Art.15 | Denial of ML service |
+| SP03 | semantic policy | LLM08 / ASI | MANAGE | A.6 | Art.15 | LLM plugin/tool compromise |
+| SC04 | secure codegen | LLM05 / LLM02 | MEASURE, MANAGE | A.6 | Art.15 | — |
+| SE05 | secure exec (sandbox) | LLM08 / ASI | MANAGE | A.6 | Art.14, Art.15 | LLM plugin/tool compromise |
+| DP06 | diff policy | LLM05 | MANAGE | A.6 | Art.15 | — |
+| MG07 | memory-write guard | LLM01 / LLM03 (data/model poisoning) | MEASURE, MANAGE | A.7 data | Art.10, Art.15 | LLM data/model poisoning |
+| CG08 | cost guard | LLM10 (unbounded consumption) | MANAGE | A.6 | Art.15 | Denial of ML service / cost |
+| OP09 | output PII redaction | LLM02:2025 (sensitive info disclosure) | MAP, MEASURE | A.7 data | Art.10 | LLM data leakage |
+| MR10 | MCP response scan | LLM01 (indirect injection) / ASI | MEASURE | A.6 | Art.15 | Prompt injection (indirect) |
+| TR11 | transparency / disclosure | ASI — transparency | GOVERN | A.6 | Art.13 transparency; Art.14 oversight | — |
+| RV12 | reversibility | LLM06 (excessive agency) / ASI | MANAGE | A.6 | Art.14 human oversight | — |
+| CG13 | constraint graph | LLM08 (excessive agency) | MANAGE | A.6 | Art.14, Art.15 | LLM plugin/tool compromise |
+| GW14 | MCP tool gateway | LLM08 / ASI | MANAGE | A.6 | Art.14, Art.15 | LLM plugin/tool compromise |
+| RL15 | MCP rate limit | LLM10 (unbounded consumption) | MANAGE | A.6 | Art.15 | Denial of ML service |
+| SA16 | MCP session auth | ASI — agent identity | GOVERN, MANAGE | A.9 | Art.12, Art.15 | — |
+| MS17 | MCP message signing | ASI — multi-agent integrity | GOVERN, MANAGE | A.9 | Art.12, Art.15 | — |
+| TS18 | MCP tool-definition screen | LLM01 / ASI (tool poisoning) | MEASURE | A.6 | Art.15 | Prompt injection (indirect) |
+| HE19 | human escalation (HITL) | LLM06 (excessive agency) / ASI | GOVERN, MANAGE | A.9 | Art.14 human oversight | ASI — human-in-the-loop |
+| CQ20 | output content quality | LLM09 (misinformation) | MEASURE | A.6 | Art.13 transparency; Art.15 accuracy | — |
+| SLO21 | SLO + error budget | — | MEASURE, MANAGE | A.6, A.9 | Art.15; Art.72 monitoring | — |
+| AC22 | accuracy declaration | — | MEASURE (accuracy) | A.6 | Art.13 transparency; Art.15 accuracy | — |
+| EV23 | eval suite | LLM09 | MEASURE | A.6 | Art.15 | — |
+| RP24 | golden-trace replay | — | MEASURE (monitoring) | A.6, A.9 | Art.15; Art.72 monitoring | — |
+| SB25 | SBOM (SPDX/CycloneDX) | LLM03 (supply chain) | GOVERN | A.10 third-party | Art.15 cybersecurity | ML supply chain compromise |
+| SG26 | artifact signing (Ed25519) | LLM03 (supply chain) | GOVERN | A.10 third-party | Art.15 cybersecurity | ML supply chain compromise |
+| CT27 | certification gate | — | GOVERN (accountability) | A.9 | Art.17 quality management | — |
+| AD28 | adversarial red-team | LLM01 / ASI | MEASURE (red-team) | A.6 | Art.15 robustness | Prompt injection; evade ML model |
+
 ## Coverage caveat
 
 The demo matrix exercises the controls above as 37 checks (success and failure paths
