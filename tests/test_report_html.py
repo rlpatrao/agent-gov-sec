@@ -64,6 +64,18 @@ def test_renders_unified_report(tmp_path):
     assert "4 controls" in h
 
 
+def test_creates_missing_parent_dir(tmp_path):
+    """--html docs/output/report.html must work even when the dir does not exist."""
+    out = tmp_path / "nested" / "dir" / "report.html"
+    assert not out.parent.exists()
+    path = report_html.render_report(
+        str(out), generated="t", cloud="local", framework="raw", mode="deterministic",
+        baseline_checks=[_check("A1 NHI identity", "FinOps", "x", True)],
+        baseline_control_map={"A1": "NHI identity"}, extended_rows=[], real=False)
+    assert Path(path).exists()
+    assert "<!doctype html>" in Path(path).read_text(encoding="utf-8")
+
+
 def test_real_mode_marks_na(tmp_path):
     out = tmp_path / "r.html"
     baseline = [_check("B7 capability", "Rogue", "adversarial tool", False, model_dep=True)]

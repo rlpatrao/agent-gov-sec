@@ -12,6 +12,7 @@ CSS is inline so the file opens anywhere.
 from __future__ import annotations
 
 import html
+import pathlib
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -340,6 +341,8 @@ docs/standards-crosswalk.md; it is an indicative crosswalk to be confirmed by th
 compliance owner. The controls support conformance; they are not a certification.</p>
 </div></body></html>
 """
-    with open(out_path, "w", encoding="utf-8") as fh:
-        fh.write(doc)
-    return out_path
+    out = pathlib.Path(out_path)
+    if out.parent and not out.parent.exists():
+        out.parent.mkdir(parents=True, exist_ok=True)   # e.g. --html docs/output/report.html
+    out.write_text(doc, encoding="utf-8")
+    return str(out)
