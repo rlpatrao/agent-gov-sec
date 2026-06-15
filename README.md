@@ -72,6 +72,7 @@ uv pip install --python .venv/bin/python -e '.[aws]'         # live --aws (boto3
 .venv/bin/python scripts/demo_agents.py --logs     # raw logger stream (--log-level DEBUG for per-guard detail)
 
 .venv/bin/python scripts/demo_agents.py --fake --extended   # unified: baseline 37 + sweep 47 = 84 checks · 49 controls
+.venv/bin/python scripts/demo_agents.py --fake --html report.html   # unified matrix → self-contained HTML report
 .venv/bin/python scripts/demo_extended_guardrails.py        # the sweep walk on its own (28 controls)
 ```
 
