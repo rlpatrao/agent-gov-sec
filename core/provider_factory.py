@@ -10,7 +10,7 @@ this module pulls no cloud SDK at all.
     provider = get_provider()                 # azure by default
     gateway  = provider.llm_gateway()
 
-Each ``adapters/<cloud>/`` package must expose a module-level ``PROVIDER``
+Each ``cloud_adapters/<cloud>/`` package must expose a module-level ``PROVIDER``
 implementing ``core.interfaces.CloudProvider``. The AWS/GCP packages expose a
 provider whose accessors raise ``NotImplementedError`` (WS5/WS6) so the
 contract is locked but the impl is deferred.

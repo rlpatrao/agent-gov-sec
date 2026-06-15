@@ -3,7 +3,7 @@ core.secrets — the agnostic, env-var-only SecretProvider.
 
 This is the cloud-neutral default: it reads the key from an environment
 variable and caches it. Managed-secret-store providers (Azure Key Vault, AWS
-Secrets Manager, GCP Secret Manager) live under ``adapters/<cloud>/secrets.py``
+Secrets Manager, GCP Secret Manager) live under ``cloud_adapters/<cloud>/secrets.py``
 and add a managed path *in front of* this env-var fallback.
 
 Importing this module pulls no cloud SDK.
