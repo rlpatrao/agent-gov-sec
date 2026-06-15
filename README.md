@@ -60,32 +60,45 @@ uv pip install --python .venv/bin/python -e '.[aws]'         # live --aws (boto3
 > `langchain` / cloud extras and cause `ModuleNotFoundError`. The `uv run python` forms below
 > work when `.venv` is the active/only environment.
 
+`scripts/demo_agents.py` is the consolidated runner. To run everything offline and
+deterministically:
+
+```bash
+# Unified matrix — baseline 37 + sweep 47 = 84 checks · 49 controls, each with a
+# pass case and an intercept case. Off-by-default guards are enabled per scenario.
+.venv/bin/python scripts/demo_agents.py --fake --extended
+
+# Same run, written to a self-contained HTML report (open in any browser). Every
+# row carries the control description, the input to the guardrail, and its output —
+# nothing else to look up. --html implies --extended.
+.venv/bin/python scripts/demo_agents.py --fake --html galaxy-guardrail-report.html
+```
+
+Each matrix row (CLI and HTML) is self-describing: control description · input ·
+output · verdict. The baseline matrix stays at 37/37 as the no-regression anchor;
+the sweep adds the ~28 controls from the full sweep (previously-unwired `agent_os` /
+`agent_sre` modules plus output content-safety and PII redaction), each flag-gated
+and off by default. See [`docs/extended-guardrails.md`](docs/extended-guardrails.md).
+
+Other invocations:
+
 ```bash
 # Model selection is per-cloud: azure/gcp/aws call their REAL model when creds resolve, else fake.
 .venv/bin/python scripts/demo_governance.py        # minimal guard/redaction/ledger walkthrough (no creds)
 .venv/bin/python scripts/demo_agents.py            # azure → REAL Azure OpenAI (creds in .env, else fake)
 .venv/bin/python scripts/demo_agents.py --gcp      # gcp  → REAL Vertex/Gemini   (needs '.[gcp]' + creds)
 .venv/bin/python scripts/demo_agents.py --aws      # aws  → REAL Bedrock via API Gateway (needs infra + '.[aws]')
-.venv/bin/python scripts/demo_agents.py --fake     # force the deterministic 37-check matrix on any cloud
+.venv/bin/python scripts/demo_agents.py --fake     # the deterministic 37-check baseline matrix on any cloud
 .venv/bin/python scripts/demo_agents.py --local    # cloud-neutral, fake model, in-memory ledger
-.venv/bin/python scripts/demo_agents.py --verbose  # curated narrative: agents, prompts, LLM/tool output, interceptions
-.venv/bin/python scripts/demo_agents.py --logs     # raw logger stream (--log-level DEBUG for per-guard detail)
-
-.venv/bin/python scripts/demo_agents.py --fake --extended   # unified: baseline 37 + sweep 47 = 84 checks · 49 controls
-.venv/bin/python scripts/demo_agents.py --fake --html report.html   # unified matrix → self-contained HTML report
-.venv/bin/python scripts/demo_extended_guardrails.py        # the sweep walk on its own (28 controls)
+.venv/bin/python scripts/demo_agents.py --framework raw      # swap the agent framework (langgraph | raw | pydantic)
+.venv/bin/python scripts/demo_agents.py --fake --verbose     # curated narrative: prompts, LLM/tool output, interceptions
+.venv/bin/python scripts/demo_agents.py --fake --logs        # raw logger stream (--log-level DEBUG for per-guard detail)
+.venv/bin/python scripts/demo_extended_guardrails.py         # the sweep walk on its own (28 controls)
 ```
 
-`demo_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`) and drives every
-control on both its success and failure path across the three agents.
-
-`--extended` appends the full-sweep guardrail walk and reports a **unified total**:
-the 37-check baseline matrix (identity/egress/FGAC/A2A/reasoning/ledger) plus the
-~28 controls added in the sweep — the previously-unwired `agent_os` / `agent_sre`
-modules plus output content-safety and PII redaction, each flag-gated and off by
-default, with a pass case and an intercept case. The sweep walk is deterministic
-and runs the same under any cloud/framework. See
-[`docs/extended-guardrails.md`](docs/extended-guardrails.md).
+`demo_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`); `--fake`,
+`--extended`, `--html`, and `--framework` compose with any cloud flag. The full
+matrix runs each control on both its success and failure path across the three agents.
 
 - **Real-model mode** (`--azure` / `--gcp` / `--aws` with creds): the whole matrix runs on the
   live model, so outcomes are **observed, not asserted** — the `VERDICT` column reads
