@@ -40,8 +40,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Optional
 
-# Make the repo root importable when run as a script.
+# Make the repo root and this script's dir importable when run as a script (the
+# latter so the sibling report_html — the single source of control descriptions —
+# resolves both as a script and under pytest's importlib loader).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 os.environ.setdefault("CLOUD_PROVIDER", "local")
 
@@ -49,6 +52,18 @@ from adapters.contract import RunResult, ScriptStep, ToolCall, ToolSpec
 from adapters.raw import RawAgentBundle, ScriptedChatClient
 from governance.extensions.decision import GuardDecision
 from governance.pipeline import GovernanceViolation, build_guard_pipeline
+from report_html import EXTENDED_META   # control descriptions (what each guard does)
+
+
+def _describe(code: str) -> str:
+    """The one-line 'what it does' for a control, from the shared catalogue."""
+    return EXTENDED_META.get(code, ("", "", "", ""))[2]
+
+
+def _short(val: Any, n: int = 70) -> str:
+    """Compact, single-line repr of a guard input payload for the matrix."""
+    s = " ".join(str(val).split())
+    return s if len(s) <= n else s[: n - 1] + "…"
 
 # ── tiny ANSI ──────────────────────────────────────────────────────────────────
 _GREEN, _RED, _YEL, _DIM, _BOLD, _CYAN, _RST = (
@@ -64,20 +79,29 @@ class Row:
     code: str
     guard: str
     mode: str
-    scenario: str
-    outcome: str          # what happened
+    scenario: str         # the input handed to the guardrail
+    outcome: str          # the output the guardrail produced
     ok: bool              # did it match the expectation
     intercepted: bool     # was this the intercept (vs pass) case
+    description: str = ""  # what the control does (for a self-contained matrix)
 
 
 RESULTS: list[Row] = []
+_DESC_PRINTED: set[str] = set()
 
 
 def record(code: str, guard: str, mode: str, scenario: str, outcome: str, ok: bool, intercepted: bool) -> None:
-    RESULTS.append(Row(code, guard, mode, scenario, outcome, ok, intercepted))
+    desc = _describe(code)
+    RESULTS.append(Row(code, guard, mode, scenario, outcome, ok, intercepted, desc))
     mark = _c(_GREEN, "✓") if ok else _c(_RED, "✗")
     shield = _c(_YEL, " 🛡") if intercepted else "  "
-    print(f"  {mark}{shield} {_c(_BOLD, code):<6} {guard:<22} {_DIM}{scenario}{_RST} → {outcome}")
+    # Print the control description once per code, so the matrix is readable
+    # standalone without opening another document.
+    if desc and code not in _DESC_PRINTED:
+        _DESC_PRINTED.add(code)
+        print(f"  {_c(_BOLD, code)} {_c(_BOLD, guard)} — {_DIM}{desc}{_RST}")
+    print(f"  {mark}{shield} {_c(_BOLD, code):<6} {guard:<20} "
+          f"in: {_DIM}{_short(scenario)}{_RST}  →  out: {outcome}")
 
 
 # ── governed-agent helper (WIRED + REGISTERED modes run a real raw invocation) ──
@@ -135,16 +159,16 @@ async def wired_before_tool(code: str, guard: str, flag: str, tool: str,
     b = _agent(pipe, ledger, audit, med, "CodeWriter", ts,
                [ScriptStep(tool_calls=[ToolCall(name=tool, args=bad_args, id="1")])])
     blocked, detail = _invoke(b)
-    record(code, guard, "WIRED", f"{tool}(malicious) via agent",
-           _c(_YEL, f"INTERCEPT[{detail}]") if blocked else f"allowed:{detail}",
+    record(code, guard, "WIRED", f"{tool}({_short(bad_args)})",
+           _c(_YEL, f"BLOCKED · GovernanceViolation({detail})") if blocked else f"allowed → {detail}",
            blocked and detail == expect_code, True)
     # pass
     pipe2, l2, a2, m2 = await _build_pipeline("CodeWriter", flags_on=flags_on)
     b2 = _agent(pipe2, l2, a2, m2, "CodeWriter", ts,
                 [ScriptStep(tool_calls=[ToolCall(name=tool, args=good_args, id="1")])])
     blocked2, _ = _invoke(b2)
-    record(code, guard, "WIRED", f"{tool}(benign) via agent",
-           "passed" if not blocked2 else _c(_RED, "false-block"), not blocked2, False)
+    record(code, guard, "WIRED", f"{tool}({_short(good_args)})",
+           "allowed (tool ran)" if not blocked2 else _c(_RED, "false-block"), not blocked2, False)
     _flags_off(flags_on)
 
 
@@ -159,8 +183,9 @@ async def registered_before_tool(code: str, guard: str, register: Callable[[Any]
     b = _agent(pipe, ledger, audit, med, agent_type, [_tool(tool), _tool(good_tool)],
                [ScriptStep(tool_calls=[ToolCall(name=tool, args=bad_args, id="1")])])
     blocked, detail = _invoke(b)
-    record(code, guard, "REGISTERED", f"{tool} via agent",
-           _c(_YEL, f"INTERCEPT[{detail}]") if blocked else f"allowed:{detail}",
+    bad_in = f"{tool}({_short(bad_args)})" if bad_args else f"{tool}()"
+    record(code, guard, "REGISTERED", bad_in,
+           _c(_YEL, f"BLOCKED · GovernanceViolation({detail})") if blocked else f"allowed → {detail}",
            blocked and detail == expect_code, True)
     pipe2, l2, a2, m2 = await build_guard_pipeline(
         agent_id=f"{agent_type}-demo", agent_type=agent_type, nhi_id="nhi-demo", run_id="run-reg2")
@@ -168,8 +193,9 @@ async def registered_before_tool(code: str, guard: str, register: Callable[[Any]
     b2 = _agent(pipe2, l2, a2, m2, agent_type, [_tool(tool), _tool(good_tool)],
                 [ScriptStep(tool_calls=[ToolCall(name=good_tool, args=good_args, id="1")])])
     blocked2, _ = _invoke(b2)
-    record(code, guard, "REGISTERED", f"{good_tool} via agent",
-           "passed" if not blocked2 else _c(_RED, "false-block"), not blocked2, False)
+    good_in = f"{good_tool}({_short(good_args)})" if good_args else f"{good_tool}()"
+    record(code, guard, "REGISTERED", good_in,
+           "allowed (tool ran)" if not blocked2 else _c(_RED, "false-block"), not blocked2, False)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -423,6 +449,7 @@ async def run_walk(print_header: bool = True) -> tuple[int, int, int, int]:
     safe to call repeatedly (the unified ``demo_agents.py --extended`` path and
     the standalone entrypoint both go through here)."""
     RESULTS.clear()
+    _DESC_PRINTED.clear()
     if print_header:
         print(_c(_BOLD, "\nGalaxy — extended guardrail conformance walk (full sweep)"))
         print(_DIM + "each control: pass case + intercept case; guards off by default, enabled per-scenario" + _RST)

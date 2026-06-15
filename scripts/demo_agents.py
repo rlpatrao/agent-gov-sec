@@ -621,9 +621,21 @@ def print_matrix(real: bool = False):
              else "Feature × Agent — expected vs actual")
     print(_c(BOLD + WHITE, f"  {title}"))
     print(_c(BOLD + CYAN, "━" * width))
+    print(dim("  SCENARIO = input to the control · RESULT = output · description printed once per control"))
     print(f"  {'FEATURE':<28}{'AGENT':<16}{'SCENARIO':<30}{'VERDICT':<8}{'RESULT'}")
     print(dim("  " + "─" * (width - 2)))
+    try:
+        from report_html import BASELINE_NOTES
+    except Exception:
+        BASELINE_NOTES = {}
+    seen_codes: set[str] = set()
     for c in CHECKS:
+        code = c.feature.split(" ", 1)[0]
+        if code not in seen_codes:
+            seen_codes.add(code)
+            what = BASELINE_NOTES.get(code, ("", ""))[0]
+            if what:
+                print(dim(f"  ↳ {code}: {what}"))
         label, colour = _verdict(c, real)
         mark = _c(GREEN, "✓") if c.ok else (dim("·") if (real and c.model_dep) else _c(RED, "✗"))
         verdict = _c(BOLD + colour, f"{label:<7}")

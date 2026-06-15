@@ -197,17 +197,32 @@ tr:hover td { background: var(--bg); }
 .tag.intercept { color: var(--intercept); border-color:#eac54f; background:#fff8c5; }
 .tag.pass { color: var(--pass); border-color:#a2d8a8; background:#eafff0; }
 .what { color: var(--ink); } .why { color: var(--muted); }
+.desc { color: var(--ink); }
+.io { font: 11.5px ui-monospace,SFMono-Regular,Menlo,monospace; color: var(--muted); word-break: break-word; }
+.io.out { color: var(--ink); }
+.fh { display:block; margin-top:3px; }
+.fh code { font-size: 11px; }
+td.narrow { max-width: 240px; }
 .foot { margin-top: 50px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
 """
 
 
+_ANSI = __import__("re").compile(r"\x1b\[[0-9;]*m")
+
+
+def _clean(s: Any) -> str:
+    return _ANSI.sub("", str(s)).strip()
+
+
 @dataclass
-class _Check:
+class _Row:
     code: str
-    label: str
-    agent: str
-    scenario: str
-    verdict: str   # PASS | FAIL | NA
+    control: str       # control / guard name
+    flaghook: str      # "GALAXY_* · hook" (extended only), else ""
+    description: str   # what the control is / does
+    inp: str           # input handed to the guardrail
+    out: str           # output the guardrail produced
+    verdict: str       # PASS | FAIL | NA
     intercepted: bool
 
 
@@ -223,26 +238,24 @@ def _esc(s: Any) -> str:
     return html.escape(str(s))
 
 
-def _matrix_rows(checks: list[_Check]) -> str:
+def _matrix_rows(rows: list[_Row]) -> str:
     out = []
-    for c in checks:
+    for c in rows:
         vclass = c.verdict if c.verdict in ("PASS", "FAIL") else "NA"
-        tag = '<span class="tag intercept">intercept</span>' if c.intercepted else '<span class="tag pass">pass</span>'
+        tag = ('<span class="tag intercept">intercept</span>' if c.intercepted
+               else '<span class="tag pass">pass</span>')
+        control_cell = _esc(c.control)
+        if c.flaghook:
+            control_cell += f"<span class='fh'><code>{_esc(c.flaghook)}</code></span>"
         out.append(
-            f"<tr><td class='code'>{_esc(c.code)}</td><td>{_esc(c.label)}</td>"
-            f"<td>{_esc(c.agent)}</td><td>{_esc(c.scenario)}</td>"
-            f"<td>{tag}</td><td class='v {vclass}'>{c.verdict.replace('NA','N/A')}</td></tr>"
-        )
-    return "\n".join(out)
-
-
-def _catalogue_rows(entries: list[tuple]) -> str:
-    # entries: (code, label, extra_html, what, why)
-    out = []
-    for code, label, extra, what, why in entries:
-        out.append(
-            f"<tr><td class='code'>{_esc(code)}</td><td>{_esc(label)}{extra}</td>"
-            f"<td class='what'>{_esc(what)}</td><td class='why'>{_esc(why)}</td></tr>"
+            f"<tr>"
+            f"<td class='code'>{_esc(c.code)}</td>"
+            f"<td>{control_cell}</td>"
+            f"<td class='desc narrow'>{_esc(c.description)}</td>"
+            f"<td class='io narrow'>{_esc(c.inp)}</td>"
+            f"<td class='io out narrow'>{_esc(c.out)}</td>"
+            f"<td>{tag}<br><span class='v {vclass}'>{c.verdict.replace('NA','N/A')}</span></td>"
+            f"</tr>"
         )
     return "\n".join(out)
 
@@ -259,44 +272,28 @@ def render_report(
     extended_rows: list,            # demo_extended_guardrails Row objects
     real: bool,
 ) -> str:
-    # ── baseline matrix ──
-    base: list[_Check] = []
+    # ── baseline matrix: input = scenario, output = the recorded actual ──
+    base: list[_Row] = []
     for c in baseline_checks:
         code = c.feature.split(" ", 1)[0]
-        label = baseline_control_map.get(code, c.feature)
-        # the failure-path rows are the "intercept" demonstrations
+        control = baseline_control_map.get(code, c.feature)
+        description = BASELINE_NOTES.get(code, ("", ""))[0]
         intercepted = any(h in str(c.scenario).lower() or h in str(c.actual).lower()
                           for h in ("block", "deny", "mask", "broken", "tamper", "redact", "filter", "quarantine"))
-        base.append(_Check(code, label, c.agent, c.scenario,
-                           _verdict_baseline(c.ok, getattr(c, "model_dep", False), real), intercepted))
+        base.append(_Row(code, control, "", description, _clean(c.scenario), _clean(c.actual),
+                         _verdict_baseline(c.ok, getattr(c, "model_dep", False), real), intercepted))
 
-    # ── extended matrix ──
-    ext: list[_Check] = []
+    # ── extended matrix: input = scenario, output = outcome ──
+    ext: list[_Row] = []
     for r in extended_rows:
-        meta = EXTENDED_META.get(r.code)
-        label = f"{r.guard}" + (f" · {r.mode}" if r.mode else "")
-        ext.append(_Check(r.code, label, r.mode, r.scenario,
-                          "PASS" if r.ok else "FAIL", bool(r.intercepted)))
+        flag, hook, what, _why = EXTENDED_META.get(r.code, ("", "", "", ""))
+        flaghook = f"{flag} · {hook}" if flag else (r.mode or "")
+        ext.append(_Row(r.code, r.guard, flaghook, what, _clean(r.scenario), _clean(r.outcome),
+                       "PASS" if r.ok else "FAIL", bool(r.intercepted)))
 
-    # ── control catalogue (distinct, ordered) ──
-    base_codes: list[str] = []
-    for c in base:
-        if c.code not in base_codes:
-            base_codes.append(c.code)
-    base_cat = [(code, baseline_control_map.get(code, code), "",
-                 *BASELINE_NOTES.get(code, ("—", "—"))) for code in base_codes]
+    base_codes = list(dict.fromkeys(c.code for c in base))
+    ext_codes = list(dict.fromkeys(c.code for c in ext))
 
-    ext_codes: list[str] = []
-    for c in ext:
-        if c.code not in ext_codes:
-            ext_codes.append(c.code)
-    ext_cat = []
-    for code in ext_codes:
-        flag, hook, what, why = EXTENDED_META.get(code, ("", "", "—", "—"))
-        extra = f"<br><code>{_esc(flag)}</code> <span class='meta'>({_esc(hook)})</span>" if flag else ""
-        ext_cat.append((code, code, extra, what, why))
-
-    # ── tallies ──
     b_total, b_pass = len(base), sum(1 for c in base if c.verdict == "PASS")
     e_total, e_pass = len(ext), sum(1 for c in ext if c.verdict == "PASS")
     e_intercept = sum(1 for c in ext if c.intercepted and c.verdict == "PASS")
@@ -322,28 +319,19 @@ def render_report(
   <div class="card"><div class="n">{e_intercept}</div><div class="l">sweep interceptions</div></div>
 </div>
 
+<p class="sub">Each row is self-contained: the control description, the input handed to the
+guardrail, and the output it produced — no other document is needed to read it.</p>
+
 <h2>Baseline matrix — identity, egress, guards, FGAC, A2A, reasoning, ledger</h2>
-<table><thead><tr><th>Code</th><th>Control</th><th>Agent</th><th>Scenario</th><th>Path</th><th>Verdict</th></tr></thead>
+<table><thead><tr><th>Code</th><th>Control</th><th>Description</th><th>Input</th><th>Output</th><th>Verdict</th></tr></thead>
 <tbody>
 {_matrix_rows(base)}
 </tbody></table>
 
 <h2>Extended sweep — flag-gated guardrails (off by default)</h2>
-<table><thead><tr><th>Code</th><th>Guard · mode</th><th>Mode</th><th>Scenario</th><th>Path</th><th>Verdict</th></tr></thead>
+<table><thead><tr><th>Code</th><th>Guard<br>flag · hook</th><th>Description</th><th>Input</th><th>Output</th><th>Verdict</th></tr></thead>
 <tbody>
 {_matrix_rows(ext)}
-</tbody></table>
-
-<h2>Control catalogue — what each control does and why</h2>
-<p class="sub">Baseline controls.</p>
-<table><thead><tr><th>Code</th><th>Control</th><th>What it does</th><th>Why it exists</th></tr></thead>
-<tbody>
-{_catalogue_rows(base_cat)}
-</tbody></table>
-<p class="sub" style="margin-top:22px">Extended sweep controls (flag · hook shown under each code).</p>
-<table><thead><tr><th>Code</th><th>Flag / hook</th><th>What it does</th><th>Why it exists</th></tr></thead>
-<tbody>
-{_catalogue_rows(ext_cat)}
 </tbody></table>
 
 <p class="foot">Every extended guard is off by default and enabled per scenario via its <code>GALAXY_*</code> flag.
