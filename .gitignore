@@ -49,3 +49,4 @@ migrated_aca/
 # Generated guardrail report (scripts/demo_agents.py --html)
 galaxy-guardrail-report.html
 *-guardrail-report.html
+docs/output/
