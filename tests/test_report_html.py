@@ -48,13 +48,17 @@ def test_renders_unified_report(tmp_path):
     h = out.read_text(encoding="utf-8")
     # structure
     assert "<!doctype html>" in h and "</html>" in h
-    # both matrices + catalogue
-    assert "Baseline matrix" in h and "Extended sweep" in h and "Control catalogue" in h
-    assert "What it does" in h and "Why it exists" in h
-    # codes + the flag/why content
+    # both matrices, each self-contained with description / input / output columns
+    assert "Baseline matrix" in h and "Extended sweep" in h
+    assert "<th>Description</th>" in h and "<th>Input</th>" in h and "<th>Output</th>" in h
+    # codes present
     assert "A1" in h and "EG01" in h and "AD28" in h
+    # flag/hook + the inline control description (no other doc needed to read the row)
     assert "GALAXY_GAP_EGRESS_POLICY" in h
-    assert "exfiltration" in h.lower()  # the EG01 "why"
+    assert "Outbound URL allow-list" in h            # EG01 description, inline
+    assert "Per-agent Non-Human Identity" in h       # A1 baseline description, inline
+    # the input + output values appear in the row
+    assert "evil url" in h                            # EG01 input (scenario)
     # tallies: 2 baseline + 3 extended = 5 checks, distinct controls A1/B4 + EG01/AD28 = 4
     assert "5/5" in h
     assert "4 controls" in h
