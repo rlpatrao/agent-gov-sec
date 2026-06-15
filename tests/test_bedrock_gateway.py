@@ -14,7 +14,7 @@ pytest.importorskip("langchain_core")
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from adapters.langgraph.bedrock_gateway import BedrockGatewayChatModel, _from_converse, _to_converse
+from agent_framework_adapters.langgraph.bedrock_gateway import BedrockGatewayChatModel, _from_converse, _to_converse
 
 
 def test_to_converse_extracts_system_and_maps_roles():

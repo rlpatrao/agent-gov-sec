@@ -9,7 +9,7 @@
 >
 > The full multi-agent AWS→Azure migration product (the 5-stage migration pipeline, discovery pipeline, scanner/AST pipeline, ~18 agents, ACA deployment) has been moved to a **local-only, gitignored `archive/`** and is **not part of this repo**. Where this doc shows that product's multi-agent trace topology, it is explicitly labeled **(archived)** for context only — it is not a current feature.
 >
-> Azure-coupling (Application Insights, APIM, Key Vault, Entra) is **current**. The cloud-/framework-agnostic adapter restructure (Azure/MAF → `adapters/azure/`, plus AWS/GCP exporters) is **roadmap** — see [`REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md). Pairs with [`architecture.md`](architecture.md) (system view) and [`user-guide.md`](user-guide.md) (how-to).
+> Azure-coupling (Application Insights, APIM, Key Vault, Entra) is **current**. The cloud-/framework-agnostic adapter restructure (Azure/MAF → `cloud_adapters/azure/`, plus AWS/GCP exporters) is **roadmap** — see [`REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md). Pairs with [`architecture.md`](architecture.md) (system view) and [`user-guide.md`](user-guide.md) (how-to).
 
 ---
 
@@ -385,7 +385,7 @@ No NHI has Key Vault access. The AOAI key never leaves APIM's inbound policy. An
 
 ### 4.1 The Middleware Stack (Ordered, Fail-Fast)
 
-**File:** [`adapters/azure/maf/middleware.py`](../adapters/azure/maf/middleware.py) — `build_governance_stack()`
+**File:** [`cloud_adapters/azure/maf/middleware.py`](../cloud_adapters/azure/maf/middleware.py) — `build_governance_stack()`
 
 Every `agent.run()` traverses this exact stack, in this order. Guards 1–3 are this repo's MAF wrappers around `agent_os` primitives; guards 4–7 come from `agent_os.integrations.maf_adapter.create_governance_middleware`:
 
@@ -526,7 +526,7 @@ At runtime, `CapabilityGuardMiddleware` enforces the same list as a second layer
 
 ### 4.7 The Hash-Chained Audit Ledger
 
-**Files:** [`core/trace_ledger.py`](../core/trace_ledger.py), [`adapters/azure/audit.py`](../adapters/azure/audit.py)
+**Files:** [`core/trace_ledger.py`](../core/trace_ledger.py), [`cloud_adapters/azure/audit.py`](../cloud_adapters/azure/audit.py)
 
 Every `AuditEntry` is written to three sinks simultaneously:
 

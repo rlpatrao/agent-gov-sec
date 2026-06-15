@@ -3,7 +3,7 @@ tests/test_secrets.py — the agnostic env-var SecretProvider (always runs).
 
 core.secrets.EnvVarSecretProvider is the cloud-neutral default behind the
 SecretProvider interface; the Azure Key Vault path lives in
-adapters/azure/secrets.py and is exercised by the Azure integration tier.
+cloud_adapters/azure/secrets.py and is exercised by the Azure integration tier.
 """
 
 from __future__ import annotations

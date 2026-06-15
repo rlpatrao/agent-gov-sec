@@ -17,7 +17,7 @@ from typing import Optional
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import tool
 
-from adapters.langgraph._base import LangGraphAgentBundle, build_langgraph_agent
+from agent_framework_adapters.langgraph._base import LangGraphAgentBundle, build_langgraph_agent
 from governance.extensions.data_classification import DataClassificationCatalog
 from governance.extensions.data_drift import DataAccessDriftDetector, JsonFileBaselineStore
 from governance.extensions.data_fgac import DataAccessMediator
@@ -54,7 +54,7 @@ def _dataset_fns(*, mediator: DataAccessMediator, nhi_id: str):
 
 def make_tool_specs(*, mediator: DataAccessMediator, nhi_id: str):
     """Framework-neutral ToolSpecs (used by the raw / pydantic adapters)."""
-    from adapters.contract import ToolSpec
+    from agent_framework_adapters.contract import ToolSpec
     query_dataset, summarize_costs = _dataset_fns(mediator=mediator, nhi_id=nhi_id)
     return [
         ToolSpec(name="query_dataset", description=query_dataset.__doc__ or "Read a governed dataset.table.",

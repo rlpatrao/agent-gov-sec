@@ -4,7 +4,7 @@
 
 **What this repo is.** A **cloud- and framework-agnostic runtime governance & security platform** for multi-agent systems, built on the **`agent_os` / `agent_sre` / `agentmesh` packages**. It provides per-agent identity, a layered guard middleware stack, A2A governance, OpenTelemetry tracing, and a hash-chained audit ledger — independent of the agents it governs *and* independent of any single cloud or agent framework. The repo's value is the **interface seam + cloud/framework adapters + composition** on top of `agent_os` primitives, not the governance logic itself.
 
-**The agnostic-core + adapter split (WS1 — done).** Everything cloud- or framework-specific lives behind an interface under `adapters/<cloud>/`. The agnostic core (`core/`, `governance/`, `a2a/`) imports **no** cloud SDK and **no** agent framework — this is enforced as an invariant.
+**The agnostic-core + adapter split (WS1 — done).** Everything cloud- or framework-specific lives behind an interface under `cloud_adapters/<cloud>/`. The agnostic core (`core/`, `governance/`, `a2a/`) imports **no** cloud SDK and **no** agent framework — this is enforced as an invariant.
 
 Azure is the one fully-implemented provider today (and ships the Azure framework glue). AWS and GCP are interface-complete **skeletons** (`NotImplementedError` until WS5/WS6). What remains roadmap is the *fill-in* of those clouds, the `agent_os` / `agent_sre` / `agentmesh` v4 re-baseline (WS3), and the gap modules (WS7) — **not** the adapter structure itself, which is real and verified.
 
@@ -42,11 +42,11 @@ flowchart TB
     NHI["core/nhi_registry.py — agent-type → principal id (resolver; no cloud SDK, no agent list)"]
   end
 
-  subgraph ADAPTERS["Cloud + framework adapters — adapters/"]
+  subgraph ADAPTERS["Cloud + framework adapters — cloud_adapters/ + agent_framework_adapters/"]
     direction LR
-    AZ["adapters/azure/  (FULL)\nidentity · secrets · gateway ·\ntracing · audit · egress · infra\n+ maf/ (guards · middleware · runtime)"]
-    AWS["adapters/aws/  (WS5 skeleton)"]
-    GCP["adapters/gcp/  (WS6 skeleton)"]
+    AZ["cloud_adapters/azure/  (FULL)\nidentity · secrets · gateway ·\ntracing · audit · egress · infra\n+ maf/ (guards · middleware · runtime)"]
+    AWS["cloud_adapters/aws/  (WS5 skeleton)"]
+    GCP["cloud_adapters/gcp/  (WS6 skeleton)"]
   end
 
   Base --> Factory
@@ -69,7 +69,7 @@ flowchart TB
 
 Every cloud/framework touchpoint is one of these Protocols. `AuditBackend` is re-exported from `agent_os` so adapters implement the upstream contract directly.
 
-| Interface | Azure impl (`adapters/azure/`) | AWS (WS5) | GCP (WS6) |
+| Interface | Azure impl (`cloud_adapters/azure/`) | AWS (WS5) | GCP (WS6) |
 |---|---|---|---|
 | `SecretProvider` | `secrets.TokenProvider` — Key Vault + Workload Identity (env fallback) | Secrets Manager / SSM | Secret Manager / ADC |
 | `IdentityProvider` | `identity.AzureIdentityProvider` — ManagedIdentityCredential | STS AssumeRole / IRSA | Workload Identity Federation |
@@ -83,7 +83,7 @@ The agnostic default `SecretProvider` (`core/secrets.EnvVarSecretProvider`) is e
 
 ### The provider factory — `core/provider_factory.py`
 
-`get_provider(name=None)` selects the adapter set by the `CLOUD_PROVIDER` env var (default `azure`) and **lazy-imports** the chosen `adapters/<cloud>/` package — so an `azure` run never needs the AWS/GCP SDKs, and importing the factory pulls no cloud SDK at all. Each adapter package exposes a module-level `PROVIDER` implementing `CloudProvider`. The AWS/GCP providers resolve but raise `NotImplementedError` from each accessor, locking the contract for WS5/WS6.
+`get_provider(name=None)` selects the adapter set by the `CLOUD_PROVIDER` env var (default `azure`) and **lazy-imports** the chosen `cloud_adapters/<cloud>/` package — so an `azure` run never needs the AWS/GCP SDKs, and importing the factory pulls no cloud SDK at all. Each adapter package exposes a module-level `PROVIDER` implementing `CloudProvider`. The AWS/GCP providers resolve but raise `NotImplementedError` from each accessor, locking the contract for WS5/WS6.
 
 ### Directory map
 
@@ -108,17 +108,20 @@ governance/                # agnostic governance only
 
 a2a/                       # typed A2A envelopes + audited dispatcher (agnostic)
 
-adapters/
-├── azure/                 # FULL: the Azure framework adapter (current default)
+cloud_adapters/            # CLOUD AXIS — selected by CLOUD_PROVIDER (core/provider_factory)
+├── azure/                 # FULL: the Azure cloud bindings (current default)
 │   ├── identity.py  secrets.py  gateway.py  tracing.py  audit.py
 │   ├── egress.yaml  infra/ (aca_jobs.bicep, ledger_schema.sql)
-│   └── framework/        # agent framework glue (the framework axis)
-│       ├── runtime.py     #   AgentRuntimeAdapter — framework OTel wiring
-│       ├── middleware.py  #   build_governance_stack() — the governance-middleware assembly
-│       └── guards/        #   3 framework middleware wrappers around agent_os primitives
-│           ├── prompt_injection.py  credential_redactor.py  context_budget.py
-├── aws/                   # WS5 skeleton — NotImplementedError stubs
-└── gcp/                   # WS6 skeleton — NotImplementedError stubs
+│   └── maf/              # Microsoft Agent Framework glue (MAF guards · middleware · runtime)
+├── aws/                   # IAM · Bedrock gateway · DynamoDB ledger (+ infra/ Terraform/Lambda)
+├── gcp/                   # SA · Vertex·Gemini · BigQuery
+└── local/                # cloud-neutral: env secrets, in-memory ledger, no egress
+
+agent_framework_adapters/  # FRAMEWORK AXIS — selected by --framework (core/framework_factory)
+├── contract.py            # the neutral contract every binding implements (ToolSpec/RunResult/…)
+├── langgraph/             # LangChain create_agent + GalaxyGuardMiddleware
+├── raw/                   # provider-native tool loop, no agent framework
+└── pydantic_ai/           # Pydantic AI Agent over native models
 
 payload_agents/            # demonstration payload (framework-coupled; the thing being governed)
 scripts/demo_governance.py # offline demo — the only runnable script in the repo
@@ -145,7 +148,7 @@ Every guard *logic* primitive comes from `agent_os` (anomaly/drift from `agent_s
 
 ### 1.2 Non-Human Identity (NHI)
 
-Source: [`core/nhi_registry.py`](../core/nhi_registry.py) (agnostic), [`adapters/azure/identity.py`](../adapters/azure/identity.py) (Azure credential)
+Source: [`core/nhi_registry.py`](../core/nhi_registry.py) (agnostic), [`cloud_adapters/azure/identity.py`](../cloud_adapters/azure/identity.py) (Azure credential)
 
 The registry is fully generic and imports no cloud SDK — it **hardcodes no agent list**. Both halves of an identity are delegated to the selected provider's `IdentityProvider`:
 
@@ -163,9 +166,9 @@ The `client_id` is carried as:
 flowchart LR
   Agent["Python agent process\n(NHI_CLIENT_ID_* from env)"]
   Reg["core/nhi_registry.py\n(agent-type → principal id resolver)"]
-  IDP["IdentityProvider\n(adapters/azure/identity.py)"]
+  IDP["IdentityProvider\n(cloud_adapters/azure/identity.py)"]
   Cloud["Cloud identity\n(Entra MI / STS / WIF)"]
-  GW["LLMGateway\n(adapters/azure/gateway.py)"]
+  GW["LLMGateway\n(cloud_adapters/azure/gateway.py)"]
 
   Agent --> Reg
   Reg -. get_credential() via factory .-> IDP
@@ -175,9 +178,9 @@ flowchart LR
 
 ### 1.3 Governance middleware pipeline
 
-Source: [`adapters/azure/maf/middleware.py`](../adapters/azure/maf/middleware.py) — `build_governance_stack()`
+Source: [`cloud_adapters/azure/maf/middleware.py`](../cloud_adapters/azure/maf/middleware.py) — `build_governance_stack()`
 
-`build_governance_stack()` returns `(middleware_list, pg_backend, audit_logger)` and is the **governance-middleware assembly** — the framework axis of the Azure bundle. It composes `agent_os` primitives into a framework middleware list. Guards 1–3 are framework wrappers (`adapters/azure/maf/guards/`) around `agent_os` detectors; guards 4–7 come from the `agent_os.integrations` framework-integration adapter. The agnostic pieces it draws on stay in `governance/`: the policy YAML packs, the prompt-injection config, and `OtelAuditBackend`.
+`build_governance_stack()` returns `(middleware_list, pg_backend, audit_logger)` and is the **governance-middleware assembly** — the framework axis of the Azure bundle. It composes `agent_os` primitives into a framework middleware list. Guards 1–3 are framework wrappers (`cloud_adapters/azure/maf/guards/`) around `agent_os` detectors; guards 4–7 come from the `agent_os.integrations` framework-integration adapter. The agnostic pieces it draws on stay in `governance/`: the policy YAML packs, the prompt-injection config, and `OtelAuditBackend`.
 
 **Execution order — guards 1–3 run before any toolkit middleware fires:**
 
@@ -210,7 +213,7 @@ flowchart TD
   RD["⑦ RogueDetectionMiddleware\nbehavioral drift\nOWASP LLM02"]
   RD --> LLM
 
-  LLM(["LLM via the gateway\n(adapters/azure/gateway.py → APIM → AOAI)"])
+  LLM(["LLM via the gateway\n(cloud_adapters/azure/gateway.py → APIM → AOAI)"])
 
   LLM --> AT_out["④ AuditTrailMiddleware\nlog complete"]
   AT_out --> Sinks
@@ -221,7 +224,7 @@ flowchart TD
   Sinks["Audit backends fan-out"]
   Sinks --> Log["LoggingBackend (stdout)"]
   Sinks --> Otel["OtelAuditBackend (agnostic)\nspan event → tracing backend"]
-  Sinks --> PG["PostgresHashChainBackend\n(adapters/azure/audit.py)"]
+  Sinks --> PG["PostgresHashChainBackend\n(cloud_adapters/azure/audit.py)"]
 
   classDef block fill:#a00,color:#fff
   classDef azure fill:#06f,color:#fff
@@ -235,12 +238,12 @@ Guards 1–3 call `audit_log.log(...)` directly on block/redact, so all governan
 
 | Guard | Module | Agnostic? |
 |---|---|---|
-| ① PromptInjection / ② CredentialRedactor / ③ ContextBudget | `adapters/azure/maf/guards/` | No — framework middleware wrappers |
+| ① PromptInjection / ② CredentialRedactor / ③ ContextBudget | `cloud_adapters/azure/maf/guards/` | No — framework middleware wrappers |
 | ④–⑦ (Audit, Policy, Capability, Rogue) | `agent_os.integrations` framework-integration adapter (Rogue via `agent_sre.anomaly`) | No — framework adapter |
 | egress / escalation guards | `governance/guards/` | **Yes** — pure `agent_os`, framework-free |
 | policy packs `galaxy-*.yaml` | `governance/policies/` | **Yes** |
 | `OtelAuditBackend` | `governance/adapters/otel_audit_backend.py` | **Yes** — pure OTel |
-| `PostgresHashChainBackend` | `adapters/azure/audit.py` | No — Azure ledger choice |
+| `PostgresHashChainBackend` | `cloud_adapters/azure/audit.py` | No — Azure ledger choice |
 
 **Per-agent tuning** lives in `payload_agents/config/<agent>.yaml`. For the shipped `Analyzer`:
 
@@ -260,7 +263,7 @@ Guards 1–3 call `audit_log.log(...)` directly on block/redact, so all governan
 | [`governance/policies/galaxy-tools.yaml`](../governance/policies/galaxy-tools.yaml) | Per-agent tool allow-list |
 | [`governance/policies/galaxy-pii.yaml`](../governance/policies/galaxy-pii.yaml) | PII rules placeholder |
 | [`governance/policies/galaxy-ast.yaml`](../governance/policies/galaxy-ast.yaml) | AST-agent rules (deny outbound A2A from leaf) |
-| [`adapters/azure/egress.yaml`](../adapters/azure/egress.yaml) | Outbound egress allow-list (Azure domains) |
+| [`cloud_adapters/azure/egress.yaml`](../cloud_adapters/azure/egress.yaml) | Outbound egress allow-list (Azure domains) |
 | [`governance/configs/prompt-injection.yaml`](../governance/configs/prompt-injection.yaml) | Injection threat patterns + thresholds |
 
 The egress allow-list moved under the Azure adapter (it lists Azure domains); the egress *guard* (`governance/guards/egress.py`) stays agnostic and resolves the path via the provider factory.
@@ -307,7 +310,7 @@ classDiagram
 
 ### 1.5 OTel tracing
 
-Source: [`core/run_tracer.py`](../core/run_tracer.py) (agnostic SDK), [`adapters/azure/tracing.py`](../adapters/azure/tracing.py) (Azure exporter), [`adapters/azure/maf/runtime.py`](../adapters/azure/maf/runtime.py) (framework wiring)
+Source: [`core/run_tracer.py`](../core/run_tracer.py) (agnostic SDK), [`cloud_adapters/azure/tracing.py`](../cloud_adapters/azure/tracing.py) (Azure exporter), [`cloud_adapters/azure/maf/runtime.py`](../cloud_adapters/azure/maf/runtime.py) (framework wiring)
 
 `configure_tracing()` is agnostic. Routing:
 1. The provider's `TraceExporterFactory` yields a span exporter (Azure → Azure Monitor when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set; AWS → X-Ray; GCP → Cloud Trace).
@@ -331,7 +334,7 @@ flowchart TB
 
 ### 1.6 Hash-chained audit ledger
 
-Source: [`core/trace_ledger.py`](../core/trace_ledger.py) (agnostic schema/logic), [`adapters/azure/audit.py`](../adapters/azure/audit.py) (Azure Postgres backend)
+Source: [`core/trace_ledger.py`](../core/trace_ledger.py) (agnostic schema/logic), [`cloud_adapters/azure/audit.py`](../cloud_adapters/azure/audit.py) (Azure Postgres backend)
 
 ```mermaid
 erDiagram
@@ -352,11 +355,11 @@ erDiagram
   }
 ```
 
-`PostgresHashChainBackend` implements `agent_os`'s `AuditBackend`; AWS (DynamoDB/QLDB) and GCP (BigQuery/Spanner) ship sibling backends under their adapters. **Current state:** `POSTGRES_DSN` unset → stdout mode (in-memory chain). The offline demo reproduces this chain logic in-process and verifies it. Schema DDL: [`adapters/azure/infra/ledger_schema.sql`](../adapters/azure/infra/ledger_schema.sql).
+`PostgresHashChainBackend` implements `agent_os`'s `AuditBackend`; AWS (DynamoDB/QLDB) and GCP (BigQuery/Spanner) ship sibling backends under their adapters. **Current state:** `POSTGRES_DSN` unset → stdout mode (in-memory chain). The offline demo reproduces this chain logic in-process and verifies it. Schema DDL: [`cloud_adapters/azure/infra/ledger_schema.sql`](../cloud_adapters/azure/infra/ledger_schema.sql).
 
 ### 1.7 Azure resource map — (archived full-product deployment topology)
 
-> Describes the archived full-product deployment (~18 agents as ACA jobs), retained as the target topology. The provisioning Bicep is [`adapters/azure/infra/aca_jobs.bicep`](../adapters/azure/infra/aca_jobs.bicep).
+> Describes the archived full-product deployment (~18 agents as ACA jobs), retained as the target topology. The provisioning Bicep is [`cloud_adapters/azure/infra/aca_jobs.bicep`](../cloud_adapters/azure/infra/aca_jobs.bicep).
 
 ```mermaid
 flowchart LR
@@ -386,11 +389,11 @@ flowchart LR
   class KV,ACR,MI,LAW,AI,AOAI,ACAEnv,APIM,Job,Pg azure
 ```
 
-**APIM egress policy (reference):** validates `Ocp-Apim-Subscription-Key`; rejects requests missing `x-agent-type` / `x-galaxy-run-id` (HTTP 400); rate-limits per subscription key; injects the real AOAI key from a Key-Vault-backed named value before forwarding. The `LLMGateway` (`adapters/azure/gateway.py`) stamps `x-agent-type` / `x-nhi-id` and the subscription key, so the egress contract is honored whenever an agent runs against a live APIM endpoint.
+**APIM egress policy (reference):** validates `Ocp-Apim-Subscription-Key`; rejects requests missing `x-agent-type` / `x-galaxy-run-id` (HTTP 400); rate-limits per subscription key; injects the real AOAI key from a Key-Vault-backed named value before forwarding. The `LLMGateway` (`cloud_adapters/azure/gateway.py`) stamps `x-agent-type` / `x-nhi-id` and the subscription key, so the egress contract is honored whenever an agent runs against a live APIM endpoint.
 
 ### 1.8 Deployment topology — AWS (WS5 target)
 
-A layered, slide-ready view of how the platform maps onto AWS services — the **WS5 adapter target** (interface-complete skeleton today; Azure is the implemented provider). The top three layers (application, governance/orchestration, runtime) are cloud-agnostic; only the bottom two (AWS platform services, observability) are provider-specific, supplied by `adapters/aws/`. The application layer reflects the current repo — the single `Analyzer` demonstration agent, with the per-agent NHI model scaling to N.
+A layered, slide-ready view of how the platform maps onto AWS services — the **WS5 adapter target** (interface-complete skeleton today; Azure is the implemented provider). The top three layers (application, governance/orchestration, runtime) are cloud-agnostic; only the bottom two (AWS platform services, observability) are provider-specific, supplied by `cloud_adapters/aws/`. The application layer reflects the current repo — the single `Analyzer` demonstration agent, with the per-agent NHI model scaling to N.
 
 ➡️ **[`docs/aws-deployment-topology.html`](aws-deployment-topology.html)** — open in a browser (self-contained, no dependencies).
 
@@ -462,7 +465,7 @@ flowchart TD
   Cfg["analyzer.yaml"] --> BA["build_agent('analyzer', run_id)"]
   BA --> NHI["NHIRegistry.get('Analyzer')"]
   BA --> GW["get_provider().llm_gateway().resolve()\n→ endpoint, key, headers"]
-  BA --> GS["build_governance_stack()\n(adapters/azure/maf/middleware.py)"]
+  BA --> GS["build_governance_stack()\n(cloud_adapters/azure/maf/middleware.py)"]
   GW --> Client["OpenAIChatClient(headers)"]
   GS --> Agent["agent-framework Agent(client, middleware)"]
   Client --> Agent
@@ -489,15 +492,15 @@ flowchart TD
 
 | Module | Role |
 |---|---|
-| [`adapters/azure/identity.py`](../adapters/azure/identity.py) | `IdentityProvider` — ManagedIdentityCredential |
-| [`adapters/azure/secrets.py`](../adapters/azure/secrets.py) | `SecretProvider` — Key Vault + env fallback (`TokenProvider`) |
-| [`adapters/azure/gateway.py`](../adapters/azure/gateway.py) | `LLMGateway` — APIM → AOAI chokepoint |
-| [`adapters/azure/tracing.py`](../adapters/azure/tracing.py) | `TraceExporterFactory` — Azure Monitor exporter |
-| [`adapters/azure/audit.py`](../adapters/azure/audit.py) | `AuditBackend` — Postgres hash-chain ledger |
-| [`adapters/azure/maf/middleware.py`](../adapters/azure/maf/middleware.py) | `build_governance_stack()` — the governance-middleware assembly |
-| [`adapters/azure/maf/runtime.py`](../adapters/azure/maf/runtime.py) | `AgentRuntimeAdapter` — framework OTel wiring |
-| [`adapters/azure/maf/guards/`](../adapters/azure/maf/guards/) | 3 framework guard middlewares |
-| [`adapters/aws/`](../adapters/aws/), [`adapters/gcp/`](../adapters/gcp/) | WS5/WS6 skeletons (`NotImplementedError`) |
+| [`cloud_adapters/azure/identity.py`](../cloud_adapters/azure/identity.py) | `IdentityProvider` — ManagedIdentityCredential |
+| [`cloud_adapters/azure/secrets.py`](../cloud_adapters/azure/secrets.py) | `SecretProvider` — Key Vault + env fallback (`TokenProvider`) |
+| [`cloud_adapters/azure/gateway.py`](../cloud_adapters/azure/gateway.py) | `LLMGateway` — APIM → AOAI chokepoint |
+| [`cloud_adapters/azure/tracing.py`](../cloud_adapters/azure/tracing.py) | `TraceExporterFactory` — Azure Monitor exporter |
+| [`cloud_adapters/azure/audit.py`](../cloud_adapters/azure/audit.py) | `AuditBackend` — Postgres hash-chain ledger |
+| [`cloud_adapters/azure/maf/middleware.py`](../cloud_adapters/azure/maf/middleware.py) | `build_governance_stack()` — the governance-middleware assembly |
+| [`cloud_adapters/azure/maf/runtime.py`](../cloud_adapters/azure/maf/runtime.py) | `AgentRuntimeAdapter` — framework OTel wiring |
+| [`cloud_adapters/azure/maf/guards/`](../cloud_adapters/azure/maf/guards/) | 3 framework guard middlewares |
+| [`cloud_adapters/aws/`](../cloud_adapters/aws/), [`cloud_adapters/gcp/`](../cloud_adapters/gcp/) | WS5/WS6 skeletons (`NotImplementedError`) |
 
 #### Payload (Part 2)
 
@@ -520,8 +523,8 @@ The repo was built as an AWS→Azure migration platform: a 5-stage migration pip
 ## Appendix A — Architectural rules
 
 1. **The agnostic core imports no cloud SDK and no agent framework.** `core/`, `governance/`, `a2a/` depend only on `core.interfaces` + the `agent_os` / `agent_sre` / `agentmesh` packages. Reach the Azure framework adapter only through `core.provider_factory.get_provider()`. This import invariant is the CI-able invariant.
-2. **One interface per cloud touchpoint.** New cloud capability = a new Protocol in `core/interfaces.py` + an impl under each `adapters/<cloud>/`. Never branch on `CLOUD_PROVIDER` in the core.
-3. **Adapters are lazy.** Importing `core.provider_factory` or an `adapters/<cloud>/` package must not import that cloud's SDK at module load — keep SDK imports inside methods, so a wrong-cloud install never breaks startup.
+2. **One interface per cloud touchpoint.** New cloud capability = a new Protocol in `core/interfaces.py` + an impl under each `cloud_adapters/<cloud>/`. Never branch on `CLOUD_PROVIDER` in the core.
+3. **Adapters are lazy.** Importing `core.provider_factory` or an `cloud_adapters/<cloud>/` package must not import that cloud's SDK at module load — keep SDK imports inside methods, so a wrong-cloud install never breaks startup.
 4. **Single LLM-egress per agent.** Every LLM call goes through `agent.run()` and the resolved `LLMGateway`. Never construct a chat client outside the `build_agent()` factory.
 5. **A2A is the only inter-agent path.** No agent imports another agent's class. Typed `*Request/v1` / `*Report/v1` schemas are the contract.
 6. **Tunables in YAML, code in Python.** Per-agent toggles live in `payload_agents/config/<agent>.yaml`; the factory never branches on agent name.
@@ -537,16 +540,16 @@ The repo was built as an AWS→Azure migration platform: a 5-stage migration pip
 |---|---|---|
 | Agnostic-core / adapter split (WS1) | ✅ Done & verified | verified import-clean `core/governance/a2a`; factory resolves azure/aws/gcp |
 | Interface seam + provider factory | ✅ Working | [`core/interfaces.py`](../core/interfaces.py), [`core/provider_factory.py`](../core/provider_factory.py) |
-| Azure provider (full) | ✅ Working | [`adapters/azure/`](../adapters/azure/) |
+| Azure provider (full) | ✅ Working | [`cloud_adapters/azure/`](../cloud_adapters/azure/) |
 | AWS / GCP providers | 🛣️ Skeleton | `NotImplementedError` stubs — WS5 / WS6 |
-| Governance middleware stack (7 guards) | ✅ Working | [`adapters/azure/maf/middleware.py`](../adapters/azure/maf/middleware.py) |
+| Governance middleware stack (7 guards) | ✅ Working | [`cloud_adapters/azure/maf/middleware.py`](../cloud_adapters/azure/maf/middleware.py) |
 | `build_agent()` factory | ✅ Working | [`payload_agents/_base.py`](../payload_agents/_base.py) |
 | Analyzer demo agent | ✅ Working | [`payload_agents/analyzer_agent.py`](../payload_agents/analyzer_agent.py) |
 | A2A envelope + audited dispatcher | ✅ Working | [`a2a/`](../a2a/) |
-| OTel tracing (agnostic SDK + Azure exporter) | ✅ Working (when configured) | [`core/run_tracer.py`](../core/run_tracer.py), [`adapters/azure/tracing.py`](../adapters/azure/tracing.py) |
-| Hash-chained audit logic | ✅ Working (stdout mode) | [`adapters/azure/audit.py`](../adapters/azure/audit.py) |
+| OTel tracing (agnostic SDK + Azure exporter) | ✅ Working (when configured) | [`core/run_tracer.py`](../core/run_tracer.py), [`cloud_adapters/azure/tracing.py`](../cloud_adapters/azure/tracing.py) |
+| Hash-chained audit logic | ✅ Working (stdout mode) | [`cloud_adapters/azure/audit.py`](../cloud_adapters/azure/audit.py) |
 | Offline governance demo | ✅ Working | `python scripts/demo_governance.py` |
-| Persistent Postgres ledger | 🔶 Opt-in | set `POSTGRES_DSN`; apply [`adapters/azure/infra/ledger_schema.sql`](../adapters/azure/infra/ledger_schema.sql) |
+| Persistent Postgres ledger | 🔶 Opt-in | set `POSTGRES_DSN`; apply [`cloud_adapters/azure/infra/ledger_schema.sql`](../cloud_adapters/azure/infra/ledger_schema.sql) |
 | Full multi-agent product | 🗄️ Archived | local-only `archive/` |
 | AWS adapters (WS5) / GCP adapters (WS6) | 🛣️ Roadmap | [`docs/REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md) |
 | `agent_os` / `agent_sre` / `agentmesh` v4 re-baseline (WS3) / gap modules (WS7) | 🛣️ Roadmap | REFACTOR_AND_GAPS_PLAN.md |

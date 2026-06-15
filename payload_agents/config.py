@@ -84,7 +84,7 @@ class GovernanceConfig(BaseModel):
     denied_tools: list[str] = Field(default_factory=list)
 
     # ── WS7 gap-module toggles (consumed by the LangGraph axis,
-    #    adapters/langgraph/governance.build_langgraph_governance) ──────────
+    #    agent_framework_adapters/langgraph/governance.build_langgraph_governance) ──────────
     blocked_patterns: list[str] = Field(
         default_factory=list,
         description="Substrings denied in tool arguments / model output "

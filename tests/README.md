@@ -34,12 +34,12 @@ at collection:
 
 | Module | Covers | Run it with |
 |---|---|---|
-| `test_guards.py` | The 3 MAF `AgentMiddleware` guard wrappers (`adapters/azure/maf/guards/`) against a context stub | `pip install '.[azure]'` |
+| `test_guards.py` | The 3 MAF `AgentMiddleware` guard wrappers (`cloud_adapters/azure/maf/guards/`) against a context stub | `pip install '.[azure]'` |
 | `test_analyzer_agent.py` | `AnalyzerHandler` logic against a fake agent (currently MAF-coupled only at *import*) | `pip install '.[azure]'` |
 
 ## Tier 3 — Per-cloud adapter contract (WS5 / WS6, not yet built)
 
-When `adapters/aws/` and `adapters/gcp/` are implemented, each gets a parallel
+When `cloud_adapters/aws/` and `cloud_adapters/gcp/` are implemented, each gets a parallel
 suite mirroring the Azure adapter against **mocked SDKs** (moto for AWS, the GCP
 client test doubles for GCP): identity, secrets, tracing, audit, gateway,
 egress. The factory-contract test (`test_provider_factory.py`) already asserts
@@ -70,7 +70,7 @@ with real behavior as the impls land.
 2. **A thin MAF stack smoke test** runnable in CI with `.[azure]` installed:
    build the Analyzer via `build_agent(...)`, assert the 7-guard middleware list
    assembles and a stubbed `agent.run()` fires the guards end-to-end.
-3. **Tier-3 mocked-SDK suites** for `adapters/aws` and `adapters/gcp` (with WS5/WS6).
+3. **Tier-3 mocked-SDK suites** for `cloud_adapters/aws` and `cloud_adapters/gcp` (with WS5/WS6).
 4. **A grep/import CI gate** asserting the agnostic invariant
    (`grep -rE "^\s*(from|import) (azure|agent_framework)" core governance a2a`
    returns nothing) so the boundary can't silently regress.

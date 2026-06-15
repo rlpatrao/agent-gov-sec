@@ -19,7 +19,7 @@ from typing import Optional
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import tool
 
-from adapters.langgraph._base import LangGraphAgentBundle, build_langgraph_agent
+from agent_framework_adapters.langgraph._base import LangGraphAgentBundle, build_langgraph_agent
 from governance.extensions.data_classification import DataClassificationCatalog
 from governance.extensions.data_drift import DataAccessDriftDetector, JsonFileBaselineStore
 from governance.extensions.data_fgac import DataAccessMediator
@@ -40,7 +40,7 @@ def make_tools():
 
 def make_tool_specs():
     """Framework-neutral ToolSpecs (used by the raw / pydantic adapters)."""
-    from adapters.contract import ToolSpec
+    from agent_framework_adapters.contract import ToolSpec
     return [ToolSpec(name="shell_exec", description=_shell_exec.__doc__ or "Run a shell command.",
                      parameters={"type": "object", "properties": {"cmd": {"type": "string"}}, "required": ["cmd"]},
                      fn=_shell_exec)]

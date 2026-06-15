@@ -1,6 +1,6 @@
 """
 tests/test_guards.py — MAF-integration tests for the Azure adapter's guard
-middlewares (``adapters/azure/maf/guards/``).
+middlewares (``cloud_adapters/azure/maf/guards/``).
 
 These exercise the three MAF ``AgentMiddleware`` wrappers against a minimal
 AgentContext stub. They require the Microsoft Agent Framework, so the whole
@@ -30,9 +30,9 @@ from agent_framework._middleware import MiddlewareTermination
 from agent_os.audit_logger import GovernanceAuditLogger, InMemoryBackend
 from agent_os.context_budget import ContextScheduler
 
-from adapters.azure.maf.guards.context_budget import ContextBudgetGuardMiddleware
-from adapters.azure.maf.guards.credential_redactor import CredentialRedactorGuardMiddleware
-from adapters.azure.maf.guards.prompt_injection import PromptInjectionGuardMiddleware
+from cloud_adapters.azure.maf.guards.context_budget import ContextBudgetGuardMiddleware
+from cloud_adapters.azure.maf.guards.credential_redactor import CredentialRedactorGuardMiddleware
+from cloud_adapters.azure.maf.guards.prompt_injection import PromptInjectionGuardMiddleware
 
 
 # ── Minimal context stub matching what AgentMiddleware.process expects ──────

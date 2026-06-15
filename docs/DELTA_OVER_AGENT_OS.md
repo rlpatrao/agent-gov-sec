@@ -55,29 +55,29 @@ Legend: **(a)** pure `agent_os` pass-through · **(b)** `agent_os` / `agent_sre`
 | `core/trace_ledger.py` | 232 | **Hash-chained SHA-256 audit ledger** schema + chain logic. ⚠️ see reconciliation below. |
 | `a2a/envelope.py` | 195 | Typed A2A envelopes (`A2ARequest/Response/Status`). (`agent-framework` ships `agent_framework.a2a`; ours is a purpose-built envelope.) |
 | `a2a/dispatcher.py` | 245 | Audited A2A dispatch with trace-linking — *(b)* for audit (uses `agent_os` `GovernanceAuditLogger`), but the dispatch/envelope protocol is ours. |
-| `adapters/azure/identity.py` | 39 | Azure binding — Entra `ManagedIdentityCredential`. |
-| `adapters/azure/secrets.py` | 124 | Azure binding — Key Vault + Workload Identity (`TokenProvider`). |
-| `adapters/azure/tracing.py` | 34 | Azure binding — `AzureMonitorTraceExporter`. |
-| `adapters/azure/gateway.py` | 66 | Azure binding — APIM → AOAI egress chokepoint (`AzureLLMGateway`). |
-| `adapters/azure/maf/runtime.py` | 40 | MAF OTel wiring behind `AgentRuntimeAdapter` (`MafRuntimeAdapter`). |
-| `adapters/azure/infra/` | — | `aca_jobs.bicep`, `ledger_schema.sql` (Azure IaC). |
-| `adapters/{aws,gcp}/__init__.py` | 57+57 | WS5/WS6 skeletons (every accessor raises `NotImplementedError`). |
+| `cloud_adapters/azure/identity.py` | 39 | Azure binding — Entra `ManagedIdentityCredential`. |
+| `cloud_adapters/azure/secrets.py` | 124 | Azure binding — Key Vault + Workload Identity (`TokenProvider`). |
+| `cloud_adapters/azure/tracing.py` | 34 | Azure binding — `AzureMonitorTraceExporter`. |
+| `cloud_adapters/azure/gateway.py` | 66 | Azure binding — APIM → AOAI egress chokepoint (`AzureLLMGateway`). |
+| `cloud_adapters/azure/maf/runtime.py` | 40 | MAF OTel wiring behind `AgentRuntimeAdapter` (`MafRuntimeAdapter`). |
+| `cloud_adapters/azure/infra/` | — | `aca_jobs.bicep`, `ledger_schema.sql` (Azure IaC). |
+| `cloud_adapters/{aws,gcp}/__init__.py` | 57+57 | WS5/WS6 skeletons (every accessor raises `NotImplementedError`). |
 | `core/discovery_artifacts.py` | 126 | Pydantic models kept for the demo payload. |
 
 ### (b) `agent_os` / `agent_sre` primitive + our wiring/config — the governance composition
 
 | Module | LOC | Upstream primitive wrapped/used | Our part |
 |---|---|---|---|
-| `adapters/azure/maf/guards/prompt_injection.py` | 125 | `agent_os.prompt_injection.PromptInjectionDetector` | MAF `AgentMiddleware` wrapper + audit emission + **config backfill shim** (`agent_os` config misses `allowlist`/`blocklist`/`custom_patterns`/`sensitivity`) |
-| `adapters/azure/maf/guards/credential_redactor.py` | 98 | `agent_os.credential_redactor.CredentialRedactor` | MAF middleware wrapper, redact/deny modes, audit |
-| `adapters/azure/maf/guards/context_budget.py` | 139 | `agent_os.context_budget.ContextScheduler` | MAF middleware wrapper, pre-call budget + post-call usage record |
-| `adapters/azure/maf/middleware.py` | 172 | `agent_os.integrations.maf_adapter.create_governance_middleware` + `ContextScheduler` + `ThreatLevel` | `build_governance_stack()` assembly (guards 1–3 ours, 4–7 from `agent_os`) + **`_CompatAuditLogger` shim** bridging the kernel-3.x `log()` signature mismatch |
+| `cloud_adapters/azure/maf/guards/prompt_injection.py` | 125 | `agent_os.prompt_injection.PromptInjectionDetector` | MAF `AgentMiddleware` wrapper + audit emission + **config backfill shim** (`agent_os` config misses `allowlist`/`blocklist`/`custom_patterns`/`sensitivity`) |
+| `cloud_adapters/azure/maf/guards/credential_redactor.py` | 98 | `agent_os.credential_redactor.CredentialRedactor` | MAF middleware wrapper, redact/deny modes, audit |
+| `cloud_adapters/azure/maf/guards/context_budget.py` | 139 | `agent_os.context_budget.ContextScheduler` | MAF middleware wrapper, pre-call budget + post-call usage record |
+| `cloud_adapters/azure/maf/middleware.py` | 172 | `agent_os.integrations.maf_adapter.create_governance_middleware` + `ContextScheduler` + `ThreatLevel` | `build_governance_stack()` assembly (guards 1–3 ours, 4–7 from `agent_os`) + **`_CompatAuditLogger` shim** bridging the kernel-3.x `log()` signature mismatch |
 | `governance/guards/egress.py` | 55 | `agent_os.egress_policy.EgressPolicy` | guard wrapper + allow-list path via the provider factory + **`protocol: tcp` parser workaround** |
 | `governance/guards/escalation.py` | 88 | `agent_os.escalation.*` | guard wrapper + audit |
 | `governance/adapters/otel_audit_backend.py` | 67 | implements `agent_os.audit_logger.AuditBackend` | OTel span-event backend (`governance.<event_type>`). ⚠️ see reconciliation |
-| `adapters/azure/audit.py` | 182 | implements `agent_os.audit_logger.AuditBackend` | `PostgresHashChainBackend` — SHA-256 hash-chain persistence |
+| `cloud_adapters/azure/audit.py` | 182 | implements `agent_os.audit_logger.AuditBackend` | `PostgresHashChainBackend` — SHA-256 hash-chain persistence |
 | `payload_agents/_base.py` | — | `agent_framework.Agent`, `OpenAIChatClient`, `GovernanceAuditLogger` | `build_agent()` factory wiring the stack (payload, not platform) |
-| `governance/policies/galaxy-*.yaml`, `configs/prompt-injection.yaml`, `adapters/azure/egress.yaml` | — | drive `agent_os`'s `PolicyEvaluator` / `PromptInjectionDetector` / `EgressPolicy` | **our rules**, their engines |
+| `governance/policies/galaxy-*.yaml`, `configs/prompt-injection.yaml`, `cloud_adapters/azure/egress.yaml` | — | drive `agent_os`'s `PolicyEvaluator` / `PromptInjectionDetector` / `EgressPolicy` | **our rules**, their engines |
 
 ---
 
@@ -87,7 +87,7 @@ Legend: **(a)** pure `agent_os` pass-through · **(b)** `agent_os` / `agent_sre`
 2. **Compatibility shims are ours and load-bearing.** `_CompatAuditLogger` (signature bridge for `GovernanceAuditLogger.log`), the prompt-injection **config backfill**, and the egress **`protocol: tcp`** parser are workarounds for `agent_os` packaging quirks — see `docs/guardrails-inventory.md` "packaging quirks". These survived the WS3 bump to 3.7.0 (suite green) but should be re-checked on each `agent_os` upgrade; ideally upstreamed.
 3. **Roadmap leverage already in `agent_os` / `agent_sre`** (don't rebuild): **Gap 2** (unified policy engine) → `agent_os.policies` / `semantic_policy` exist upstream (adopt, don't build); **Gap 3** (data-access drift) → extend `agent_sre.anomaly`; **Gap 4** (reasoning-chain) → `agent_os.content_governance` / `semantic_policy` + the MCP response/intent scanners are relevant surface.
 4. **WS5/WS6 framework axis is partly upstream:** `agent_framework.amazon` / `agent_framework.google` provider clients exist — the AWS/GCP framework adapters can wire those rather than build from scratch.
-5. **Policy-engine verification + Gap-1 reconciliation (RESOLVED).** Runtime introspection (prompted by a "Casbin?" question) confirmed `agent_os.policies` is a full ABAC engine — `PolicyEvaluator.evaluate(context)` with `Condition(field, operator, value)` (EQ/NE/GT/GTE/LT/LTE/IN/NOT_IN/CONTAINS/MATCHES), `PolicyScope` (GLOBAL/ORG/TENANT/AGENT), conflict resolution, **and pluggable Cedar (`CedarBackend`/`load_cedar`) + OPA/Rego (`OPABackend`/`load_rego`) backends.** It also ships `agent_os.policies.data_classification` (`DataClassification`, `DataLabel`, `ABACPolicy`, `DataAccessEvaluator`, `classify_text`, `detect_pii/phi/pci`). **Casbin is therefore unnecessary** (it would be a third engine). Our WS7 **Gap 1 was refactored to consume MSGK's `data_classification`** for the classification + ABAC decision — only the *enforcement* (in-process masking + AWS Lake Formation pushdown, `governance/extensions/data_fgac.py`, `adapters/aws/data_fgac.py`) and the deployment *config catalog* remain ours. **Cedar is wired** as the standards-based engine for agent + data authz (`governance/extensions/policy_engine.CedarAuthorizer`, flag `GALAXY_POLICY_ENGINE=cedar`, **`cedarpy` is a base dependency** so it works out of the box). ⚠️ **Upstream bug found:** MSGK 3.7.0's own `CedarBackend` targets the cedarpy **3.x** API (`AuthorizationRequest`) — incompatible with the only Py3.14-installable cedarpy (4.x) — and **fails open** (returns *allow*) on that error. So we evaluate via `cedarpy.is_authorized` (4.x) **directly, fail-closed**; the Cedar policy set + ABAC intent are unchanged. Worth reporting to MSGK.
+5. **Policy-engine verification + Gap-1 reconciliation (RESOLVED).** Runtime introspection (prompted by a "Casbin?" question) confirmed `agent_os.policies` is a full ABAC engine — `PolicyEvaluator.evaluate(context)` with `Condition(field, operator, value)` (EQ/NE/GT/GTE/LT/LTE/IN/NOT_IN/CONTAINS/MATCHES), `PolicyScope` (GLOBAL/ORG/TENANT/AGENT), conflict resolution, **and pluggable Cedar (`CedarBackend`/`load_cedar`) + OPA/Rego (`OPABackend`/`load_rego`) backends.** It also ships `agent_os.policies.data_classification` (`DataClassification`, `DataLabel`, `ABACPolicy`, `DataAccessEvaluator`, `classify_text`, `detect_pii/phi/pci`). **Casbin is therefore unnecessary** (it would be a third engine). Our WS7 **Gap 1 was refactored to consume MSGK's `data_classification`** for the classification + ABAC decision — only the *enforcement* (in-process masking + AWS Lake Formation pushdown, `governance/extensions/data_fgac.py`, `cloud_adapters/aws/data_fgac.py`) and the deployment *config catalog* remain ours. **Cedar is wired** as the standards-based engine for agent + data authz (`governance/extensions/policy_engine.CedarAuthorizer`, flag `GALAXY_POLICY_ENGINE=cedar`, **`cedarpy` is a base dependency** so it works out of the box). ⚠️ **Upstream bug found:** MSGK 3.7.0's own `CedarBackend` targets the cedarpy **3.x** API (`AuthorizationRequest`) — incompatible with the only Py3.14-installable cedarpy (4.x) — and **fails open** (returns *allow*) on that error. So we evaluate via `cedarpy.is_authorized` (4.x) **directly, fail-closed**; the Cedar policy set + ABAC intent are unchanged. Worth reporting to MSGK.
 
 ---
 

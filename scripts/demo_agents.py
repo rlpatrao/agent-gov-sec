@@ -55,10 +55,10 @@ from langchain_core.messages import AIMessage
 
 from a2a.dispatcher import a2a_call
 from a2a.envelope import A2ARequest, A2AResponse
-from adapters.aws.data_fgac import AwsLakeFormationEnforcer
-from adapters.langgraph.governance import GovernanceViolation
-from adapters.contract import RunResult
-from adapters.langgraph.runtime import build_chat_model, build_gemini_model, build_bedrock_model
+from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
+from agent_framework_adapters.langgraph.governance import GovernanceViolation
+from agent_framework_adapters.contract import RunResult
+from agent_framework_adapters.langgraph.runtime import build_chat_model, build_gemini_model, build_bedrock_model
 from core.nhi_registry import NHIRegistry
 from governance.extensions.data_drift import DataAccessDriftDetector, InMemoryBaselineStore, DriftConfig
 from governance.extensions.reasoning_guard import ReasoningStep, ReasoningStepValidator

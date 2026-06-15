@@ -22,9 +22,9 @@ and MITRE ATLAS columns are an indicative crosswalk.
 
 | Code | Control | Enforcing module | OWASP | NIST AI RMF | ISO/IEC 42001 | EU AI Act | MITRE ATLAS |
 |---|---|---|---|---|---|---|---|
-| A1 | NHI identity (per-agent principal) | `core/nhi_registry.py` + `adapters/<cloud>/identity.py` | ASI — agent identity | GOVERN, MANAGE | A.9 roles & responsibilities | Art.12 record-keeping (attribution) | — |
-| A2 | LLM-egress chokepoint | `adapters/<cloud>/gateway.py` | ASI — excessive agency | MANAGE | A.6 lifecycle controls | Art.15 robustness/cybersecurity | LLM data leakage; exfiltration |
-| A3 | Egress allow-list | `governance/guards/egress.py` + `adapters/<cloud>/egress.yaml` | LLM05 / ASI | MANAGE | A.6 | Art.15 | Exfiltration over web service |
+| A1 | NHI identity (per-agent principal) | `core/nhi_registry.py` + `cloud_adapters/<cloud>/identity.py` | ASI — agent identity | GOVERN, MANAGE | A.9 roles & responsibilities | Art.12 record-keeping (attribution) | — |
+| A2 | LLM-egress chokepoint | `cloud_adapters/<cloud>/gateway.py` | ASI — excessive agency | MANAGE | A.6 lifecycle controls | Art.15 robustness/cybersecurity | LLM data leakage; exfiltration |
+| A3 | Egress allow-list | `governance/guards/egress.py` + `cloud_adapters/<cloud>/egress.yaml` | LLM05 / ASI | MANAGE | A.6 | Art.15 | Exfiltration over web service |
 | B4 | Prompt-injection guard | `governance/pipeline.py` (`agent_os.PromptInjectionDetector`) | LLM01 / ASI-01 | MEASURE, MANAGE | A.6 | Art.15 | Prompt injection (direct/indirect) |
 | B5 | Credential redactor | `governance/pipeline.py` (`agent_os.CredentialRedactor`) | LLM06 / LLM02:2025 | MAP, MEASURE | A.7 data | Art.10 data governance | LLM data leakage |
 | B6 | Context-budget guard | `governance/pipeline.py` (`agent_os.ContextScheduler`) | LLM04 (unbounded consumption) | MANAGE | A.6 | Art.15 | Denial of ML service / cost |
@@ -33,12 +33,12 @@ and MITRE ATLAS columns are an indicative crosswalk.
 | C10 | A2A recipient allow-list | `a2a/dispatcher.py` + per-agent YAML | ASI — multi-agent | MANAGE | A.6 | Art.15 | — |
 | C11 | A2A audited dispatch | `a2a/dispatcher.py` + `governance/adapters/otel_audit_backend.py` | ASI — multi-agent | GOVERN | A.9 logging | Art.12 record-keeping | — |
 | D12–D15 | Data FGAC (ABAC allow / mask / row-filter) | `governance/extensions/data_fgac.py` + `data_classification.py` (`agent_os.DataAccessEvaluator`) | LLM02:2025 / ASI | MAP, MANAGE | A.7 data governance | Art.10 data governance | LLM data leakage |
-| D16 | FGAC store-side pushdown | `adapters/aws/data_fgac.py` (Lake Formation / Athena SQL) | LLM02:2025 | MANAGE | A.7 | Art.10 | LLM data leakage |
+| D16 | FGAC store-side pushdown | `cloud_adapters/aws/data_fgac.py` (Lake Formation / Athena SQL) | LLM02:2025 | MANAGE | A.7 | Art.10 | LLM data leakage |
 | D-authz | Data FGAC deny-all (no policy) | `governance/extensions/data_fgac.py` | LLM02:2025 / ASI | MANAGE | A.7 | Art.10 | — |
 | F18 | Data-access drift detector | `governance/extensions/data_drift.py` (`agent_sre.anomaly`) | LLM02 / ASI | MEASURE (monitoring) | A.6 | Art.15; Art.72 post-market monitoring | Discover ML model behavior |
 | G19 | Reasoning-step guard (pre-exec CoT check) | `governance/extensions/reasoning_guard.py` | ASI — reasoning / LLM09 | MEASURE | A.6 | Art.14 human oversight | — |
 | G20 | CoT/CoVe reasoning trace (redacted) | `governance/extensions/reasoning_trace.py` | ASI — reasoning | MEASURE (explainability) | A.6 | Art.12 logging; Art.13 transparency | — |
-| H21 | Hash-chained audit ledger | `adapters/<cloud>/audit.py` + `core/trace_ledger.py` | — | GOVERN (accountability) | A.9 logging | Art.12 record-keeping | — |
+| H21 | Hash-chained audit ledger | `cloud_adapters/<cloud>/audit.py` + `core/trace_ledger.py` | — | GOVERN (accountability) | A.9 logging | Art.12 record-keeping | — |
 | I23 | HITL escalation | `governance/guards/escalation.py` | ASI — human-in-the-loop | GOVERN, MANAGE | A.9 | Art.14 human oversight | — |
 
 ## Notes per framework

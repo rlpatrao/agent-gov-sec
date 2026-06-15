@@ -13,7 +13,7 @@ no framework at all.
 
 Each ``adapters/<framework>/`` package must expose the builder surface the demo
 uses (``build_agent`` / the per-persona builders) and return an object satisfying
-``adapters.contract.AgentBundle`` (a framework-neutral ``invoke(prompt) ->
+``agent_framework_adapters.contract.AgentBundle`` (a framework-neutral ``invoke(prompt) ->
 RunResult``).
 """
 
@@ -28,9 +28,9 @@ logger = logging.getLogger(__name__)
 
 # name -> adapter package
 _FRAMEWORK_PACKAGES: dict[str, str] = {
-    "langgraph": "adapters.langgraph",       # LangChain create_agent + middleware
-    "raw": "adapters.raw",                   # provider-native tool loop, no framework
-    "pydantic": "adapters.pydantic_ai",      # Pydantic AI Agent (native models)
+    "langgraph": "agent_framework_adapters.langgraph",       # LangChain create_agent + middleware
+    "raw": "agent_framework_adapters.raw",                   # provider-native tool loop, no framework
+    "pydantic": "agent_framework_adapters.pydantic_ai",      # Pydantic AI Agent (native models)
 }
 
 DEFAULT_FRAMEWORK = "langgraph"

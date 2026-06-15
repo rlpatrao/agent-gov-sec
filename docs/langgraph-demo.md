@@ -2,7 +2,7 @@
 
 A framework-agnostic demonstration: the same governance platform governs **LangGraph**
 agents end-to-end — offline by default, with an opt-in `--live` path that drives a real
-LLM. The demo lives entirely in `adapters/langgraph/` + `payload_agents/` (+ the
+LLM. The demo lives entirely in `agent_framework_adapters/langgraph/` + `payload_agents/` (+ the
 `scripts/demo_agents.py` runner) and touches **no core-framework code** — it registers its NHIs via env
 (`payload_agents/__init__.py` → `NHI_CLIENT_ID_*`, resolved by `core.nhi_registry`'s
 env-extensible lookup) and its deps are the opt-in `.[langgraph]` extra.
@@ -32,7 +32,7 @@ through the API Gateway egress chokepoint** for aws — read from your environme
 The aws path is special: rather than calling `bedrock-runtime` directly, the agent POSTs
 Bedrock **Converse** requests to an API Gateway (`x-api-key` + per-agent attribution
 headers) that proxies to Bedrock via Lambda — so the agent never holds Bedrock credentials.
-It needs the `galaxy-rp` infra applied (`adapters/aws/infra`) and `AWS_BEDROCK_GATEWAY_ENDPOINT`
+It needs the `galaxy-rp` infra applied (`cloud_adapters/aws/infra`) and `AWS_BEDROCK_GATEWAY_ENDPOINT`
 + key set; see `docs/REFACTOR_AND_GAPS_PLAN.md` WS5. Either way the ledger runs in
 stdout/persisted mode per cloud and OTel no-ops without an exporter.
 
@@ -87,8 +87,8 @@ The audit ledger entries + hashes also print in the **[H]** section regardless.
 | **Auditor** (`auditor_agent.py`) | privileged cross-dataset reader + A2A callee | broader clearance + governed A2A hop |
 | **Rogue** (`rogue_agent.py`) | untrusted agent | trips every guard — prompt injection, credential leak, out-of-scope data, disallowed tools |
 
-All three are built by `adapters/langgraph/_base.build_langgraph_agent()` and wrapped by
-`adapters/langgraph/governance.GalaxyGuardMiddleware`, which threads the same `governance/` +
+All three are built by `agent_framework_adapters/langgraph/_base.build_langgraph_agent()` and wrapped by
+`agent_framework_adapters/langgraph/governance.GalaxyGuardMiddleware`, which threads the same `governance/` +
 `core/` + `a2a/` primitives and WS7 extensions used for MAF agents into a LangChain
 `AgentMiddleware`.
 

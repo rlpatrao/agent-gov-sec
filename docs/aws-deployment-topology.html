@@ -209,7 +209,7 @@
   </div>
 
   <div class="footer">
-    <p><b>How to read this.</b> The top three layers (application, governance/orchestration, runtime) are largely <b>cloud-agnostic</b> — they live in <code>core/</code>, <code>governance/</code>, <code>a2a/</code> and depend only on the interface seam. Only the bottom two layers (AWS platform services, observability) are provider-specific, supplied by <code>adapters/aws/</code>.</p>
+    <p><b>How to read this.</b> The top three layers (application, governance/orchestration, runtime) are largely <b>cloud-agnostic</b> — they live in <code>core/</code>, <code>governance/</code>, <code>a2a/</code> and depend only on the interface seam. Only the bottom two layers (AWS platform services, observability) are provider-specific, supplied by <code>cloud_adapters/aws/</code>.</p>
     <p><b>Status.</b> This is the <b>WS5 target topology</b>. The AWS adapter is an interface-complete skeleton today (every accessor raises <code>NotImplementedError</code>); Azure is the one fully-implemented provider. The application layer reflects the current repo — a single <code>Analyzer</code> demonstration agent in <code>payload_agents/</code>; the full multi-agent migration product is archived. See <code>docs/REFACTOR_AND_GAPS_PLAN.md</code> (WS5) and <code>docs/architecture.md</code>.</p>
   </div>
 
