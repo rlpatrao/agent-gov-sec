@@ -62,6 +62,14 @@ The baseline matrix stays at 37/37 (the no-regression anchor — the sweep guard
 are off by default, so they do not appear there); the sweep walk is deterministic
 and runs the same under any cloud/framework selection.
 
+For a shareable artifact, `--html` writes a self-contained HTML report of the
+unified matrix (both control sets, per-check verdict) plus a control catalogue
+stating, for each of the 49 controls, what it does and why it exists:
+
+```bash
+.venv/bin/python scripts/demo_agents.py --fake --html galaxy-guardrail-report.html
+```
+
 Four enforcement modes, by how the guard binds:
 
 - **WIRED** — the pipeline auto-registers the guard and runs it on every governed

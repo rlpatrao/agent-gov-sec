@@ -759,7 +759,8 @@ def _real_call_error(agent: str, e: Exception) -> None:
 
 
 async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate: bool = False,
-               fake: bool = False, framework: str = "langgraph", extended: bool = False):
+               fake: bool = False, framework: str = "langgraph", extended: bool = False,
+               html: str | None = None):
     # --logs / --log-level → the raw logger stream (guard decisions, audit writes…).
     # --verbose → the curated narrative (agents, prompts, LLM/tool output, guardrail
     # interceptions, per-check outcomes). They're independent and can combine.
@@ -815,16 +816,16 @@ async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate:
 
     all_ok = print_matrix(real=is_real())
 
-    if extended:
+    if extended or html:
         # Append the full-sweep guardrail walk and report a unified total. The walk
         # is deterministic (it builds its own pipelines with the local provider and
         # scripted clients), so it is independent of the cloud/framework/real-model
-        # mode of the baseline matrix above.
-        from demo_extended_guardrails import run_walk
+        # mode of the baseline matrix above. --html implies the walk.
+        import demo_extended_guardrails as _ext
         base_total = len(CHECKS)
         base_passed = sum(1 for c in CHECKS if c.ok)
         base_controls = len({c.feature.split(" ", 1)[0] for c in CHECKS})
-        ext_passed, ext_total, ext_intercepts, ext_controls = await run_walk()
+        ext_passed, ext_total, ext_intercepts, ext_controls = await _ext.run_walk()
         ext_ok = ext_passed == ext_total
 
         width = 104
@@ -843,6 +844,18 @@ async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate:
                                 f"{total_controls} controls"))
         print(_c(BOLD + CYAN, "━" * width))
         all_ok = all_ok and ext_ok
+
+        if html:
+            from datetime import datetime
+            from report_html import render_report
+            mode = "real model (observed)" if is_real() else "deterministic (fake model)"
+            path = render_report(
+                html, generated=datetime.now().strftime("%Y-%m-%d %H:%M"),
+                cloud=cloud, framework=framework, mode=mode,
+                baseline_checks=CHECKS, baseline_control_map=_CONTROL,
+                extended_rows=_ext.RESULTS, real=is_real(),
+            )
+            print(_c(BOLD + GREEN, f"  HTML report written → {path}"))
 
     sys.exit(0 if all_ok else 1)
 
@@ -880,6 +893,11 @@ def _parse_args() -> tuple[int, str, bool, bool]:
     p.add_argument("--extended", action="store_true",
                    help="also run the full-sweep guardrail walk (~28 flag-gated controls, pass + "
                         "intercept each) and report a unified total. Deterministic, cloud/framework-independent.")
+    p.add_argument("--html", nargs="?", const="galaxy-guardrail-report.html", default=None,
+                   metavar="PATH",
+                   help="write a self-contained HTML report of the unified matrix (baseline + sweep) "
+                        "with a per-control what/why catalogue. Implies --extended. "
+                        "Default path: galaxy-guardrail-report.html")
     args = p.parse_args()
     if args.log_level:
         level = getattr(logging, args.log_level)
@@ -887,9 +905,9 @@ def _parse_args() -> tuple[int, str, bool, bool]:
         level = logging.INFO
     else:
         level = logging.CRITICAL
-    return level, args.cloud, args.verbose, args.fake, args.framework, args.extended
+    return level, args.cloud, args.verbose, args.fake, args.framework, args.extended, args.html
 
 
 if __name__ == "__main__":
-    _level, _cloud, _narrate, _fake, _framework, _extended = _parse_args()
-    asyncio.run(main(_level, _cloud, _narrate, _fake, framework=_framework, extended=_extended))
+    _level, _cloud, _narrate, _fake, _framework, _extended, _html = _parse_args()
+    asyncio.run(main(_level, _cloud, _narrate, _fake, framework=_framework, extended=_extended, html=_html))
