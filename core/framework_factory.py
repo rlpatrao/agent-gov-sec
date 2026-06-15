@@ -11,7 +11,7 @@ no framework at all.
     fw = get_framework()                      # langgraph by default
     bundle = await fw.build_agent("finops", run_id, ...)
 
-Each ``adapters/<framework>/`` package must expose the builder surface the demo
+Each ``agent_framework_adapters/<framework>/`` package must expose the builder surface the demo
 uses (``build_agent`` / the per-persona builders) and return an object satisfying
 ``agent_framework_adapters.contract.AgentBundle`` (a framework-neutral ``invoke(prompt) ->
 RunResult``).

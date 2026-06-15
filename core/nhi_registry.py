@@ -7,7 +7,7 @@ Account). This module holds only the agent-type → client-id mapping and the
 attribution model; it knows nothing about any cloud SDK.
 
 Resolving an actual cloud *credential* for an identity is the job of an
-``IdentityProvider`` under ``adapters/<cloud>/identity.py`` (Azure →
+``IdentityProvider`` under ``cloud_adapters/<cloud>/identity.py`` (Azure →
 ManagedIdentityCredential, AWS → STS AssumeRole, GCP → Workload Identity
 Federation), obtained via ``core.provider_factory.get_provider()``.
 

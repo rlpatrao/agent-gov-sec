@@ -90,7 +90,8 @@ governance/                # cloud- & framework-AGNOSTIC governance only
     ├── escalation.py      # pure agent_os, MAF-free -> stays
     └── egress.py          # pure agent_os, MAF-free -> stays
 
-adapters/
+cloud_adapters/            # cloud axis (the framework axis shipped as a separate
+│                          #   top-level package, agent_framework_adapters/)
 ├── __init__.py            # registry: {"azure": ..., "aws": ..., "gcp": ...}
 ├── azure/
 │   ├── identity.py        # Entra SP + ManagedIdentityCredential      (from core/nhi_identity.py)
@@ -156,7 +157,7 @@ adapters/
 - [x] **2.4** `infrastructure-connections.md`/`.html` (and the other one-off `.html` exports) deleted — no duplication remains.
 - [x] **2.5** Overlapping status docs (`current-state.md`, `platform-status.md`) deleted; status now lives inline in the kept docs.
 - [x] **2.6** `docs/screenshots/` + `screenshot-manifest.md` removed.
-- [x] **2.7** `README.md` updated: `adapters/` layout, multi-cloud + framework-adapter framing, `payload_agents/` framing, doc links.
+- [x] **2.7** `README.md` updated: `cloud_adapters/` + `agent_framework_adapters/` layout, multi-cloud + framework-adapter framing, `payload_agents/` framing, doc links.
 - [x] **2.8** *(added)* **Public-push scrub** — removed all remaining identifying values (real Azure FQDNs, the `d63cdd` deploy suffix, `AI Labs` subscription name, partial client ID, Foundry resource/RG names) from kept docs, `galaxy-egress.yaml`, `aca_jobs.bicep`, and `test_guards.py`, using `example-*` placeholders kept in sync between the egress allow-list and its test.
 
 **Acceptance:** ✅ `docs/` current and non-duplicated (all relative links resolve); historical product moved to local `archive/`; no large binaries tracked (largest tracked file is `uv.lock`); README accurate; repo scrubbed of identifying values.

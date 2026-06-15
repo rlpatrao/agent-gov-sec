@@ -10,7 +10,7 @@ module is just the **deployment config**: a YAML map of which schema column
 carries which label, and each agent's ABAC policy — turned into MSGK objects.
 
 The decision is MSGK's; the *enforcement* (row/column masking, cloud pushdown)
-lives in ``data_fgac`` and ``adapters/<cloud>/data_fgac`` and is genuinely ours.
+lives in ``data_fgac`` and ``cloud_adapters/<cloud>/data_fgac`` and is genuinely ours.
 """
 
 from __future__ import annotations

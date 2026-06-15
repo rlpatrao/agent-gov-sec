@@ -2,7 +2,7 @@
 core.interfaces — the cloud- and framework-agnostic seam.
 
 Every cloud-specific binding (Azure today; AWS/GCP planned) is expressed as
-one of the Protocols below and lives under ``adapters/<cloud>/``. The agnostic
+one of the Protocols below and lives under ``cloud_adapters/<cloud>/``. The agnostic
 core (``core/``, ``governance/``, ``a2a/``) depends only on these Protocols,
 never on a cloud SDK or an agent framework.
 
@@ -111,7 +111,7 @@ class AgentRuntimeAdapter(Protocol):
 
 class CloudProvider(Protocol):
     """Umbrella resolved by ``core.provider_factory.get_provider()``. One impl
-    per cloud under ``adapters/<cloud>/``. AWS/GCP impls raise
+    per cloud under ``cloud_adapters/<cloud>/``. AWS/GCP impls raise
     ``NotImplementedError`` from each accessor until WS5/WS6 fill them in."""
 
     name: str
