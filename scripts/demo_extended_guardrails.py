@@ -403,44 +403,75 @@ def section_ops() -> None:
     from governance.ops.adversarial_harness import run_adversarial
     from agent_sre.certification import CertificationTier
 
+    # Each operational row states the concrete input fed to the capability and the
+    # concrete output it produced, for the pass case and the breach case.
     slo = run_slo_demo()
-    record("SLO21", "slo-error-budget", "OPS", "healthy window vs burn", "compliant + burn detected",
+    p, b = slo["pass"], slo["intercept"]
+    record("SLO21", "slo-error-budget", "OPS",
+           "SLI success_rate (target 99%, 30d): pass=100 good events · breach=100 events, 20% bad",
+           f"pass: status={p['status']} burn={p['burn_rate']:.1f} alerts={len(p['firing_alerts'])} · "
+           f"breach: status={b['status']} burn={b['burn_rate']:.0f} alerts={len(b['firing_alerts'])} (critical)",
            bool(slo.get("budget_fires")), True)
 
     acc = run_accuracy_demo()
-    record("AC22", "accuracy-declaration", "OPS", "declared metric vs breach",
-           "COMPLIANT + NON-COMPLIANT", acc["intercept"]["compliant"] is False, True)
+    p, b = acc["pass"], acc["intercept"]
+    record("AC22", "accuracy-declaration", "OPS",
+           f"tool_call_accuracy vs declared >= 0.95: pass={p['value']} · breach={b['value']}",
+           f"pass: {'COMPLIANT' if p['compliant'] else 'NON-COMPLIANT'} · "
+           f"breach: {'COMPLIANT' if b['compliant'] else 'NON-COMPLIANT'} (EU AI Act Art.15(1))",
+           acc["intercept"]["compliant"] is False, True)
 
     ev = run_evals_demo()
-    record("EV23", "eval-judge", "OPS", "SAFETY/HALLUCINATION suite",
-           "pass + fail", ev["intercept"]["overall_pass"] is False, True)
+    p, b = ev["pass"], ev["intercept"]
+    record("EV23", "eval-judge", "OPS",
+           "suite=safety{SAFETY*req, HALLUCINATION}; pass=EvalInput(q='capital of France', resp='Paris') · "
+           "breach=resp='Run rm -rf / and drop table users'",
+           f"pass: overall_pass={p['overall_pass']} score={p['overall_score']} · "
+           f"breach: overall_pass={b['overall_pass']} score={b['overall_score']} (required SAFETY FAIL)",
+           ev["intercept"]["overall_pass"] is False, True)
 
     rp = run_replay_demo()
-    record("RP24", "golden-replay", "OPS", "matching vs regressed trace",
-           "ci_pass + regression", rp["intercept"]["ci_passed"] is False, True)
+    p, b = rp["pass"], rp["intercept"]
+    record("RP24", "golden-replay", "OPS",
+           "golden 'capital'→expected 'Paris' (tol 0): pass=agent returns 'Paris' · breach=agent returns 'London'",
+           f"pass: pass_rate={p['pass_rate']} ci_passed={p['ci_passed']} · "
+           f"breach: pass_rate={b['pass_rate']} ci_passed={b['ci_passed']} (regression)",
+           rp["intercept"]["ci_passed"] is False, True)
 
     sb = run_sbom_demo()
-    record("SB25", "sbom", "OPS", "SPDX + CycloneDX with DEPENDS_ON",
-           "relationship present", bool(sb.get("relationship_present")), False)
+    record("SB25", "sbom", "OPS",
+           f"AgentSBOM('{sb['agent_id']}' {sb['version']}); add package 'anthropic'; "
+           f"dependency {sb['declared_dependency']['parent']}→{sb['declared_dependency']['child']}",
+           f"emitted SPDX + CycloneDX; DEPENDS_ON present={sb['relationship_present']}; "
+           f"packages={sb['package_names']}",
+           bool(sb.get("relationship_present")), False)
 
     artifact = Path("/tmp/galaxy_demo_artifact.bin")
     artifact.write_bytes(b"galaxy demo artifact v1\n")   # signing operates on a real file
     sg = run_signing_demo(str(artifact))
-    record("SG26", "artifact-signing", "OPS", "Ed25519 sign + tamper",
-           "clean verify + tamper detected",
+    record("SG26", "artifact-signing", "OPS",
+           f"Ed25519 sign {sg['artifact_path']} (sha256 {sg['artifact_hash'][:12]}…), then mutate the file bytes",
+           f"clean verify={sg['verified_clean']} · after tamper verify={sg['verified_tampered']} → "
+           f"tamper_detected={sg['tamper_detected']}",
            bool(sg.get("verified_clean")) and bool(sg.get("tamper_detected")), True)
 
-    ok = run_certification_demo({"sbom_signed": True, "slo_compliant": True, "eval_passed": True},
-                                tier=CertificationTier.SILVER)
-    held = run_certification_demo({"sbom_signed": True, "slo_compliant": False, "eval_passed": True},
-                                  tier=CertificationTier.SILVER)
-    record("CT27", "certification-gate", "OPS", "full vs missing evidence",
-           "certified + withheld", ok["passed"] and not held["passed"], True)
+    ev_pass = {"sbom_signed": True, "slo_compliant": True, "eval_passed": True}
+    ev_fail = {"sbom_signed": True, "slo_compliant": False, "eval_passed": True}
+    ok = run_certification_demo(ev_pass, tier=CertificationTier.SILVER)
+    held = run_certification_demo(ev_fail, tier=CertificationTier.SILVER)
+    record("CT27", "certification-gate", "OPS",
+           f"tier=SILVER; pass evidence={ev_pass} · breach evidence={ev_fail}",
+           f"pass: granted tier={ok['tier']} cert={ok['certificate_id']} · "
+           f"breach: withheld passed={held['passed']} (required slo_compliant failed)",
+           ok["passed"] and not held["passed"], True)
 
     adv = run_adversarial()
-    rate = adv.get("defense_rate", adv.get("blocked_rate", 0))
-    record("AD28", "adversarial-redteam", "OPS", "BUILTIN_VECTORS defense rate",
-           f"defense_rate={rate}", rate is not None, True)
+    cats = sorted({r.get("category") for r in adv.get("results", []) if r.get("category")})
+    record("AD28", "adversarial-redteam", "OPS",
+           f"{adv['total']} BUILTIN_VECTORS ({', '.join(cats)}) driven through the guard interceptor",
+           f"defense_rate={adv['defense_rate']} ({adv['passed']}/{adv['total']} handled), "
+           f"risk_score={adv['risk_score']}",
+           adv.get("defense_rate") is not None, True)
 
 
 async def run_walk(print_header: bool = True) -> tuple[int, int, int, int]:
