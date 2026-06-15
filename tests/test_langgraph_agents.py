@@ -20,8 +20,8 @@ pytest.importorskip("langchain.agents", reason="LangGraph axis requires langchai
 
 from langchain_core.messages import AIMessage  # noqa: E402
 
-from adapters.langgraph.governance import GovernanceViolation  # noqa: E402
-from adapters.langgraph.runtime import scripted_model  # noqa: E402
+from agent_framework_adapters.langgraph.governance import GovernanceViolation  # noqa: E402
+from agent_framework_adapters.langgraph.runtime import scripted_model  # noqa: E402
 from payload_agents.auditor_agent import build_auditor_agent  # noqa: E402
 from payload_agents.finops_agent import build_finops_agent  # noqa: E402
 from payload_agents.rogue_agent import build_rogue_agent  # noqa: E402
@@ -153,7 +153,7 @@ async def test_rogue_data_deny_all(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_aws_pushdown_scoped_sql_and_denied(tmp_path: Path):
-    from adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
     b = await build_finops_agent("t", scripted_model(AIMessage(content="x")), drift_baseline_path=tmp_path / "d.json")
     enf = AwsLakeFormationEnforcer(region="us-east-1")
     fin = b.mediator.authorize(agent_type="FinOps", dataset="finops", table="billing",
@@ -192,7 +192,7 @@ async def test_a2a_allow_and_deny(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_ledger_chain_valid_then_tamper_detected(tmp_path: Path):
-    from adapters.azure.audit import PostgresHashChainBackend, _compute_hash
+    from cloud_adapters.azure.audit import PostgresHashChainBackend, _compute_hash
 
     b = await build_finops_agent("t", scripted_model(
         _call("query_billing", {"columns": ["cost_usd"]}), AIMessage(content="done")),

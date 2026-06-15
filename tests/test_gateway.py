@@ -9,7 +9,7 @@ payload_agents/_base.py depends on.
 
 from __future__ import annotations
 
-from adapters.azure.gateway import AzureLLMGateway
+from cloud_adapters.azure.gateway import AzureLLMGateway
 
 
 class _FakeSecret:

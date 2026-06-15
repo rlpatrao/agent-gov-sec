@@ -48,8 +48,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 os.environ.setdefault("CLOUD_PROVIDER", "local")
 
-from adapters.contract import RunResult, ScriptStep, ToolCall, ToolSpec
-from adapters.raw import RawAgentBundle, ScriptedChatClient
+from agent_framework_adapters.contract import RunResult, ScriptStep, ToolCall, ToolSpec
+from agent_framework_adapters.raw import RawAgentBundle, ScriptedChatClient
 from governance.extensions.decision import GuardDecision
 from governance.pipeline import GovernanceViolation, build_guard_pipeline
 from report_html import EXTENDED_META   # control descriptions (what each guard does)

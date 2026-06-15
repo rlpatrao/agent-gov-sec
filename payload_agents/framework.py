@@ -2,12 +2,12 @@
 payload_agents.framework — framework-axis dispatch for the demo personas.
 
 The demo matrix is written once against a framework-neutral bundle contract
-(``adapters.contract.AgentBundle`` / ``RunResult``). This module lets the SAME
+(``agent_framework_adapters.contract.AgentBundle`` / ``RunResult``). This module lets the SAME
 matrix run under any framework on the ``--framework`` axis:
 
   - ``langgraph`` — the existing ``build_langgraph_agent`` path (unchanged).
-  - ``raw``       — the provider-native tool loop (``adapters.raw.build_agent``).
-  - ``pydantic``  — the Pydantic AI binding (``adapters.pydantic_ai.build_agent``).
+  - ``raw``       — the provider-native tool loop (``agent_framework_adapters.raw.build_agent``).
+  - ``pydantic``  — the Pydantic AI binding (``agent_framework_adapters.pydantic_ai.build_agent``).
 
 The demo scripts each model turn as a LangChain ``AIMessage`` (its native, oldest
 shape). ``make_model(framework, *messages)`` translates that single source of
@@ -29,7 +29,7 @@ from typing import Any, Optional
 
 from langchain_core.messages import AIMessage
 
-from adapters.contract import ScriptStep, ToolCall
+from agent_framework_adapters.contract import ScriptStep, ToolCall
 from governance.extensions.data_classification import DataClassificationCatalog
 from governance.extensions.data_drift import DataAccessDriftDetector, JsonFileBaselineStore
 from governance.extensions.data_fgac import DataAccessMediator
@@ -62,10 +62,10 @@ def make_model(framework: str, *messages: AIMessage):
     ``AIMessage`` turns. (Real-model mode is handled by the demo before this is
     reached — these are the ``--fake`` / offline models.)"""
     if framework == "langgraph":
-        from adapters.langgraph.runtime import scripted_model
+        from agent_framework_adapters.langgraph.runtime import scripted_model
         return scripted_model(*messages)
     if framework == "raw":
-        from adapters.raw import ScriptedChatClient
+        from agent_framework_adapters.raw import ScriptedChatClient
         return ScriptedChatClient(_to_script_steps(messages))
     if framework == "pydantic":
         return _pydantic_function_model(_to_script_steps(messages))
@@ -135,9 +135,9 @@ async def build_rogue_agent(framework: str, run_id: str, model: Any, *, drift_ba
 
 def _adapter_build(framework: str):
     if framework == "raw":
-        from adapters.raw import build_agent
+        from agent_framework_adapters.raw import build_agent
         return build_agent
     if framework == "pydantic":
-        from adapters.pydantic_ai import build_agent
+        from agent_framework_adapters.pydantic_ai import build_agent
         return build_agent
     raise ValueError(f"unknown framework: {framework}")

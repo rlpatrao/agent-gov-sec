@@ -30,10 +30,10 @@ logger = logging.getLogger(__name__)
 
 # name -> adapter package exposing `PROVIDER`
 _PROVIDER_PACKAGES: dict[str, str] = {
-    "azure": "adapters.azure",
-    "aws": "adapters.aws",
-    "gcp": "adapters.gcp",
-    "local": "adapters.local",   # cloud-neutral: env secrets, in-memory ledger, no egress
+    "azure": "cloud_adapters.azure",
+    "aws": "cloud_adapters.aws",
+    "gcp": "cloud_adapters.gcp",
+    "local": "cloud_adapters.local",   # cloud-neutral: env secrets, in-memory ledger, no egress
 }
 
 DEFAULT_PROVIDER = "azure"

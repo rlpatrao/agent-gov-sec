@@ -36,8 +36,8 @@ from payload_agents.config import AgentConfigModel, load_agent_config_cached
 from core.interfaces import SecretProvider
 from core.nhi_registry import NHIRegistry
 from core.provider_factory import get_provider
-from adapters.azure.audit import PostgresHashChainBackend
-from adapters.azure.maf.middleware import build_governance_stack
+from cloud_adapters.azure.audit import PostgresHashChainBackend
+from cloud_adapters.azure.maf.middleware import build_governance_stack
 
 logger = logging.getLogger(__name__)
 

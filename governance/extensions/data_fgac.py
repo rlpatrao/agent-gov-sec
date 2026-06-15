@@ -14,7 +14,7 @@ Split of responsibility (post-Casbin/MSGK review):
     when a Cedar authorizer is injected, to MSGK's Cedar backend. We do **not**
     re-implement the decision.
   - **Enforcement = ours.** ``InProcessEnforcer`` masks/drops columns and filters
-    rows post-fetch; cloud adapters (``adapters/aws/data_fgac`` Lake Formation /
+    rows post-fetch; cloud adapters (``cloud_adapters/aws/data_fgac`` Lake Formation /
     Athena pushdown) enforce store-side so sensitive bytes never leave the store.
 
 Feature-flagged off by default (``GALAXY_GAP_DATA_FGAC``). When a drift detector
@@ -69,7 +69,7 @@ class InProcessEnforcer:
     """Agnostic enforcer: masks/drops columns and filters rows in Python.
 
     Cloud-neutral and always correct, but reads the bytes first — use a
-    store-side adapter (e.g. ``adapters/aws/data_fgac``) in production for true
+    store-side adapter (e.g. ``cloud_adapters/aws/data_fgac``) in production for true
     non-exfiltration.
     """
 

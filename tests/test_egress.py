@@ -12,7 +12,7 @@ from pathlib import Path
 
 from governance.guards.egress import load_egress_policy
 
-_AZURE_EGRESS = Path(__file__).parent.parent / "adapters" / "azure" / "egress.yaml"
+_AZURE_EGRESS = Path(__file__).parent.parent / "cloud_adapters" / "azure" / "egress.yaml"
 
 
 def test_allow_list_loads_from_explicit_path():

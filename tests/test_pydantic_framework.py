@@ -20,7 +20,7 @@ pytest.importorskip("pydantic_ai")
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 
-from adapters.pydantic_ai import build_agent
+from agent_framework_adapters.pydantic_ai import build_agent
 from governance.extensions.data_classification import DataClassificationCatalog
 from governance.extensions.data_fgac import DataAccessMediator
 from governance.pipeline import GovernanceViolation

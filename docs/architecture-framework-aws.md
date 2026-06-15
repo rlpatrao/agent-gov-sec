@@ -17,8 +17,8 @@ is built on two independent axes:
 
 - **Framework axis** — how an agent is orchestrated, via an adapter over the shared
   `GuardPipeline`. Three are implemented and run the full demo matrix: LangGraph
-  (LangChain `create_agent` + middleware), Pydantic AI (`adapters/pydantic_ai/`, governance
-  via a model wrapper), and a raw provider-native tool loop (`adapters/raw/`, which imports
+  (LangChain `create_agent` + middleware), Pydantic AI (`agent_framework_adapters/pydantic_ai/`, governance
+  via a model wrapper), and a raw provider-native tool loop (`agent_framework_adapters/raw/`, which imports
   no agent framework).
 - **Cloud axis** — *where* identity, secrets, egress, tracing, and audit are
   resolved. Today: **AWS**, **Azure**, **GCP**, plus a cloud-neutral **local**.
@@ -27,7 +27,7 @@ Between them sits an **agnostic core** (`core/`, `governance/`, `a2a/`) that
 imports neither a cloud SDK nor an agent framework. Every cloud-specific or
 framework-specific concern is expressed as a `Protocol` in
 [`core/interfaces.py`](../core/interfaces.py) and implemented under
-`adapters/<cloud>/` or `adapters/<framework>/`. Selecting AWS is a one-line change
+`cloud_adapters/<cloud>/` or `agent_framework_adapters/<framework>/`. Selecting AWS is a one-line change
 (`CLOUD_PROVIDER=aws`); no core code moves.
 
 ### Key terminology
@@ -58,7 +58,7 @@ the same regardless of which framework or cloud is selected.
 flowchart TB
     P["payload_agents/ — FinOpsAnalyst · Auditor · Rogue<br/>(framework-neutral personas: prompt + ToolSpecs + NHI)"]
 
-    subgraph FW["FRAMEWORK AXIS — --framework  (adapters/&lt;fw&gt;/)"]
+    subgraph FW["FRAMEWORK AXIS — --framework  (agent_framework_adapters/&lt;fw&gt;/)"]
       direction LR
       LG["langgraph<br/>create_agent +<br/>GalaxyGuardMiddleware"]
       RAW["raw<br/>provider-native<br/>tool loop (no deps)"]
@@ -74,7 +74,7 @@ flowchart TB
       C3["a2a/ envelope + dispatcher"]
     end
 
-    subgraph CL["CLOUD AXIS — CLOUD_PROVIDER  (adapters/&lt;cloud&gt;/)"]
+    subgraph CL["CLOUD AXIS — CLOUD_PROVIDER  (cloud_adapters/&lt;cloud&gt;/)"]
       direction LR
       AZ["azure<br/>Entra · AOAI · Postgres"]
       GC["gcp<br/>SA · Vertex · BigQuery"]
@@ -95,9 +95,9 @@ Design invariant: the `core/` and `governance/` modules do not `import boto3` or
 `import langchain`. Each framework adapter maps its own hooks onto `before_model` /
 `after_model` / `before_tool`, so the governance logic is the same across frameworks and
 clouds (LangGraph on AWS, the raw loop on GCP, and so on). All three framework adapters
-are implemented and run the full demo matrix: `langgraph` (`adapters/langgraph/`),
-`pydantic` (`adapters/pydantic_ai/`, model-wrapper governance), and `raw`
-(`adapters/raw/`, a provider-native loop). Governance-parity tests:
+are implemented and run the full demo matrix: `langgraph` (`agent_framework_adapters/langgraph/`),
+`pydantic` (`agent_framework_adapters/pydantic_ai/`, model-wrapper governance), and `raw`
+(`agent_framework_adapters/raw/`, a provider-native loop). Governance-parity tests:
 `tests/test_pydantic_framework.py` and `tests/test_raw_framework.py`.
 
 > **Layered view:** for the stacked "payload → framework → core → cloud-adapters →
@@ -133,7 +133,7 @@ contract directly.
 
 `get_provider(name)` reads `CLOUD_PROVIDER` (default `azure`), then **lazy-imports
 only the selected adapter package** so an AWS run never loads Azure SDKs. Each
-`adapters/<cloud>/__init__.py` exposes a `PROVIDER` instance — for AWS that's
+`cloud_adapters/<cloud>/__init__.py` exposes a `PROVIDER` instance — for AWS that's
 `AwsProvider`.
 
 ### 3.3 Non-Human Identity — [`core/nhi_registry.py`](../core/nhi_registry.py)
@@ -205,7 +205,7 @@ text and calls the three hooks around model/tool execution:
 
 | Framework | Binding | Maps to |
 |-----------|---------|---------|
-| **langgraph** *(implemented)* | `GalaxyGuardMiddleware` (LangChain `AgentMiddleware`) — [`adapters/langgraph/governance.py`](../adapters/langgraph/governance.py) | `wrap_model_call` → `before_model` + `after_model`; `wrap_tool_call` → `before_tool` |
+| **langgraph** *(implemented)* | `GalaxyGuardMiddleware` (LangChain `AgentMiddleware`) — [`agent_framework_adapters/langgraph/governance.py`](../agent_framework_adapters/langgraph/governance.py) | `wrap_model_call` → `before_model` + `after_model`; `wrap_tool_call` → `before_tool` |
 | **raw** *(implemented)* | provider-native tool loop wrapping the same hooks | the same three calls |
 | **pydantic** *(planned)* | Pydantic AI agent hooks | the same three calls |
 
@@ -235,7 +235,7 @@ single `GalaxyGuardMiddleware`, preserving its original return surface.
 
 - [`governance/guards/egress.py`](../governance/guards/egress.py) — framework-free
   egress allow-list. `load_egress_policy()` defaults to
-  `get_provider().egress_config_path()` (for AWS, [`adapters/aws/egress.yaml`](../adapters/aws/egress.yaml));
+  `get_provider().egress_config_path()` (for AWS, [`cloud_adapters/aws/egress.yaml`](../cloud_adapters/aws/egress.yaml));
   `check_outbound(policy, url)` returns allow/deny.
 - `governance/extensions/` (WS7, feature-flagged, off by default) — FGAC
   (`data_fgac.py`), data classification, data-access drift (`data_drift.py`),
@@ -252,7 +252,7 @@ mode): `langgraph` (LangChain middleware), `pydantic` (model-wrapper governance)
 (provider-native loop). Each adapter returns the same neutral result shape, so the demo and
 tests do not depend on which framework ran.
 
-### 5.1 The neutral agent contract — [`adapters/contract.py`](../adapters/contract.py)
+### 5.1 The neutral agent contract — [`agent_framework_adapters/contract.py`](../agent_framework_adapters/contract.py)
 
 Pure dataclasses, no framework imports — the shape every framework adapter speaks:
 
@@ -269,7 +269,7 @@ Pure dataclasses, no framework imports — the shape every framework adapter spe
   `agent_id`, `nhi_id`, `egress`, `config`, `mediator`, `pg_backend`, and a neutral
   `invoke(prompt) -> RunResult`.
 
-### 5.2 The LangGraph factory — [`adapters/langgraph/_base.py`](../adapters/langgraph/_base.py)
+### 5.2 The LangGraph factory — [`agent_framework_adapters/langgraph/_base.py`](../agent_framework_adapters/langgraph/_base.py)
 
 `build_langgraph_agent(agent_name, run_id, *, model, tools, …)` wires the full
 governance posture around a LangGraph `create_agent`, driven entirely by the
@@ -288,7 +288,7 @@ per-agent YAML (`payload_agents/config/<name>.yaml`) — no per-agent branching:
 It returns a `LangGraphAgentBundle` whose `invoke(prompt)` normalizes the
 LangGraph result dict into a `RunResult`.
 
-### 5.3 Model factory — [`adapters/langgraph/runtime.py`](../adapters/langgraph/runtime.py)
+### 5.3 Model factory — [`agent_framework_adapters/langgraph/runtime.py`](../agent_framework_adapters/langgraph/runtime.py)
 
 Two model sources, offline-first:
 
@@ -301,7 +301,7 @@ Two model sources, offline-first:
   and GCP counterparts, `build_chat_model` / `build_gemini_model`, live in the same
   file.)
 
-### 5.4 Bedrock client model — [`adapters/langgraph/bedrock_gateway.py`](../adapters/langgraph/bedrock_gateway.py)
+### 5.4 Bedrock client model — [`agent_framework_adapters/langgraph/bedrock_gateway.py`](../agent_framework_adapters/langgraph/bedrock_gateway.py)
 
 `BedrockGatewayChatModel` is a LangChain `BaseChatModel` that reaches Bedrock
 **through the API Gateway chokepoint**, not `bedrock-runtime` directly. (It can't
@@ -330,16 +330,16 @@ roles).
 
 ## 6. The AWS adapter
 
-`AwsProvider` ([`adapters/aws/__init__.py`](../adapters/aws/__init__.py)) is the
+`AwsProvider` ([`cloud_adapters/aws/__init__.py`](../cloud_adapters/aws/__init__.py)) is the
 `CloudProvider` for AWS. Its bindings:
 
 | Concern | Class / file | AWS service |
 |---------|--------------|-------------|
-| Identity | `AwsIdentityProvider` — [`identity.py`](../adapters/aws/identity.py) | IAM + STS |
-| Secrets | `SecretsManagerProvider` — [`secrets.py`](../adapters/aws/secrets.py) | Secrets Manager / SSM |
-| Egress | `AwsLLMGateway` — [`gateway.py`](../adapters/aws/gateway.py) | API Gateway → Bedrock |
-| Tracing | `AwsTraceExporterFactory` — [`tracing.py`](../adapters/aws/tracing.py) | OTLP → ADOT → X-Ray |
-| Audit | `DynamoDbHashChainBackend` — [`audit.py`](../adapters/aws/audit.py) | DynamoDB |
+| Identity | `AwsIdentityProvider` — [`identity.py`](../cloud_adapters/aws/identity.py) | IAM + STS |
+| Secrets | `SecretsManagerProvider` — [`secrets.py`](../cloud_adapters/aws/secrets.py) | Secrets Manager / SSM |
+| Egress | `AwsLLMGateway` — [`gateway.py`](../cloud_adapters/aws/gateway.py) | API Gateway → Bedrock |
+| Tracing | `AwsTraceExporterFactory` — [`tracing.py`](../cloud_adapters/aws/tracing.py) | OTLP → ADOT → X-Ray |
+| Audit | `DynamoDbHashChainBackend` — [`audit.py`](../cloud_adapters/aws/audit.py) | DynamoDB |
 
 A consistent resilience pattern runs through all of them: **`boto3` is imported
 lazily and guarded**, so importing the adapter without the AWS SDK (or without
@@ -373,7 +373,7 @@ the next call (e.g. after a 401).
 - **`bedrock-direct`** — fallback to the regional `bedrock-runtime` host,
   SigV4-signed by the agent's IAM credentials (no static key changes hands).
 
-Pairs with [`adapters/aws/egress.yaml`](../adapters/aws/egress.yaml), which lists
+Pairs with [`cloud_adapters/aws/egress.yaml`](../cloud_adapters/aws/egress.yaml), which lists
 the API-Gateway/Bedrock hosts as the only permitted LLM destinations.
 
 ### 6.4 Audit — `DynamoDbHashChainBackend`
@@ -424,7 +424,7 @@ The reason agents never hold Bedrock credentials and never choose a model.
 ```
 
 Key properties — see
-[`bedrock_proxy.py`](../adapters/aws/infra/lambda/bedrock_proxy.py):
+[`bedrock_proxy.py`](../cloud_adapters/aws/infra/lambda/bedrock_proxy.py):
 
 - **Model is server-side only.** The caller cannot pick an arbitrary model; the
   Lambda injects `modelId` from its `BEDROCK_MODEL_ID` env var.
@@ -441,7 +441,7 @@ Key properties — see
 
 ## 8. AWS infrastructure (Terraform)
 
-[`adapters/aws/infra/main.tf`](../adapters/aws/infra/main.tf) is the reference
+[`cloud_adapters/aws/infra/main.tf`](../cloud_adapters/aws/infra/main.tf) is the reference
 topology — everything `demo_agents.py --aws` needs to run against a real model
 through the governed chokepoint. All resources carry `project = galaxy-rp` (via
 `default_tags`) so they can be found and torn down by tag.
@@ -577,19 +577,19 @@ LangGraph via `GalaxyGuardMiddleware`.
 | [`core/trace_ledger.py`](../core/trace_ledger.py) | Hash-chain schema + verify logic |
 | [`governance/pipeline.py`](../governance/pipeline.py) | `GuardPipeline` — shared, framework-neutral guard orchestration |
 | [`governance/guards/egress.py`](../governance/guards/egress.py) | Egress allow-list |
-| [`adapters/contract.py`](../adapters/contract.py) | Neutral agent contract (`ToolSpec`, `RunResult`, `AgentBundle`) |
-| [`adapters/langgraph/governance.py`](../adapters/langgraph/governance.py) | `GalaxyGuardMiddleware` — thin LangChain shim onto `GuardPipeline` |
-| [`adapters/langgraph/_base.py`](../adapters/langgraph/_base.py) | `build_langgraph_agent` → `LangGraphAgentBundle` |
-| [`adapters/langgraph/runtime.py`](../adapters/langgraph/runtime.py) | Model factory |
-| [`adapters/langgraph/bedrock_gateway.py`](../adapters/langgraph/bedrock_gateway.py) | `BedrockGatewayChatModel` |
-| [`adapters/aws/__init__.py`](../adapters/aws/__init__.py) | `AwsProvider` |
-| [`adapters/aws/identity.py`](../adapters/aws/identity.py) | IAM role ARN + STS |
-| [`adapters/aws/secrets.py`](../adapters/aws/secrets.py) | Secrets Manager / SSM |
-| [`adapters/aws/gateway.py`](../adapters/aws/gateway.py) | API GW → Bedrock chokepoint |
-| [`adapters/aws/tracing.py`](../adapters/aws/tracing.py) | ADOT → X-Ray |
-| [`adapters/aws/audit.py`](../adapters/aws/audit.py) | DynamoDB hash-chain ledger |
-| [`adapters/aws/infra/main.tf`](../adapters/aws/infra/main.tf) | Reference Terraform |
-| [`adapters/aws/infra/lambda/bedrock_proxy.py`](../adapters/aws/infra/lambda/bedrock_proxy.py) | Lambda Bedrock proxy |
+| [`agent_framework_adapters/contract.py`](../agent_framework_adapters/contract.py) | Neutral agent contract (`ToolSpec`, `RunResult`, `AgentBundle`) |
+| [`agent_framework_adapters/langgraph/governance.py`](../agent_framework_adapters/langgraph/governance.py) | `GalaxyGuardMiddleware` — thin LangChain shim onto `GuardPipeline` |
+| [`agent_framework_adapters/langgraph/_base.py`](../agent_framework_adapters/langgraph/_base.py) | `build_langgraph_agent` → `LangGraphAgentBundle` |
+| [`agent_framework_adapters/langgraph/runtime.py`](../agent_framework_adapters/langgraph/runtime.py) | Model factory |
+| [`agent_framework_adapters/langgraph/bedrock_gateway.py`](../agent_framework_adapters/langgraph/bedrock_gateway.py) | `BedrockGatewayChatModel` |
+| [`cloud_adapters/aws/__init__.py`](../cloud_adapters/aws/__init__.py) | `AwsProvider` |
+| [`cloud_adapters/aws/identity.py`](../cloud_adapters/aws/identity.py) | IAM role ARN + STS |
+| [`cloud_adapters/aws/secrets.py`](../cloud_adapters/aws/secrets.py) | Secrets Manager / SSM |
+| [`cloud_adapters/aws/gateway.py`](../cloud_adapters/aws/gateway.py) | API GW → Bedrock chokepoint |
+| [`cloud_adapters/aws/tracing.py`](../cloud_adapters/aws/tracing.py) | ADOT → X-Ray |
+| [`cloud_adapters/aws/audit.py`](../cloud_adapters/aws/audit.py) | DynamoDB hash-chain ledger |
+| [`cloud_adapters/aws/infra/main.tf`](../cloud_adapters/aws/infra/main.tf) | Reference Terraform |
+| [`cloud_adapters/aws/infra/lambda/bedrock_proxy.py`](../cloud_adapters/aws/infra/lambda/bedrock_proxy.py) | Lambda Bedrock proxy |
 
 ### 11.2 Environment variables (AWS subset)
 

@@ -1,7 +1,7 @@
 """
 tests/test_aws_adapter.py — the WS5 AWS adapter (agnostic; no boto3 required).
 
-Exercises adapters/aws against the core interfaces with the AWS SDK forced
+Exercises cloud_adapters/aws against the core interfaces with the AWS SDK forced
 absent (monkeypatched out), mirroring the Azure/agnostic test tiers. Verifies:
 factory resolution, secret env-var fallback, identity graceful degradation,
 the gateway egress contract (API Gateway vs direct-Bedrock), egress allow-list
@@ -19,7 +19,7 @@ import pytest
 
 from core.provider_factory import get_provider
 
-_AWS_EGRESS = Path(__file__).parent.parent / "adapters" / "aws" / "egress.yaml"
+_AWS_EGRESS = Path(__file__).parent.parent / "cloud_adapters" / "aws" / "egress.yaml"
 
 
 # ── Factory + protocol conformance ────────────────────────────────────────────
@@ -39,10 +39,10 @@ def test_factory_resolves_aws():
 
 def test_aws_impls_satisfy_protocols():
     from core.interfaces import IdentityProvider, LLMGateway, SecretProvider, TraceExporterFactory
-    from adapters.aws.gateway import AwsLLMGateway
-    from adapters.aws.identity import AwsIdentityProvider
-    from adapters.aws.secrets import SecretsManagerProvider
-    from adapters.aws.tracing import AwsTraceExporterFactory
+    from cloud_adapters.aws.gateway import AwsLLMGateway
+    from cloud_adapters.aws.identity import AwsIdentityProvider
+    from cloud_adapters.aws.secrets import SecretsManagerProvider
+    from cloud_adapters.aws.tracing import AwsTraceExporterFactory
 
     assert isinstance(AwsIdentityProvider(), IdentityProvider)
     assert isinstance(SecretsManagerProvider(env_var_fallback="X"), SecretProvider)
@@ -55,7 +55,7 @@ def test_aws_impls_satisfy_protocols():
 def test_aws_secret_env_fallback(monkeypatch):
     monkeypatch.setitem(sys.modules, "boto3", None)  # force ImportError on `import boto3`
     monkeypatch.setenv("AWS_LLM_API_KEY", "aws-secret-xyz")
-    from adapters.aws.secrets import SecretsManagerProvider
+    from cloud_adapters.aws.secrets import SecretsManagerProvider
     sp = SecretsManagerProvider(env_var_fallback="AWS_LLM_API_KEY")
     assert sp.get_api_key() == "aws-secret-xyz"
 
@@ -63,7 +63,7 @@ def test_aws_secret_env_fallback(monkeypatch):
 def test_aws_secret_missing_raises(monkeypatch):
     monkeypatch.setitem(sys.modules, "boto3", None)
     monkeypatch.delenv("ABSENT_AWS_KEY", raising=False)
-    from adapters.aws.secrets import SecretsManagerProvider
+    from cloud_adapters.aws.secrets import SecretsManagerProvider
     sp = SecretsManagerProvider(env_var_fallback="ABSENT_AWS_KEY")
     with pytest.raises(EnvironmentError, match="ABSENT_AWS_KEY"):
         sp.get_api_key()
@@ -73,14 +73,14 @@ def test_aws_secret_missing_raises(monkeypatch):
 
 def test_aws_identity_degrades_without_sdk(monkeypatch):
     monkeypatch.setitem(sys.modules, "boto3", None)
-    from adapters.aws.identity import AwsIdentityProvider
+    from cloud_adapters.aws.identity import AwsIdentityProvider
     prov = AwsIdentityProvider()
     assert prov.get_credential(client_id="arn:aws:iam::123:role/galaxy-analyzer", agent_type="Analyzer") is None
     assert prov.get_credential(client_id="", agent_type="Analyzer") is None
 
 
 def test_aws_resolve_client_id_env_then_convention(monkeypatch):
-    from adapters.aws.identity import AwsIdentityProvider
+    from cloud_adapters.aws.identity import AwsIdentityProvider
     prov = AwsIdentityProvider()
     # 1) env (IaC-provisioned role ARN) wins
     monkeypatch.setenv("NHI_CLIENT_ID_FINOPS", "arn:aws:iam::999:role/explicit")
@@ -112,7 +112,7 @@ class _FakeSecret:
 
 def test_aws_gateway_apigw_mode(monkeypatch):
     monkeypatch.setenv("AWS_BEDROCK_GATEWAY_ENDPOINT", "https://example-gw.execute-api.us-east-1.amazonaws.com")
-    from adapters.aws.gateway import AwsLLMGateway
+    from cloud_adapters.aws.gateway import AwsLLMGateway
     res = AwsLLMGateway().resolve(agent_type="Analyzer", client_id="arn-1", secret_provider=_FakeSecret())
     assert res.mode == "apigw-bedrock"
     assert res.endpoint == "https://example-gw.execute-api.us-east-1.amazonaws.com"
@@ -126,7 +126,7 @@ def test_aws_gateway_direct_bedrock_mode(monkeypatch):
     monkeypatch.delenv("AWS_BEDROCK_GATEWAY_ENDPOINT", raising=False)
     monkeypatch.delenv("AWS_BEDROCK_ENDPOINT", raising=False)
     monkeypatch.setenv("AWS_REGION", "us-east-1")
-    from adapters.aws.gateway import AwsLLMGateway
+    from cloud_adapters.aws.gateway import AwsLLMGateway
     res = AwsLLMGateway().resolve(agent_type="Analyzer", client_id="arn-1")
     assert res.mode == "bedrock-direct"
     assert res.endpoint == "https://bedrock-runtime.us-east-1.amazonaws.com"
@@ -158,7 +158,7 @@ def test_aws_egress_resolves_via_factory(monkeypatch):
 
 def test_aws_audit_stdout_mode_without_sdk(monkeypatch):
     monkeypatch.setitem(sys.modules, "boto3", None)
-    from adapters.aws.audit import DynamoDbHashChainBackend
+    from cloud_adapters.aws.audit import DynamoDbHashChainBackend
     from agent_os.audit_logger import AuditEntry
 
     backend = asyncio.run(DynamoDbHashChainBackend.create(run_id="run-1"))
@@ -195,7 +195,7 @@ def _finops_decision():
 
 
 def test_aws_fgac_scoped_query_projects_masks_and_filters():
-    from adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
     sql = AwsLakeFormationEnforcer().scoped_query(_finops_decision(), database="finops", table="billing")
     # allowed columns projected
     assert "account_id" in sql and "cost_usd" in sql and "region" in sql
@@ -209,7 +209,7 @@ def test_aws_fgac_scoped_query_projects_masks_and_filters():
 
 def test_aws_fgac_scoped_query_denied_raises():
     from governance.extensions.data_fgac import DataAccessDecision
-    from adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
     denied = DataAccessDecision(agent_type="FinOps", dataset="hr", table="employees", denied=True, reason="out of scope")
     with pytest.raises(PermissionError, match="denied"):
         AwsLakeFormationEnforcer().scoped_query(denied, database="hr", table="employees")
@@ -217,7 +217,7 @@ def test_aws_fgac_scoped_query_denied_raises():
 
 def test_aws_fgac_apply_is_defense_in_depth():
     # As a DataAccessEnforcer it still masks post-fetch rows (delegates in-process).
-    from adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
     dec = _finops_decision()
     rows = [{"account_id": "a1", "cost_usd": 1, "region": "us-east-1", "customer_email": "x@y.com", "tax_id": "T-1"},
             {"account_id": "a2", "cost_usd": 2, "region": "eu-west-1", "customer_email": "z@y.com", "tax_id": "T-2"}]
@@ -228,12 +228,12 @@ def test_aws_fgac_apply_is_defense_in_depth():
 
 def test_aws_fgac_register_filter_requires_boto3(monkeypatch):
     monkeypatch.setitem(sys.modules, "boto3", None)
-    from adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
     with pytest.raises(RuntimeError, match="boto3"):
         AwsLakeFormationEnforcer().register_data_cells_filter(_finops_decision(), database="finops", table="billing")
 
 
 def test_aws_fgac_satisfies_enforcer_protocol():
     from governance.extensions.data_fgac import DataAccessEnforcer
-    from adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
     assert isinstance(AwsLakeFormationEnforcer(), DataAccessEnforcer)

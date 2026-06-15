@@ -22,7 +22,7 @@ BillingColumn = Literal["account_id", "cost_usd", "region", "customer_email", "t
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import tool
 
-from adapters.langgraph._base import LangGraphAgentBundle, build_langgraph_agent
+from agent_framework_adapters.langgraph._base import LangGraphAgentBundle, build_langgraph_agent
 from governance.extensions.data_classification import DataClassificationCatalog
 from governance.extensions.data_drift import DataAccessDriftDetector, JsonFileBaselineStore
 from governance.extensions.data_fgac import DataAccessMediator
@@ -68,7 +68,7 @@ def _billing_fns(*, mediator: DataAccessMediator, nhi_id: str):
 
 def make_tool_specs(*, mediator: DataAccessMediator, nhi_id: str):
     """Framework-neutral ToolSpecs (used by the raw / pydantic adapters)."""
-    from adapters.contract import ToolSpec
+    from agent_framework_adapters.contract import ToolSpec
     query_billing, summarize_costs = _billing_fns(mediator=mediator, nhi_id=nhi_id)
     cols = ["account_id", "cost_usd", "region", "customer_email", "tax_id"]
     return [

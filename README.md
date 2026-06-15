@@ -8,7 +8,7 @@ A runtime governance and security platform for multi-agent systems, built on the
 
 **Governance platform** (`core/`, `governance/`, `a2a/`): per-agent Non-Human Identity (Entra), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → Application Insights tracing, a hash-chained Postgres audit ledger, and APIM as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
 
-**Demonstration payload** (`payload_agents/`): three governed **LangGraph** agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). They prove the governance stack is **framework-agnostic**: the same `governance/` + `core/` + `a2a/` primitives and WS7 extensions wrap a LangGraph `create_agent` via a thin LangChain `AgentMiddleware` shim (`adapters/langgraph/`) — exactly as they'd wrap any agent framework.
+**Demonstration payload** (`payload_agents/`): three governed **LangGraph** agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). They prove the governance stack is **framework-agnostic**: the same `governance/` + `core/` + `a2a/` primitives and WS7 extensions wrap a LangGraph `create_agent` via a thin LangChain `AgentMiddleware` shim (`agent_framework_adapters/langgraph/`) — exactly as they'd wrap any agent framework.
 
 **Governance demos** — run fully offline (deterministic fake model) *or* against a **real
 per-cloud LLM** (Azure OpenAI / Vertex·Gemini / Bedrock) when credentials resolve:
@@ -24,7 +24,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full system design:
 - **Part 1 — Governance Platform**: NHI identity, middleware stack, A2A protocol, OTel tracing, audit ledger, Azure resource map
 - **Part 2 — Payload**: the sample agent, codebase classification, structured logging
 
-The planned cloud-agnostic restructure (Azure bindings → `adapters/azure/`, plus AWS/GCP adapters) and the gap-closing modules are described in [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md).
+The planned cloud-agnostic restructure (Azure bindings → `cloud_adapters/azure/`, plus AWS/GCP adapters) and the gap-closing modules are described in [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md).
 
 ---
 
@@ -113,7 +113,7 @@ matrix runs each control on both its success and failure path across the three a
 |---|---|---|
 | `--azure` (default) | Azure OpenAI | `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_KEY` + `AZURE_OPENAI_DEPLOYMENT` (reasoning/codex deployments auto-route through the Responses API) |
 | `--gcp` | Vertex AI / Gemini | `pip install '.[gcp]'`; `GOOGLE_CLOUD_PROJECT` (+ `gcloud auth application-default login`), or `GOOGLE_API_KEY` |
-| `--aws` | Bedrock via API Gateway | `pip install '.[aws]'`; provision `adapters/aws/infra` (`terraform apply`, tagged `galaxy-rp`), then set `AWS_BEDROCK_GATEWAY_ENDPOINT` + `AWS_BEDROCK_GATEWAY_KEY` from `terraform output`. The agent reaches Bedrock only through the gateway (`x-api-key`) — it never holds Bedrock creds. **Tear down:** `cd adapters/aws/infra && terraform destroy`. |
+| `--aws` | Bedrock via API Gateway | `pip install '.[aws]'`; provision `cloud_adapters/aws/infra` (`terraform apply`, tagged `galaxy-rp`), then set `AWS_BEDROCK_GATEWAY_ENDPOINT` + `AWS_BEDROCK_GATEWAY_KEY` from `terraform output`. The agent reaches Bedrock only through the gateway (`x-api-key`) — it never holds Bedrock creds. **Tear down:** `cd cloud_adapters/aws/infra && terraform destroy`. |
 
 See [`.env.example`](.env.example) for every variable and [`docs/langgraph-demo.md`](docs/langgraph-demo.md) for the full walkthrough.
 
@@ -169,12 +169,12 @@ agentic-sdlc/
 │   ├── config/{finops,auditor,rogue}.yaml   Per-agent config
 │   └── prompts/{finops,auditor,rogue}.md    System prompts
 │
-├── adapters/langgraph/             LangGraph framework axis (agent-framework binding)
+├── agent_framework_adapters/langgraph/             LangGraph framework axis (agent-framework binding)
 │   ├── _base.py                    build_langgraph_agent() factory (NHI + egress + governance)
 │   ├── governance.py               GalaxyGuardMiddleware + build_langgraph_governance()
 │   └── runtime.py                  FakeToolCallingModel (offline) + live model factory
 │
-├── core/                           Shared infrastructure  (Azure-coupled today; → adapters/ in WS1)
+├── core/                           Shared infrastructure  (Azure-coupled today; → cloud_adapters/ in WS1)
 │   ├── nhi_identity.py             Non-Human Identity registry
 │   ├── run_tracer.py               OTel configure_tracing + pipeline_span
 │   ├── token_provider.py           Key Vault / env-var credential provider
@@ -184,7 +184,7 @@ agentic-sdlc/
 ├── governance/                     Security & compliance layer
 │   ├── middleware.py               build_governance_stack() — the guard factory
 │   ├── guards/                     Guard implementations (framework middleware wrapping `agent_os` primitives)
-│   ├── adapters/                   Audit backends (OTel, Postgres hash-chain)
+│   ├── adapters/                   Governance audit sink (OTel span-event backend)
 │   ├── policies/                   YAML declarative rules (galaxy-*.yaml)
 │   ├── configs/                    Guard configs (prompt-injection.yaml, egress.yaml)
 │   └── mappings/                   aws-azure-reference.yaml
@@ -196,7 +196,7 @@ agentic-sdlc/
 │   └── demo_agents.py          Full feature × agent matrix over the 3 LangGraph agents
 │
 ├── tests/                          Test suite (runs without Azure credentials)
-├── infra/                          ledger_schema.sql, aca_jobs.bicep  (→ adapters/azure/ in WS1)
+├── infra/                          ledger_schema.sql, aca_jobs.bicep  (→ cloud_adapters/azure/ in WS1)
 ├── docs/                           Architecture, user guide, guardrails inventory, refactor plan
 └── .env.example                    Environment variable template
 

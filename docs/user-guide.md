@@ -98,7 +98,7 @@ NHI_CLIENT_ID_ANALYZER=local-analyzer-nhi
 
 The full env var set (including the archived-product NHI identities, still listed for compatibility) lives in [`.env.example`](../.env.example). See [§9.1](#91-environment-variables) for the reference table.
 
-Azure coupling and APIM are **current** in this codebase. The cloud-agnostic adapter restructure (Azure/MAF → `adapters/azure/`, plus AWS/GCP adapters) is **planned** — see [REFACTOR_AND_GAPS_PLAN.md](REFACTOR_AND_GAPS_PLAN.md).
+Azure coupling and APIM are **current** in this codebase. The cloud-agnostic adapter restructure (Azure/MAF → `cloud_adapters/azure/`, plus AWS/GCP adapters) is **planned** — see [REFACTOR_AND_GAPS_PLAN.md](REFACTOR_AND_GAPS_PLAN.md).
 
 ---
 
@@ -240,7 +240,7 @@ tp = TokenProvider(
 value = tp.get_api_key()   # cached for 5 minutes
 ```
 
-Source: [`adapters/azure/secrets.py`](../adapters/azure/secrets.py).
+Source: [`cloud_adapters/azure/secrets.py`](../cloud_adapters/azure/secrets.py).
 
 ### 5.3 APIM subscription key
 
@@ -277,7 +277,7 @@ chain_ok = await pg_backend.verify_chain()
 # False means a row was modified after the fact
 ```
 
-See [`adapters/azure/infra/ledger_schema.sql`](../adapters/azure/infra/ledger_schema.sql) for the table DDL and [architecture.md](architecture.md) for the full explanation. The offline demo (`scripts/demo_governance.py`) exercises the exact same chain logic against an in-memory ledger.
+See [`cloud_adapters/azure/infra/ledger_schema.sql`](../cloud_adapters/azure/infra/ledger_schema.sql) for the table DDL and [architecture.md](architecture.md) for the full explanation. The offline demo (`scripts/demo_governance.py`) exercises the exact same chain logic against an in-memory ledger.
 
 ---
 
@@ -662,7 +662,7 @@ from governance.adapters.postgres_audit_backend import PostgresHashChainBackend
 broken_at = await backend.find_first_broken_link()
 ```
 
-If the chain breaks without deliberate tampering, check whether `_compute_hash` in [`adapters/azure/audit.py`](../adapters/azure/audit.py) and `verify_chain` use the same field order in the hash input — they must be identical.
+If the chain breaks without deliberate tampering, check whether `_compute_hash` in [`cloud_adapters/azure/audit.py`](../cloud_adapters/azure/audit.py) and `verify_chain` use the same field order in the hash input — they must be identical.
 
 In stdout/in-memory mode (no `POSTGRES_DSN`), the "chain" resets on each run. This is expected — the offline demo demonstrates the same logic in-memory.
 

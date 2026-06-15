@@ -11,7 +11,7 @@ The **`agent_os` + `agent_sre`** packages ship ~40 governance modules. This plat
 
 > **Scope.** This repo is the **governance platform** (`core/`, `governance/`, `a2a/`, `infra/`). The agents are a **minimal demonstration payload** — a single MAF `Analyzer` agent in [`payload_agents/`](../payload_agents/). The full multi-agent AWS→Azure migration product (18 agents, migration/discovery/scanner pipelines, per-stack Coder prompts, ACA deployment) has been moved to a **local-only, gitignored `archive/`** and is **not part of this repo**. Where this doc illustrates a guard "per pipeline stage", that is reframed to **per governed agent invocation / per A2A hop** — there is one agent and the A2A `Analyzer` leaf today; multi-agent topology is archived context only.
 >
-> **Coupling.** Azure + MAF coupling is **current**. The cloud- and framework-agnostic adapter restructure (Azure/MAF → `adapters/azure/`, plus AWS/GCP adapters) is **roadmap** — see [`REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md).
+> **Coupling.** Azure + MAF coupling is **current**. The cloud- and framework-agnostic adapter restructure (Azure/MAF → `cloud_adapters/azure/`, plus AWS/GCP adapters) is **roadmap** — see [`REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md).
 
 **Last updated:** 2026-06-09
 
@@ -31,13 +31,13 @@ The **`agent_os` + `agent_sre`** packages ship ~40 governance modules. This plat
 
 ## What's wired today (seven middleware)
 
-Stack ordering, fail-fast first. Built by [`adapters/azure/maf/middleware.py`](../adapters/azure/maf/middleware.py) `build_governance_stack()`. Guards 1–3 are this repo's MAF wrappers around `agent_os` primitives and run before any `agent_os.integrations.maf_adapter` middleware; guards 4–7 come from `agent_os.integrations.maf_adapter.create_governance_middleware`. Every guard fires on every `agent.run()` — i.e. on **every governed agent invocation**.
+Stack ordering, fail-fast first. Built by [`cloud_adapters/azure/maf/middleware.py`](../cloud_adapters/azure/maf/middleware.py) `build_governance_stack()`. Guards 1–3 are this repo's MAF wrappers around `agent_os` primitives and run before any `agent_os.integrations.maf_adapter` middleware; guards 4–7 come from `agent_os.integrations.maf_adapter.create_governance_middleware`. Every guard fires on every `agent.run()` — i.e. on **every governed agent invocation**.
 
 | # | Middleware | Upstream class | Source | OWASP | What it stops |
 |---|---|---|---|---|---|
-| 1 | `PromptInjectionGuardMiddleware` | wraps `agent_os.prompt_injection.PromptInjectionDetector` | [`adapters/azure/maf/guards/prompt_injection.py`](../adapters/azure/maf/guards/prompt_injection.py) | ASI-01 / LLM01 | 7-vector taxonomy: direct override, delimiter attack, encoding attack, role play, context manipulation, canary leak, multi-turn escalation. Threat levels NONE / LOW / MEDIUM / HIGH / CRITICAL; blocks at `prompt_injection_block_threshold` (default `medium` in the stack; the Analyzer config sets `high`). |
-| 2 | `CredentialRedactorGuardMiddleware` | wraps `agent_os.credential_redactor.CredentialRedactor` | [`adapters/azure/maf/guards/credential_redactor.py`](../adapters/azure/maf/guards/credential_redactor.py) | LLM06 | API keys, AWS access keys, GitHub tokens, generic secret patterns. Two modes: `redact` (mutate prompt to `[REDACTED]`, proceed — the Analyzer default) or `deny` (block call). |
-| 3 | `ContextBudgetGuardMiddleware` | wraps `agent_os.context_budget.ContextScheduler` | [`adapters/azure/maf/guards/context_budget.py`](../adapters/azure/maf/guards/context_budget.py) | LLM04 | Token-budget allocator + post-call usage record. `context_budget_total_tokens` defaults to 8000 in the stack; the Analyzer config raises it to 40000. |
+| 1 | `PromptInjectionGuardMiddleware` | wraps `agent_os.prompt_injection.PromptInjectionDetector` | [`cloud_adapters/azure/maf/guards/prompt_injection.py`](../cloud_adapters/azure/maf/guards/prompt_injection.py) | ASI-01 / LLM01 | 7-vector taxonomy: direct override, delimiter attack, encoding attack, role play, context manipulation, canary leak, multi-turn escalation. Threat levels NONE / LOW / MEDIUM / HIGH / CRITICAL; blocks at `prompt_injection_block_threshold` (default `medium` in the stack; the Analyzer config sets `high`). |
+| 2 | `CredentialRedactorGuardMiddleware` | wraps `agent_os.credential_redactor.CredentialRedactor` | [`cloud_adapters/azure/maf/guards/credential_redactor.py`](../cloud_adapters/azure/maf/guards/credential_redactor.py) | LLM06 | API keys, AWS access keys, GitHub tokens, generic secret patterns. Two modes: `redact` (mutate prompt to `[REDACTED]`, proceed — the Analyzer default) or `deny` (block call). |
+| 3 | `ContextBudgetGuardMiddleware` | wraps `agent_os.context_budget.ContextScheduler` | [`cloud_adapters/azure/maf/guards/context_budget.py`](../cloud_adapters/azure/maf/guards/context_budget.py) | LLM04 | Token-budget allocator + post-call usage record. `context_budget_total_tokens` defaults to 8000 in the stack; the Analyzer config raises it to 40000. |
 | 4 | `AuditTrailMiddleware` | from `agent_os.integrations.maf_adapter` | bundled | — | Hash-chain audit start/end pairs per agent invocation, with `entry_id` correlation. |
 | 5 | `GovernancePolicyMiddleware` | from `agent_os.integrations.maf_adapter` | bundled | — | YAML rule engine (`PolicyEvaluator`). Evaluates [`governance/policies/*.yaml`](../governance/policies/) against the call context. |
 | 6 | `CapabilityGuardMiddleware` | from `agent_os.integrations.maf_adapter` (conditional) | bundled | LLM08 | Function-level tool allow/deny. Activates only when `allowed_tools` or `denied_tools` is passed to `build_governance_stack`. The read-only `Analyzer` declares `allowed_tools: []`, so it is effectively a no-op for the current payload. |
@@ -48,7 +48,7 @@ Stack ordering, fail-fast first. Built by [`adapters/azure/maf/middleware.py`](.
 | Layer | Where | What it does |
 |---|---|---|
 | **APIM gateway** | Azure-side (reference topology) | Sub-key validation, required-headers guard (`x-agent-type` / `x-galaxy-run-id`), per-subscription RPM rate-limit, real AOAI key injection. The sole LLM-egress path when `APIM_ENDPOINT` is set. |
-| **Hash-chained ledger** | [`adapters/azure/audit.py`](../adapters/azure/audit.py) | Tamper-evident SHA-256 audit chain (stdout/in-memory mode by default; Postgres when `POSTGRES_DSN` is set). |
+| **Hash-chained ledger** | [`cloud_adapters/azure/audit.py`](../cloud_adapters/azure/audit.py) | Tamper-evident SHA-256 audit chain (stdout/in-memory mode by default; Postgres when `POSTGRES_DSN` is set). |
 | **OTel audit backend** | [`governance/adapters/otel_audit_backend.py`](../governance/adapters/otel_audit_backend.py) | Every `AuditEntry` becomes a span event on the current OTel span → App Insights `customEvents`. |
 | **A2A allow-list** | [`a2a/dispatcher.py`](../a2a/dispatcher.py) + per-agent YAML | Two-layer allow-list (compile-time + runtime) on every A2A hop. The shipped `Analyzer` is a leaf (`allowed_recipients: []`), so the dispatcher governs inbound only. |
 
@@ -132,7 +132,7 @@ These fire on tool calls that carry the matching shape (code, diff, exec, memory
 
 ## Adapters and integrations available
 
-`agent_os/integrations/` ships ~30 framework-specific adapters. This platform uses one (`maf_adapter`); the others exist for wiring a non-MAF agent into the same governance pipeline. (Under the refactor, the MAF binding moves behind `adapters/azure/maf/`; the AWS/GCP framework axes — e.g. LangGraph/Bedrock, Google ADK — map onto these same adapters. See WS5.8 / WS6.8 in the plan.)
+`agent_os/integrations/` ships ~30 framework-specific adapters. This platform uses one (`maf_adapter`); the others exist for wiring a non-MAF agent into the same governance pipeline. (Under the refactor, the MAF binding moves behind `cloud_adapters/azure/maf/`; the AWS/GCP framework axes — e.g. LangGraph/Bedrock, Google ADK — map onto these same adapters. See WS5.8 / WS6.8 in the plan.)
 
 | Adapter | What it bridges |
 |---|---|
@@ -189,7 +189,7 @@ Separate package, ~30 sub-modules. Different concerns than runtime governance �
 
 | Concern | What this repo built | Why custom |
 |---|---|---|
-| Hash-chained Postgres audit | [`adapters/azure/audit.py`](../adapters/azure/audit.py) | `agent_os` ships an `audit_logger.AuditBackend` protocol but no concrete SHA-256 hash-chain backend. ~200 LOC fills the compliance-archive gap. (Reconcile against `agent_os`'s Merkle audit trail in WS4.) |
+| Hash-chained Postgres audit | [`cloud_adapters/azure/audit.py`](../cloud_adapters/azure/audit.py) | `agent_os` ships an `audit_logger.AuditBackend` protocol but no concrete SHA-256 hash-chain backend. ~200 LOC fills the compliance-archive gap. (Reconcile against `agent_os`'s Merkle audit trail in WS4.) |
 | OTel-event-on-current-span audit backend | [`governance/adapters/otel_audit_backend.py`](../governance/adapters/otel_audit_backend.py) | No bundled OTel span-event sink. ~70 LOC. |
 | A2A envelope + dispatcher | [`a2a/`](../a2a/) | `agent_os` has `agent_os.integrations.a2a_adapter` but for a different protocol shape. This envelope is purpose-built for Galaxy provenance/correlation and trace-linking. |
 | Pydantic+YAML per-agent config | [`payload_agents/config.py`](../payload_agents/config.py) | `agent_os` has policy YAML loaders but not per-agent runtime config (`extra="forbid"`). |
@@ -230,7 +230,7 @@ async def test_my_guard_blocks_X():
         await guard.process(_Ctx(messages=[_Msg(text="...trigger...")]), _called)
 ```
 
-> Under the cloud-/framework-agnostic refactor (WS1), new MAF-coupled guards live under `adapters/azure/maf/guards/`; framework-neutral guard logic stays in `governance/`. The MAF-free guards `escalation.py` and `egress.py` already qualify as agnostic.
+> Under the cloud-/framework-agnostic refactor (WS1), new MAF-coupled guards live under `cloud_adapters/azure/maf/guards/`; framework-neutral guard logic stays in `governance/`. The MAF-free guards `escalation.py` and `egress.py` already qualify as agnostic.
 
 ---
 
@@ -240,9 +240,9 @@ These are bugs in the `agent_os` loaders worked around in the wrappers. If a fut
 
 | Where | Quirk | Workaround |
 |---|---|---|
-| `agent_os.prompt_injection.load_prompt_injection_config` | Returns a `PromptInjectionConfig` missing `allowlist`, `blocklist`, `custom_patterns`, `sensitivity` — but `_detect_impl` reads them. Without backfill the detector fails-closed on every call (returns CRITICAL threat with `unknown` type). | [`adapters/azure/maf/guards/prompt_injection.py`](../adapters/azure/maf/guards/prompt_injection.py) (`__init__`) — `setattr(cfg, attr, [])` for the missing list fields, `cfg.sensitivity = "balanced"`. |
-| `agent_os.egress_policy.EgressPolicy.load_from_yaml` | Hand-rolled stdlib parser only accepts `protocol: tcp \| udp` (not `https`); rejects unknown top-level keys silently. | YAML uses `protocol: tcp` with `ports: [443]`. See [`adapters/azure/egress.yaml`](../adapters/azure/egress.yaml). |
-| `agent_os.audit_logger.GovernanceAuditLogger.log` | `maf_adapter` (agent-os-kernel 3.2.2) calls it with legacy kwargs `(event_type=..., agent_did=..., action=..., data=..., outcome=..., policy_decision=...)` and expects an `AuditEntry` return; the current `log(self, entry: AuditEntry) -> None` doesn't match. | [`adapters/azure/maf/middleware.py`](../adapters/azure/maf/middleware.py) — `_CompatAuditLogger` bridges both signatures and backfills `entry_id`. |
+| `agent_os.prompt_injection.load_prompt_injection_config` | Returns a `PromptInjectionConfig` missing `allowlist`, `blocklist`, `custom_patterns`, `sensitivity` — but `_detect_impl` reads them. Without backfill the detector fails-closed on every call (returns CRITICAL threat with `unknown` type). | [`cloud_adapters/azure/maf/guards/prompt_injection.py`](../cloud_adapters/azure/maf/guards/prompt_injection.py) (`__init__`) — `setattr(cfg, attr, [])` for the missing list fields, `cfg.sensitivity = "balanced"`. |
+| `agent_os.egress_policy.EgressPolicy.load_from_yaml` | Hand-rolled stdlib parser only accepts `protocol: tcp \| udp` (not `https`); rejects unknown top-level keys silently. | YAML uses `protocol: tcp` with `ports: [443]`. See [`cloud_adapters/azure/egress.yaml`](../cloud_adapters/azure/egress.yaml). |
+| `agent_os.audit_logger.GovernanceAuditLogger.log` | `maf_adapter` (agent-os-kernel 3.2.2) calls it with legacy kwargs `(event_type=..., agent_did=..., action=..., data=..., outcome=..., policy_decision=...)` and expects an `AuditEntry` return; the current `log(self, entry: AuditEntry) -> None` doesn't match. | [`cloud_adapters/azure/maf/middleware.py`](../cloud_adapters/azure/maf/middleware.py) — `_CompatAuditLogger` bridges both signatures and backfills `entry_id`. |
 
 ---
 
@@ -252,10 +252,10 @@ Aligned with [`REFACTOR_AND_GAPS_PLAN.md`](REFACTOR_AND_GAPS_PLAN.md). Two track
 
 ### Track 1 — Cloud- & framework-agnostic restructure
 
-- **WS1 — Isolate Azure + MAF behind `adapters/azure/`.** Core (`core/`, `governance/`, `a2a/`) becomes cloud-/framework-neutral; the 3 MAF guard wrappers (prompt-injection, credential, context-budget), the middleware assembly, and the Azure Monitor exporter relocate to `adapters/azure/{maf/,...}`. MAF-free guards (`escalation.py`, `egress.py`) and `policies/*.yaml` stay agnostic.
+- **WS1 — Isolate Azure + MAF behind `cloud_adapters/azure/`.** Core (`core/`, `governance/`, `a2a/`) becomes cloud-/framework-neutral; the 3 MAF guard wrappers (prompt-injection, credential, context-budget), the middleware assembly, and the Azure Monitor exporter relocate to `cloud_adapters/azure/{maf/,...}`. MAF-free guards (`escalation.py`, `egress.py`) and `policies/*.yaml` stay agnostic.
 - **WS3 — `agent_os` / `agent_sre` / `agentmesh` re-baseline.** Sync to the latest `agent-os-kernel` / `agent-sre` / `agentmesh-platform` releases (the packages keep their split names; there is no umbrella package). Verify the load-bearing `agent-sre==3.2.2` pin (used by `maf_adapter` and `RogueAgentDetector`) before bumping.
 - **WS4 — Document the delta over `agent_os` / `agent_sre` / `agentmesh`.** Almost everything in this inventory's "wired" column is **bindings + composition**, not governance logic. Cross-references this file to avoid double-counting.
-- **WS5 / WS6 — AWS & GCP adapters.** Fill `adapters/aws/` and `adapters/gcp/` against the WS1 interfaces (identity, secrets, tracing, audit, egress, LLM gateway). Each cloud's egress allow-list + managed gateway (API Gateway→Bedrock, Apigee→Vertex) mirror the Azure APIM chokepoint.
+- **WS5 / WS6 — AWS & GCP adapters.** Fill `cloud_adapters/aws/` and `cloud_adapters/gcp/` against the WS1 interfaces (identity, secrets, tracing, audit, egress, LLM gateway). Each cloud's egress allow-list + managed gateway (API Gateway→Bedrock, Apigee→Vertex) mirror the Azure APIM chokepoint.
 
 ### Track 2 — Gap-closing modules (WS7) — ✅ WIRED (behind flags)
 
@@ -263,7 +263,7 @@ Built under `governance/extensions/`, **feature-flagged off by default** (`gover
 
 | Gap | OWASP | Status | Module / flag |
 |---|---|---|---|
-| **Gap 1 — Data-layer FGAC** | LLM02:2025 (Sensitive Information Disclosure); ASI — excessive/unauthorized data access | ✅ **Wired (flag).** **Decision is MSGK's** — `DataAccessMediator` delegates per-column allow/deny to `agent_os.policies.data_classification.DataAccessEvaluator` (ABAC); our part is the config catalog + **enforcement**: `InProcessEnforcer` masks/filters post-fetch, and **AWS cloud-native pushdown** (`adapters/aws/data_fgac.AwsLakeFormationEnforcer` — scoped Athena SQL + Lake Formation data-cells filter). BigQuery CLS (GCP) / Synapse CLS (Azure) pushdown still deferred. | `data_fgac.py` · `data_classification.py` (MSGK-backed) · `adapters/aws/data_fgac.py` · `GALAXY_GAP_DATA_FGAC` |
+| **Gap 1 — Data-layer FGAC** | LLM02:2025 (Sensitive Information Disclosure); ASI — excessive/unauthorized data access | ✅ **Wired (flag).** **Decision is MSGK's** — `DataAccessMediator` delegates per-column allow/deny to `agent_os.policies.data_classification.DataAccessEvaluator` (ABAC); our part is the config catalog + **enforcement**: `InProcessEnforcer` masks/filters post-fetch, and **AWS cloud-native pushdown** (`cloud_adapters/aws/data_fgac.AwsLakeFormationEnforcer` — scoped Athena SQL + Lake Formation data-cells filter). BigQuery CLS (GCP) / Synapse CLS (Azure) pushdown still deferred. | `data_fgac.py` · `data_classification.py` (MSGK-backed) · `cloud_adapters/aws/data_fgac.py` · `GALAXY_GAP_DATA_FGAC` |
 | **Gap 2 — Unified policy engine** | (cross-cutting decision point) | ✅ **Adopt upstream (verified).** `agent_os.policies` is a full ABAC engine (native `Condition` operators + scopes + conflict resolution) with pluggable **Cedar/OPA** backends. **Cedar wired** as the standards-based engine for agent + data authz (`policy_engine.CedarAuthorizer`, `GALAXY_POLICY_ENGINE=cedar`, `cedarpy` built in — conditional ABAC verified). Casbin evaluated + rejected (redundant third engine). MSGK's own `CedarBackend` is incompatible with cedarpy 4.x + fails open, so we call cedarpy directly (fail-closed). | `policy_engine.py` · `configs/authz.cedar` · `GALAXY_POLICY_ENGINE` |
 | **Gap 3 — Data-access drift** | ASI — rogue/behavioral; LLM10:2025 (Unbounded Consumption — volume) | ✅ **Wired (flag).** `DataAccessDriftDetector` adds data-access features (volume z-score, first-seen table, sensitivity escalation, table entropy, denial rate) → risk + quarantine; **persistent** baselines (`JsonFileBaselineStore`) survive cold starts. Complements the action-level `RogueAgentDetector` (guard 7). | `data_drift.py` · `GALAXY_GAP_DATA_DRIFT` |
 | **Gap 4 — Reasoning-chain guards** | LLM06:2025 (Excessive Agency); ASI — tool misuse / intent-breaking | ✅ **Wired (flag).** (a) **Enforcement:** `ReasoningStepValidator` gates plan/tool-selection/data-access steps against the capability allow-list + Gap-1 mediator *before* execution. (b) **Observability (Gap 4+):** `ReasoningTraceLogger` mandatorily redacts (CredentialRedactor + PII), then emits `reasoning.cot`/`reasoning.cove` span events keyed to `nhi_id` + a hash-stamped `reasoning_trace` audit entry (supports LLM02 detection). Semantic CoT analysis (consistency/goal-drift) is deferred. | `reasoning_guard.py` · `reasoning_trace.py` · `GALAXY_GAP_REASONING_GUARD` / `GALAXY_GAP_REASONING_TRACE` |

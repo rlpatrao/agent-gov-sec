@@ -16,8 +16,8 @@ import json
 
 import pytest
 
-from adapters.contract import ScriptStep, ToolCall
-from adapters.raw import ScriptedChatClient, build_agent
+from agent_framework_adapters.contract import ScriptStep, ToolCall
+from agent_framework_adapters.raw import ScriptedChatClient, build_agent
 from governance.extensions.data_classification import DataClassificationCatalog
 from governance.extensions.data_fgac import DataAccessMediator
 from governance.pipeline import GovernanceViolation
