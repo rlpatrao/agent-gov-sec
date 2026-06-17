@@ -24,12 +24,14 @@ specifics. It is a thin envelope-mover that owns the audit+trace contract.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Awaitable, Callable
 
 from agent_os.audit_logger import AuditEntry, GovernanceAuditLogger
 
 from a2a.envelope import A2AError, A2ARequest, A2AResponse, A2AStatus
+from governance.policy_registry import authorize_recipient
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +76,24 @@ async def a2a_call(
     request.validate()
 
     recipient_type = request.recipient.split("-", 1)[0]
+
+    # Out-of-process authority: when the A2A broker is configured, it is the
+    # authoritative gate — the sender's allow-list is resolved from the policy
+    # registry, not from anything the sender passes in. Fail-closed.
+    if os.environ.get("GOV_A2A_BROKER_ENDPOINT"):
+        sender_type = request.sender.split("-", 1)[0]
+        ok, reason = authorize_recipient(sender_type, request.recipient)
+        if not ok:
+            denied = A2AResponse.error(
+                request=request,
+                error=A2AError(code="recipient_not_allowed", message=reason,
+                               details={"authority": "a2a_broker"}),
+                status=A2AStatus.DENIED,
+            )
+            _log_dispatch(sender_audit, request, outcome="deny", reason=reason)
+            _log_reply(sender_audit, denied, latency_ms=0.0, outcome="deny")
+            return denied
+
     if allowed_recipients and recipient_type not in allowed_recipients:
         denied = A2AResponse.error(
             request=request,

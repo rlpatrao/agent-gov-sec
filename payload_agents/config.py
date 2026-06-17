@@ -25,6 +25,8 @@ from typing import Literal, Optional
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from governance.floor import apply_floor
+
 logger = logging.getLogger(__name__)
 
 
@@ -84,7 +86,7 @@ class GovernanceConfig(BaseModel):
     denied_tools: list[str] = Field(default_factory=list)
 
     # ── WS7 gap-module toggles (consumed by the LangGraph axis,
-    #    agent_framework_adapters/langgraph/governance.build_langgraph_governance) ──────────
+    #    payload_agents/langgraph/_guard.build_langgraph_governance) ──────────
     blocked_patterns: list[str] = Field(
         default_factory=list,
         description="Substrings denied in tool arguments / model output "
@@ -216,13 +218,28 @@ def load_agent_config(
         model_input["agent_type"] = model_input.pop("type")
 
     try:
-        return AgentConfigModel.model_validate(model_input)
+        config = AgentConfigModel.model_validate(model_input)
     except ValidationError as e:
         raise ConfigError(
             f"Schema validation failed for {config_path}:\n"
             + "\n".join(f"  - {'/'.join(str(p) for p in err['loc'])}: {err['msg']}"
                         for err in e.errors())
         ) from e
+
+    # Non-overridable governance floor (mechanism 2). The per-agent YAML may
+    # tighten the governance posture but never weaken it below the baseline the
+    # governing team owns in governance/floor.py. Any field the YAML tried to
+    # loosen is clamped back and logged loudly — an attempt to disable a control
+    # is itself a governance event, not a silent success.
+    clamped, violations = apply_floor(config.governance)
+    if violations:
+        for v in violations:
+            logger.warning(
+                "config.governance_floor_enforced",
+                extra={"agent": config.agent_type, "config": str(config_path), "violation": str(v)},
+            )
+        config = config.model_copy(update={"governance": clamped})
+    return config
 
 
 # ── Per-process cache ────────────────────────────────────────────────────────

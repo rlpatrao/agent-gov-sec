@@ -1,0 +1,41 @@
+# CODEOWNERS — ownership boundary between the governing team and developers.
+#
+# Mechanism 1 of the governance-authority model (see docs/governance-authority.md).
+#
+# The paths below define WHO MAY APPROVE A CHANGE, not who may run the code.
+# GitHub blocks merging a PR that touches an owned path until a listed owner
+# approves it. This puts the authority over governance configuration with the
+# governing team even though the controls execute in the agent's process: a
+# developer can open a PR that weakens a guard, but they cannot merge it.
+#
+# Required repo settings for this to have force:
+#   - Branch protection on the default branch with "Require review from Code
+#     Owners" enabled, and "Allow specified actors to bypass" left empty.
+#   - The team handles below must resolve to real GitHub teams. Replace the
+#     placeholders before relying on this file.
+
+# ── Default ownership: developers own the application/agent code ──────────────
+*                                       @org/agent-developers
+
+# ── Governance authority: the governing team owns every control surface ───────
+# The framework-neutral guard pipeline, guards, extensions, and policies.
+/governance/                            @org/agent-governance
+
+# The non-overridable runtime floor (mechanism 2). The floor is the root of the
+# "config can only tighten" guarantee — it must not be editable by developers.
+/governance/floor.py                    @org/agent-governance
+
+# Per-agent governance blocks live inside these YAMLs. Developers legitimately
+# tune prompts and a2a limits, but the `governance:` block and the egress
+# allow-lists are the governing team's to approve.
+/payload_agents/config/                 @org/agent-governance
+/cloud_adapters/*/egress.yaml           @org/agent-governance
+
+# The out-of-process egress chokepoint (mechanism 4). The proxy enforces policy
+# the agent process cannot alter; its code and IaC are governance-owned.
+/cloud_adapters/aws/infra/              @org/agent-governance
+
+# This file and the authority documentation are themselves governance-owned,
+# so the ownership boundary cannot be quietly removed in a developer PR.
+/.github/CODEOWNERS                     @org/agent-governance
+/docs/governance-authority.md           @org/agent-governance
