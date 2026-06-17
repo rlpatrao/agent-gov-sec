@@ -8,21 +8,18 @@ A runtime governance and security platform for multi-agent systems, built on the
 
 **Governance platform** (`core/`, `governance/`, `a2a/`): per-agent Non-Human Identity (Entra), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → Application Insights tracing, a hash-chained Postgres audit ledger, and APIM as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
 
-**Demonstration payload** (`payload_agents/`): three governed **LangGraph** agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). They prove the governance stack is **framework-agnostic**: the same `governance/` + `core/` + `a2a/` primitives and WS7 extensions wrap a LangGraph `create_agent` via a thin LangChain `AgentMiddleware` shim (`agent_framework_adapters/langgraph/`) — exactly as they'd wrap any agent framework.
+**Demonstration payload** (`payload_agents/`): three governed agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). Each persona is defined once, framework-neutrally, in `payload_agents/_lib/personas.py` and built on any of three frameworks (`--framework {langgraph,raw,pydantic}`, default LangGraph). They prove the governance stack is **framework-agnostic**: the same `governance/` + `core/` + `a2a/` primitives and WS7 extensions wrap each framework — LangGraph's `create_agent` via a thin LangChain `AgentMiddleware` shim (`payload_agents/langgraph/`), Pydantic AI via a model wrapper (`payload_agents/pydantic/`), and a provider-native tool loop with no framework import (`payload_agents/raw/`).
 
 **Governance demos** — run fully offline (deterministic fake model) *or* against a **real
 per-cloud LLM** (Azure OpenAI / Vertex·Gemini / Bedrock) when credentials resolve:
 - `scripts/demo_governance.py` — the minimal, framework-free guard/redaction/ledger walkthrough (no creds).
-- `scripts/demo_agents.py` — the **full feature × agent matrix** across the three LangGraph agents: identity/egress, the per-call guard stack, A2A authz, data-layer FGAC (mask/row-filter/deny + AWS Lake Formation pushdown), data-access drift, reasoning-step guard + CoT/CoVe trace, and hash-chained audit + tamper detection — each exercised on both its success and failure path. All three clouds have been **live-verified** (azure → AOAI, gcp → Vertex, aws → Bedrock through an API Gateway chokepoint).
+- `scripts/demo_agents.py` — the **full feature × agent matrix** across the three agents: identity/egress, the per-call guard stack, A2A authz, data-layer FGAC (mask/row-filter/deny + AWS Lake Formation pushdown), data-access drift, reasoning-step guard + CoT/CoVe trace, and hash-chained audit + tamper detection — each exercised on both its success and failure path. All three clouds have been **live-verified** (azure → AOAI, gcp → Vertex, aws → Bedrock through an API Gateway chokepoint).
 
 ---
 
 ## Architecture
 
-See [`docs/architecture.md`](docs/architecture.md) for the full system design:
-
-- **Part 1 — Governance Platform**: NHI identity, middleware stack, A2A protocol, OTel tracing, audit ledger, Azure resource map
-- **Part 2 — Payload**: the sample agent, codebase classification, structured logging
+See [`docs/architecture.md`](docs/architecture.md) for the full system design — context and purpose, architecture principles and decisions, the logical (layered) and AWS infrastructure diagrams, the end-to-end execution flow, sample demo output, a glossary, and references.
 
 The planned cloud-agnostic restructure (Azure bindings → `cloud_adapters/azure/`, plus AWS/GCP adapters) and the gap-closing modules are described in [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md).
 
@@ -160,31 +157,45 @@ NHI_CLIENT_ID_FINOPS=local-finops-nhi
 ```
 agentic-sdlc/
 │
-├── payload_agents/                 Demonstration payload — 3 LangGraph agents (governed)
+├── payload_agents/                 Demonstration payload — 3 governed personas on 3 frameworks
 │   ├── config.py                   Pydantic config loader (extra="forbid")
-│   ├── finops_agent.py             FinOpsAnalyst — scoped data reader (happy path)
-│   ├── auditor_agent.py            Auditor — cross-dataset reader + A2A callee
-│   ├── rogue_agent.py              Rogue — untrusted agent that trips every guard
-│   ├── _lib/                       Shared utilities (+ demo_data.py sample rows)
-│   ├── config/{finops,auditor,rogue}.yaml   Per-agent config
-│   └── prompts/{finops,auditor,rogue}.md    System prompts
-│
-├── agent_framework_adapters/langgraph/             LangGraph framework axis (agent-framework binding)
-│   ├── _base.py                    build_langgraph_agent() factory (NHI + egress + governance)
-│   ├── governance.py               GalaxyGuardMiddleware + build_langgraph_governance()
-│   └── runtime.py                  FakeToolCallingModel (offline) + live model factory
+│   ├── config/{finops,auditor,rogue}.yaml   Per-persona governance config
+│   ├── prompts/{finops,auditor,rogue}.md    System prompts
+│   ├── _lib/                       Framework-neutral shared logic
+│   │   ├── personas.py             The 3 personas' tool specs / FGAC tools (one definition, all frameworks)
+│   │   ├── scripting.py            Scripted-turn → neutral ScriptStep conversion (offline mode)
+│   │   └── demo_data.py            Sample rows
+│   ├── _runtime/                   Framework-neutral runtime
+│   │   ├── contract.py             Neutral agent contract — ToolSpec / RunResult / AgentBundle
+│   │   ├── models.py               FakeToolCallingModel (offline) + live model factory (Bedrock/Gemini)
+│   │   └── bedrock_gateway.py      BedrockGatewayChatModel
+│   ├── langgraph/                  FRAMEWORK AXIS — LangChain create_agent + GalaxyGuardMiddleware
+│   │   ├── _runner.py              build_langgraph_agent() factory (NHI + egress + governance)
+│   │   ├── _guard.py               GalaxyGuardMiddleware + build_langgraph_governance()
+│   │   └── {finops,auditor,rogue}.py   the 3 personas on LangGraph
+│   ├── pydantic/                   FRAMEWORK AXIS — Pydantic AI Agent (GovernedModel wrapper)
+│   │   ├── _runner.py              build_agent() + GovernedModel
+│   │   └── {finops,auditor,rogue}.py
+│   └── raw/                        FRAMEWORK AXIS — provider-native tool loop (no framework import)
+│       ├── _runner.py              build_agent() + ScriptedChatClient
+│       └── {finops,auditor,rogue}.py
 │
 ├── core/                           Shared infrastructure  (Azure-coupled today; → cloud_adapters/ in WS1)
-│   ├── nhi_identity.py             Non-Human Identity registry
+│   ├── provider_factory.py         CLOUD AXIS dispatch — selects cloud_adapters/<cloud>/ (CLOUD_PROVIDER)
+│   ├── framework_factory.py        FRAMEWORK AXIS dispatch — selects payload_agents/<framework>/ (--framework)
+│   ├── nhi_registry.py             Non-Human Identity registry
 │   ├── run_tracer.py               OTel configure_tracing + pipeline_span
-│   ├── token_provider.py           Key Vault / env-var credential provider
+│   ├── secrets.py                  Key Vault / env-var credential provider
 │   ├── trace_ledger.py             Hash-chained audit ledger schema
 │   └── discovery_artifacts.py      Pydantic models
 │
-├── governance/                     Security & compliance layer
-│   ├── middleware.py               build_governance_stack() — the guard factory
-│   ├── guards/                     Guard implementations (framework middleware wrapping `agent_os` primitives)
+├── governance/                     Security & compliance layer (framework- and cloud-neutral)
+│   ├── pipeline.py                 build_guard_pipeline() — the framework-neutral GuardPipeline
+│   ├── floor.py                    Non-negotiable governance floor (always-on controls)
+│   ├── guards/                     Guard implementations (wrap `agent_os` primitives)
+│   ├── extensions/                 WS7 gap modules (data FGAC, data drift, reasoning guard/trace)
 │   ├── adapters/                   Governance audit sink (OTel span-event backend)
+│   ├── ops/                        Operational controls (agent_sre)
 │   ├── policies/                   YAML declarative rules (galaxy-*.yaml)
 │   ├── configs/                    Guard configs (prompt-injection.yaml, egress.yaml)
 │   └── mappings/                   aws-azure-reference.yaml
@@ -193,10 +204,11 @@ agentic-sdlc/
 │
 ├── scripts/
 │   ├── demo_governance.py          Minimal offline governance demo (no Azure required)
-│   └── demo_agents.py          Full feature × agent matrix over the 3 LangGraph agents
+│   ├── demo_agents.py              Full feature × agent matrix over the 3 agents (any --framework)
+│   ├── demo_extended_guardrails.py The off-by-default sweep walk on its own (28 controls)
+│   └── deploy_agent_engine.py      Deploy a persona to Vertex AI Agent Engine (GCP)
 │
 ├── tests/                          Test suite (runs without Azure credentials)
-├── infra/                          ledger_schema.sql, aca_jobs.bicep  (→ cloud_adapters/azure/ in WS1)
 ├── docs/                           Architecture, user guide, guardrails inventory, refactor plan
 └── .env.example                    Environment variable template
 
@@ -225,13 +237,14 @@ agentic-sdlc/
 
 ## Adding an agent to the payload
 
-1. Create `payload_agents/your_agent.py` with a `Handler` class and a `build_<name>_agent() → AgentBundle` factory.
-2. Register NHI in `core/nhi_identity.py` under `_NHI_CLIENT_IDS` and add `NHI_CLIENT_ID_YOURAGENTTYPE` to `.env.example`.
-3. Create `payload_agents/config/<name>.yaml` (Pydantic schema enforces `extra="forbid"` — typos raise at load time).
-4. Call `build_agent(config, tools=[...])` — the governance stack wires automatically.
-5. Add tests to `tests/test_<name>_agent.py`.
+1. Define the persona's tools once, framework-neutrally, in `payload_agents/_lib/personas.py` (`<name>_specs(...)` returning `ToolSpec`s and/or `<name>_callables(...)`).
+2. Add a `build_<name>_agent(run_id, model, ...) → AgentBundle` coroutine in each framework folder you support (`payload_agents/langgraph/<name>.py`, `pydantic/<name>.py`, `raw/<name>.py`) that wraps the shared specs via that framework's `_runner`, and export it from the framework package `__init__.py`.
+3. Register the NHI: add a `NHI_CLIENT_ID_<NAME>` default in `payload_agents/__init__.py` and the same key to `.env.example` (the registry resolves it from env — see `core/nhi_registry.py`).
+4. Create `payload_agents/config/<name>.yaml` + `payload_agents/prompts/<name>.md` (the Pydantic schema enforces `extra="forbid"` — typos raise at load time).
+5. Add tests to `tests/test_<framework>_*.py`.
 
-See [`docs/user-guide.md`](docs/user-guide.md) for the full walkthrough.
+See [`docs/adding-an-agent.md`](docs/adding-an-agent.md) for the developer/governing-team
+split and [`docs/user-guide.md`](docs/user-guide.md) for the full walkthrough.
 
 ---
 
@@ -254,6 +267,8 @@ Without `POSTGRES_DSN`, the hash chain runs in stdout mode — full chain logic 
 | [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) | Cloud-agnostic refactor, `agent_os` re-baseline, AWS/GCP adapters, and gap-closing modules |
 | [`docs/DELTA_OVER_AGENT_OS.md`](docs/DELTA_OVER_AGENT_OS.md) | What this repo adds over the stock `agent_os` / `agent_sre` / `agentmesh` packages — module-by-module (a)/(b)/(c) classification |
 | [`docs/architecture.md`](docs/architecture.md) | Full system design — governance platform + payload, Mermaid diagrams |
+| [`docs/governance-authority.md`](docs/governance-authority.md) | Who controls the controls — CODEOWNERS ownership split, the non-overridable runtime floor, and out-of-process enforcement in the egress proxy |
+| [`docs/adding-an-agent.md`](docs/adding-an-agent.md) | Developer guide for adding a governed agent — files to create, the governance-review request template, and the per-agent oversight artifacts |
 | [`docs/architecture-framework-aws.md`](docs/architecture-framework-aws.md) | Framework core + AWS binding — the two-axis (framework × cloud) design, the shared `GuardPipeline`, Mermaid component + request-flow diagrams |
 | [`docs/user-guide.md`](docs/user-guide.md) | How-to guide — running the platform, adding agents, debugging |
 | [`docs/services-and-tech.md`](docs/services-and-tech.md) | Azure resource inventory, package versions, env var reference |

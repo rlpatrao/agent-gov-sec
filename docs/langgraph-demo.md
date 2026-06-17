@@ -2,7 +2,8 @@
 
 A framework-agnostic demonstration: the same governance platform governs **LangGraph**
 agents end-to-end — offline by default, with an opt-in `--live` path that drives a real
-LLM. The demo lives entirely in `agent_framework_adapters/langgraph/` + `payload_agents/` (+ the
+LLM. The demo lives entirely in `payload_agents/langgraph/` + the shared `payload_agents/_lib/`
++ `payload_agents/_runtime/` (+ the
 `scripts/demo_agents.py` runner) and touches **no core-framework code** — it registers its NHIs via env
 (`payload_agents/__init__.py` → `NHI_CLIENT_ID_*`, resolved by `core.nhi_registry`'s
 env-extensible lookup) and its deps are the opt-in `.[langgraph]` extra.
@@ -83,14 +84,17 @@ The audit ledger entries + hashes also print in the **[H]** section regardless.
 
 | Agent | Role | What it demonstrates |
 |---|---|---|
-| **FinOpsAnalyst** (`finops_agent.py`) | scoped data reader | the happy path: data-layer FGAC — column masking (`customer_email`, above-clearance `tax_id`) + US-region row filtering on a real read |
-| **Auditor** (`auditor_agent.py`) | privileged cross-dataset reader + A2A callee | broader clearance + governed A2A hop |
-| **Rogue** (`rogue_agent.py`) | untrusted agent | trips every guard — prompt injection, credential leak, out-of-scope data, disallowed tools |
+| **FinOpsAnalyst** (`langgraph/finops.py`) | scoped data reader | the happy path: data-layer FGAC — column masking (`customer_email`, above-clearance `tax_id`) + US-region row filtering on a real read |
+| **Auditor** (`langgraph/auditor.py`) | privileged cross-dataset reader + A2A callee | broader clearance + governed A2A hop |
+| **Rogue** (`langgraph/rogue.py`) | untrusted agent | trips every guard — prompt injection, credential leak, out-of-scope data, disallowed tools |
 
-All three are built by `agent_framework_adapters/langgraph/_base.build_langgraph_agent()` and wrapped by
-`agent_framework_adapters/langgraph/governance.GalaxyGuardMiddleware`, which threads the same `governance/` +
+Each persona's domain logic (its FGAC tools) is defined once, framework-neutrally, in
+`payload_agents/_lib/personas.py`. The LangGraph builds are wired by
+`payload_agents/langgraph/_runner.build_langgraph_agent()` and wrapped by
+`payload_agents/langgraph/_guard.GalaxyGuardMiddleware`, which threads the same `governance/` +
 `core/` + `a2a/` primitives and WS7 extensions used for MAF agents into a LangChain
-`AgentMiddleware`.
+`AgentMiddleware`. The same personas run on the Pydantic AI and raw frameworks via
+`payload_agents/pydantic/` and `payload_agents/raw/`.
 
 ## What the matrix covers
 

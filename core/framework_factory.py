@@ -11,10 +11,10 @@ no framework at all.
     fw = get_framework()                      # langgraph by default
     bundle = await fw.build_agent("finops", run_id, ...)
 
-Each ``agent_framework_adapters/<framework>/`` package must expose the builder surface the demo
-uses (``build_agent`` / the per-persona builders) and return an object satisfying
-``agent_framework_adapters.contract.AgentBundle`` (a framework-neutral ``invoke(prompt) ->
-RunResult``).
+Each ``payload_agents/<framework>/`` package must expose the builder surface the
+demo uses (``make_model`` + the per-persona ``build_*_agent`` coroutines) and
+return an object satisfying ``payload_agents._runtime.contract.AgentBundle`` (a
+framework-neutral ``invoke(prompt) -> RunResult``).
 """
 
 from __future__ import annotations
@@ -26,11 +26,11 @@ from types import ModuleType
 
 logger = logging.getLogger(__name__)
 
-# name -> adapter package
+# name -> framework folder package (each exposes make_model + build_*_agent)
 _FRAMEWORK_PACKAGES: dict[str, str] = {
-    "langgraph": "agent_framework_adapters.langgraph",       # LangChain create_agent + middleware
-    "raw": "agent_framework_adapters.raw",                   # provider-native tool loop, no framework
-    "pydantic": "agent_framework_adapters.pydantic_ai",      # Pydantic AI Agent (native models)
+    "langgraph": "payload_agents.langgraph",       # LangChain create_agent + middleware
+    "raw": "payload_agents.raw",                   # provider-native tool loop, no framework
+    "pydantic": "payload_agents.pydantic",         # Pydantic AI Agent (native models)
 }
 
 DEFAULT_FRAMEWORK = "langgraph"

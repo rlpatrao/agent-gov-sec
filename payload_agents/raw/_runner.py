@@ -1,5 +1,5 @@
 """
-agent_framework_adapters.raw — the provider-native (no-framework) binding.
+payload_agents.raw._runner — the provider-native (no-framework) binding.
 
 The "control" arm of the framework axis: a hand-rolled tool loop that calls a
 ``ChatModelClient`` directly and runs the **same shared `GuardPipeline`** around
@@ -17,7 +17,7 @@ LangGraph middleware or a Pydantic AI model wrapper.
           pipeline.before_tool(name, args)   (B7/G19/B8 — raises to block)
           run the tool fn, feed the result back into messages
 
-``build_agent`` mirrors ``agent_framework_adapters.pydantic_ai.build_agent``: it resolves the
+``build_agent`` mirrors ``payload_agents.pydantic._runner.build_agent``: it resolves the
 NHI, consults the egress chokepoint, and builds the guard pipeline from the
 per-agent YAML — only the execution engine differs. ``model`` here is a
 ``ChatModelClient`` (a ``ScriptedChatClient`` for ``--fake``; a best-effort live
@@ -30,7 +30,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from agent_framework_adapters.contract import (
+from payload_agents._runtime.contract import (
     ChatModelClient,
     ModelResult,
     RunResult,

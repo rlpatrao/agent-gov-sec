@@ -20,11 +20,11 @@ pytest.importorskip("langchain.agents", reason="LangGraph axis requires langchai
 
 from langchain_core.messages import AIMessage  # noqa: E402
 
-from agent_framework_adapters.langgraph.governance import GovernanceViolation  # noqa: E402
-from agent_framework_adapters.langgraph.runtime import scripted_model  # noqa: E402
-from payload_agents.auditor_agent import build_auditor_agent  # noqa: E402
-from payload_agents.finops_agent import build_finops_agent  # noqa: E402
-from payload_agents.rogue_agent import build_rogue_agent  # noqa: E402
+from governance.pipeline import GovernanceViolation  # noqa: E402
+from payload_agents._runtime.models import scripted_model  # noqa: E402
+from payload_agents.langgraph import build_auditor_agent  # noqa: E402
+from payload_agents.langgraph import build_finops_agent  # noqa: E402
+from payload_agents.langgraph import build_rogue_agent  # noqa: E402
 
 
 def _invoke(bundle, prompt):

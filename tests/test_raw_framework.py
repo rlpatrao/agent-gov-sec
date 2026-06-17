@@ -16,18 +16,18 @@ import json
 
 import pytest
 
-from agent_framework_adapters.contract import ScriptStep, ToolCall
-from agent_framework_adapters.raw import ScriptedChatClient, build_agent
+from payload_agents._runtime.contract import ScriptStep, ToolCall
+from payload_agents.raw import ScriptedChatClient, build_agent
 from governance.extensions.data_classification import DataClassificationCatalog
 from governance.extensions.data_fgac import DataAccessMediator
 from governance.pipeline import GovernanceViolation
-from payload_agents import finops_agent, rogue_agent
+from payload_agents._lib import personas
 
 
 def _finops(model):
-    cat = DataClassificationCatalog.load(finops_agent._CATALOG_PATH)
+    cat = DataClassificationCatalog.load(personas.CATALOG_PATH)
     med = DataAccessMediator(catalog=cat)
-    specs = finops_agent.make_tool_specs(mediator=med, nhi_id="local-finops-nhi")
+    specs = personas.finops_specs(mediator=med, nhi_id="local-finops-nhi")
     return asyncio.run(build_agent("finops", "FinOps", "run-raw", model=model, tool_specs=specs, mediator=med, catalog=cat))
 
 
@@ -56,9 +56,9 @@ def test_raw_prompt_injection_blocked(monkeypatch):
 
 def test_raw_capability_guard_blocks_unlisted_tool(monkeypatch):
     monkeypatch.setenv("CLOUD_PROVIDER", "local")
-    cat = DataClassificationCatalog.load(finops_agent._CATALOG_PATH)
+    cat = DataClassificationCatalog.load(personas.CATALOG_PATH)
     med = DataAccessMediator(catalog=cat)
-    specs = rogue_agent.make_tool_specs()
+    specs = personas.rogue_specs()
     model = ScriptedChatClient([
         ScriptStep(tool_calls=[ToolCall(name="shell_exec", args={"cmd": "id"}, id="c1")]),
         ScriptStep(text="x"),

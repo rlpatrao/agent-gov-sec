@@ -67,6 +67,13 @@ langgraph = [
 pydantic = [
     "pydantic-ai-slim>=1.0",
 ]
+# Deployment host: run a governed LangGraph agent inside Vertex AI Agent Engine
+# (managed runtime). Combine with [gcp] and [langgraph]:
+#   pip install '.[gcp,langgraph,agent-engine]'
+agent-engine = [
+    "google-cloud-aiplatform[agent_engines]>=1.95.0",
+    "cloudpickle>=3.0",
+]
 
 [tool.pytest.ini_options]
 # The repo's tests only — never recurse into the local-only archive/.

@@ -1,5 +1,5 @@
 """
-agent_framework_adapters.langgraph.bedrock_gateway — client-side model for the apigw-bedrock path.
+payload_agents._runtime.bedrock_gateway — client-side model for the apigw-bedrock path.
 
 ``BedrockGatewayChatModel`` is a LangChain ``BaseChatModel`` that talks to Amazon
 Bedrock **through the API Gateway egress chokepoint** rather than to

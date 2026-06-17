@@ -20,11 +20,11 @@ pytest.importorskip("pydantic_ai")
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 
-from agent_framework_adapters.pydantic_ai import build_agent
+from payload_agents.pydantic import build_agent
 from governance.extensions.data_classification import DataClassificationCatalog
 from governance.extensions.data_fgac import DataAccessMediator
 from governance.pipeline import GovernanceViolation
-from payload_agents import finops_agent, rogue_agent
+from payload_agents._lib import personas
 
 
 def _scripted(*steps):
@@ -44,9 +44,9 @@ def _scripted(*steps):
 
 
 def _finops(model):
-    cat = DataClassificationCatalog.load(finops_agent._CATALOG_PATH)
+    cat = DataClassificationCatalog.load(personas.CATALOG_PATH)
     med = DataAccessMediator(catalog=cat)
-    specs = finops_agent.make_tool_specs(mediator=med, nhi_id="local-finops-nhi")
+    specs = personas.finops_specs(mediator=med, nhi_id="local-finops-nhi")
     return asyncio.run(build_agent("finops", "FinOps", "run-pyd", model=model, tool_specs=specs, mediator=med, catalog=cat))
 
 
@@ -74,9 +74,9 @@ def test_pydantic_prompt_injection_blocked(monkeypatch):
 
 def test_pydantic_capability_guard_blocks_unlisted_tool(monkeypatch):
     monkeypatch.setenv("CLOUD_PROVIDER", "local")
-    cat = DataClassificationCatalog.load(finops_agent._CATALOG_PATH)
+    cat = DataClassificationCatalog.load(personas.CATALOG_PATH)
     med = DataAccessMediator(catalog=cat)
-    specs = rogue_agent.make_tool_specs()
+    specs = personas.rogue_specs()
     model = _scripted(("", [("shell_exec", {"cmd": "id"})]), ("x", []))
     bundle = asyncio.run(build_agent("rogue", "Rogue", "run-pyd-r", model=model, tool_specs=specs, mediator=med, catalog=cat))
     with pytest.raises(GovernanceViolation) as ei:

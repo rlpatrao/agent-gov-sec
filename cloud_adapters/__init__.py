@@ -11,6 +11,6 @@ the hash-chained audit backend, tracing, and egress allow-list for that cloud:
 
 Selected at runtime by ``core.provider_factory.get_provider()`` (keyed on the
 ``CLOUD_PROVIDER`` env var); each package exposes a module-level ``PROVIDER``.
-This axis is orthogonal to the agent-framework axis (``agent_framework_adapters``).
+This axis is orthogonal to the agent-framework axis (``payload_agents/<framework>``).
 ``core`` and ``governance`` do not import this package or any cloud SDK.
 """

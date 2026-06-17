@@ -1,6 +1,6 @@
-# adapters/aws/infra/main.tf — WS5 reference Terraform for the AWS deployment.
+# cloud_adapters/aws/infra/main.tf — WS5 reference Terraform for the AWS deployment.
 #
-# The AWS analogue of adapters/azure/infra/aca_jobs.bicep. Provisions everything
+# The AWS analogue of cloud_adapters/azure/infra/aca_jobs.bicep. Provisions everything
 # `demo_agents.py --aws` needs to run against a real model through a governed
 # API Gateway → Bedrock egress chokepoint:
 #

@@ -90,8 +90,8 @@ governance/                # cloud- & framework-AGNOSTIC governance only
     ├── escalation.py      # pure agent_os, MAF-free -> stays
     └── egress.py          # pure agent_os, MAF-free -> stays
 
-cloud_adapters/            # cloud axis (the framework axis shipped as a separate
-│                          #   top-level package, agent_framework_adapters/)
+cloud_adapters/            # cloud axis (the framework axis shipped inside the
+│                          #   payload package, payload_agents/<framework>/)
 ├── __init__.py            # registry: {"azure": ..., "aws": ..., "gcp": ...}
 ├── azure/
 │   ├── identity.py        # Entra SP + ManagedIdentityCredential      (from core/nhi_identity.py)
@@ -157,7 +157,7 @@ cloud_adapters/            # cloud axis (the framework axis shipped as a separat
 - [x] **2.4** `infrastructure-connections.md`/`.html` (and the other one-off `.html` exports) deleted — no duplication remains.
 - [x] **2.5** Overlapping status docs (`current-state.md`, `platform-status.md`) deleted; status now lives inline in the kept docs.
 - [x] **2.6** `docs/screenshots/` + `screenshot-manifest.md` removed.
-- [x] **2.7** `README.md` updated: `cloud_adapters/` + `agent_framework_adapters/` layout, multi-cloud + framework-adapter framing, `payload_agents/` framing, doc links.
+- [x] **2.7** `README.md` updated: `cloud_adapters/` + `payload_agents/<framework>/` layout, multi-cloud + framework-adapter framing, `payload_agents/` framing, doc links.
 - [x] **2.8** *(added)* **Public-push scrub** — removed all remaining identifying values (real Azure FQDNs, the `d63cdd` deploy suffix, `AI Labs` subscription name, partial client ID, Foundry resource/RG names) from kept docs, `galaxy-egress.yaml`, `aca_jobs.bicep`, and `test_guards.py`, using `example-*` placeholders kept in sync between the egress allow-list and its test.
 
 **Acceptance:** ✅ `docs/` current and non-duplicated (all relative links resolve); historical product moved to local `archive/`; no large binaries tracked (largest tracked file is `uv.lock`); README accurate; repo scrubbed of identifying values.
@@ -208,7 +208,7 @@ cloud_adapters/            # cloud axis (the framework axis shipped as a separat
 - [x] **5.4** `cloud_adapters/aws/audit.py` — `DynamoDbHashChainBackend` implements `agent_os` `AuditBackend`: SHA-256 hash-chain on **DynamoDB** (batched async flush + `verify_chain`); stdout mode when boto3/table absent.
 - [x] **5.5** `cloud_adapters/aws/egress.yaml` — AWS endpoint allow-list (API Gateway, Bedrock runtime, Secrets Manager, SSM, STS, X-Ray).
 - [x] **5.5a** `cloud_adapters/aws/gateway.py` — `AwsLLMGateway`: **API Gateway → Bedrock** (`x-api-key`) when `AWS_BEDROCK_GATEWAY_ENDPOINT` set, else **direct Bedrock** (SigV4/IAM, no static key). Mirrors `AzureLLMGateway`.
-- [x] **5.5b** Live model (`apigw-bedrock`): `agent_framework_adapters/langgraph/bedrock_gateway.BedrockGatewayChatModel` POSTs Bedrock **Converse** through the API Gateway chokepoint (the client can't use `ChatBedrockConverse`, which hits bedrock-runtime directly); `runtime.build_bedrock_model` builds it from the gateway's resolution. Server side = `cloud_adapters/aws/infra/lambda/bedrock_proxy.py` (Lambda boto3 `converse`). `demo_agents.py --aws` drives the whole matrix on it when the gateway + key resolve. Unit-tested (Converse mapping, mocked HTTP) in `tests/test_bedrock_gateway.py`.
+- [x] **5.5b** Live model (`apigw-bedrock`): `payload_agents/_runtime/bedrock_gateway.BedrockGatewayChatModel` POSTs Bedrock **Converse** through the API Gateway chokepoint (the client can't use `ChatBedrockConverse`, which hits bedrock-runtime directly); `payload_agents/_runtime/models.build_bedrock_model` builds it from the gateway's resolution. Server side = `cloud_adapters/aws/infra/lambda/bedrock_proxy.py` (Lambda boto3 `converse`). `demo_agents.py --aws` drives the whole matrix on it when the gateway + key resolve. Unit-tested (Converse mapping, mocked HTTP) in `tests/test_bedrock_gateway.py`.
 - [x] **5.6** `cloud_adapters/aws/infra/main.tf` — **Terraform** (tagged `project=galaxy-rp` via provider `default_tags`): the 3 demo agent roles (`galaxy-rp-finops/auditor/rogue`, least-priv: Bedrock invoke + own-secret read + ledger write), DynamoDB ledger table, S3 artifact bucket, Secrets Manager gateway key, Lambda Bedrock proxy, and API Gateway (REST) + usage plan + API key. `terraform validate` passes; outputs wire straight into `.env`.
 - [x] **5.7** `cloud_adapters/aws/orchestrator.py` — `submit_agent_job` via **AWS Batch** (lazy boto3; clear error if absent). Single-agent demo runs in-process; this is for the fan-out shape.
 - [ ] **5.8** *(optional, framework axis — DEFERRED)* AWS framework adapter (LangGraph / Bedrock Agents as `AgentRuntimeAdapter`). `runtime_adapter()` intentionally returns `None` today; in-process agent uses the existing builder. Tracked for when an AWS runtime is targeted.
@@ -228,7 +228,7 @@ cloud_adapters/            # cloud axis (the framework axis shipped as a separat
 - [x] **6.4** `audit.py` — `agent_os` `AuditBackend`: hash-chain ledger on **BigQuery** with **stdout-mode** fallback; identical buffer shape to the Azure/AWS/local backends so the chain verifier is portable.
 - [x] **6.5** `egress.yaml` — GCP endpoint allow-list (Vertex AI, Secret Manager, IAM Credentials, OAuth2, Cloud Trace).
 - [x] **6.5a** `gateway.py` — `LLMGateway`: **Apigee → Vertex AI** managed egress chokepoint (`apigee-vertex`), or direct **Vertex AI** endpoint with ADC token (`vertex-direct`); resolves endpoint + auth from `SecretProvider`. Pairs with `egress.yaml`.
-- [x] **6.5b** Live model: `agent_framework_adapters/langgraph/runtime.build_gemini_model` — **Vertex AI** (`ChatVertexAI`, ADC) or **Gemini Developer API** (`ChatGoogleGenerativeAI`, key). `demo_agents.py --gcp` drives the whole matrix on it when creds + the `.[gcp]` extra resolve.
+- [x] **6.5b** Live model: `payload_agents/_runtime/models.build_gemini_model` — **Vertex AI** (`ChatVertexAI`, ADC) or **Gemini Developer API** (`ChatGoogleGenerativeAI`, key). `demo_agents.py --gcp` drives the whole matrix on it when creds + the `.[gcp]` extra resolve.
 - [ ] **6.6** `infra/` — **Terraform**: per-agent SAs + IAM bindings, job runtime (**Cloud Run jobs**), BigQuery/Spanner ledger. *(deferred — IaC)*
 - [ ] **6.7** `orchestrator.py` — job orchestration via **Cloud Run jobs / Workflows** (the GCP analogue of `run_pipeline_aca.py`). *(deferred)*
 - [ ] **6.8** *(optional, framework axis)* GCP framework adapter — wire `agent_framework`'s **Google ADK** adapter as the `AgentRuntimeAdapter`. *(LangGraph already governs GCP via the framework-agnostic adapter; ADK is an alternative.)*
