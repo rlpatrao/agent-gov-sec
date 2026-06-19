@@ -29,7 +29,7 @@ can actually observe its event.
 [`.github/CODEOWNERS`](../.github/CODEOWNERS) places every control surface under
 the governing team while leaving application code with developers:
 
-- `governance/` and `governance/floor.py` — the pipeline and the floor.
+- `governance/` and `governance/inprocess/floor.py` — the pipeline and the floor.
 - `payload_agents/config/` — the per-agent `governance:` blocks.
 - `cloud_adapters/*/egress.yaml` — the egress allow-lists.
 - `cloud_adapters/aws/infra/` — the out-of-process proxy and its IaC.
@@ -44,9 +44,9 @@ Operational requirement: the team handles in `CODEOWNERS` are placeholders
 real GitHub teams, and branch protection must be enabled, for the file to have
 force.
 
-## Mechanism 2 — the non-overridable floor (`governance/floor.py`)
+## Mechanism 2 — the non-overridable floor (`governance/inprocess/floor.py`)
 
-[`governance/floor.py`](../governance/floor.py) defines a `GovernanceFloor`: the
+[`governance/inprocess/floor.py`](../governance/inprocess/floor.py) defines a `GovernanceFloor`: the
 minimum governance posture. After a per-agent config is schema-validated,
 [`payload_agents/config.py`](../payload_agents/config.py) passes it through
 `apply_floor()`, which clamps every field in the restrictive direction:
@@ -82,7 +82,7 @@ is what mechanism 4 is for.
 
 ## Mechanism 3 — the NHI-keyed policy registry
 
-[`governance/policy_registry.py`](../governance/policy_registry.py) is the single
+[`governance/shared/policy_registry.py`](../governance/shared/policy_registry.py) is the single
 authority every enforcement tier resolves from, so an agent's posture is never
 taken from the request at enforcement time. `resolve_policy(agent_type)` builds a
 `ControlPolicy` from the per-agent config **after the floor has run**, so the
@@ -97,7 +97,7 @@ The registry is the realisation of what was previously deferred as "signed
 external policy" — the posture now lives in one governing-team-owned document
 rather than being trusted per-request from the agent. Signing that document (and
 verifying the signature at load) is the remaining hardening step; the signing
-primitives exist (`governance/extensions/mcp_message_signer_guard.py`,
+primitives exist (`governance/shared/enforcement/mcp_message_signer_guard.py`,
 `governance/ops/signing_report.py`) and can be applied to the exported registry.
 
 ## Mechanism 4 — out-of-process enforcement at three chokepoints
@@ -105,11 +105,25 @@ primitives exist (`governance/extensions/mcp_message_signer_guard.py`,
 A control can only be enforced where its event is observable. Three classes of
 governed event never traverse the LLM egress path, so full out-of-process
 enforcement requires three chokepoints, each resolving the caller's posture from
-the registry (mechanism 3) and failing closed. The shared, dependency-free check
-logic lives in [`governance/enforcement_core.py`](../governance/enforcement_core.py)
-so it can be vendored into each Lambda bundle without importing the agent
-codebase. All three are covered by `tests/test_chokepoints.py`; the core by
-`tests/test_enforcement_core.py`.
+the registry (mechanism 3) and failing closed.
+
+The chokepoints re-run the **same** enforcement library the in-process pipeline
+uses — not a weaker re-implementation. `governance/shared/enforcement/session.py`
+exposes `build_enforcement(policy) → EnforcementSession`, a synchronous wrapper
+over the real `agent_os`/`agent_sre` `GuardPipeline`; the transport-neutral
+`governance/remote/enforce.py` drives it. This is trust-but-verify on one code
+path: the agent runs the controls in-process (*trust*), the chokepoint
+independently re-runs the same controls (*verify*). Covered by
+`tests/test_chokepoints.py`, `tests/test_governance_tiers.py`, and
+`tests/test_agentcore.py`.
+
+The governance package is physically split into the tiers this implies:
+`governance/shared` (the enforcement library + the dependency-free
+`policy_registry` consumer), `governance/inprocess` (the floor), and
+`governance/remote` (the chokepoint entrypoints). `governance/policy_export.py` is
+the build-time producer (it imports the agent config; the consumer half does not),
+and an import-boundary test keeps `shared`/`remote` free of any agent-codebase
+dependency so they vendor cleanly into a Lambda or a Fargate daemon.
 
 ### 4a — LLM proxy (model boundary)
 [`cloud_adapters/aws/infra/lambda/bedrock_proxy.py`](../cloud_adapters/aws/infra/lambda/bedrock_proxy.py)
@@ -157,12 +171,25 @@ chokepoints take effect when deployed (registry supplied via `GOV_POLICY_REGISTR
 agent direct store and peer access). Deploying that IAM topology is an
 operational step, not represented in this repository's code.
 
+## AgentCore integration
+
+On AWS, the chokepoints map onto Amazon Bedrock AgentCore rather than bespoke
+plumbing (see `docs/agentcore-comparison.md`). Coarse authorization is generated
+as Cedar from the registry (`governance/agentcore/cedar_export.py`) and enforced
+by AgentCore Policy; the content controls run as AgentCore Gateway **interceptors**
+(`cloud_adapters/aws/agentcore/{request,response}_interceptor.py`) — thin adapters
+that call the same `governance/remote/enforce` library. NHI maps to AgentCore
+Identity (`cloud_adapters/aws/agentcore/identity.py`). The adapters and Cedar
+generation are verified offline (`tests/test_agentcore.py`); the deploy steps are
+in `cloud_adapters/aws/agentcore/README.md`. Off AWS, the identical
+`governance/{shared,remote}` library runs behind APIM/Apigee on a Fargate daemon.
+
 ## Remaining hardening
 
 The registry document (mechanism 3) is not yet signed. The highest-value next
 step is to sign the exported registry with the governing team's key and verify
 the signature when each chokepoint loads it, so a tampered registry is rejected.
-The signing primitives exist (`governance/extensions/mcp_message_signer_guard.py`,
+The signing primitives exist (`governance/shared/enforcement/mcp_message_signer_guard.py`,
 `governance/ops/signing_report.py`); applying them to `export_registry_json`
 output and the chokepoint load path is the remaining work to make the authority
 cryptographically, not just procedurally, owned by the governing team.

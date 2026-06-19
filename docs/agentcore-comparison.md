@@ -151,6 +151,35 @@ Recommendation: target **AgentCore Gateway interceptors + Policy on AWS**, and a
 **Fargate daemon** as the portable, non-AWS deployment of the same enforcement
 library. Avoid plain per-request Lambda for the full enforcement service.
 
+## Implementation status (in this repo)
+
+The integration above is implemented as an offline-verified spike:
+
+| Piece | Code | Verified |
+|---|---|---|
+| Cedar generation from the registry | `governance/agentcore/cedar_export.py` | `tests/test_agentcore.py` |
+| Gateway request interceptor (input + tool-plan) | `cloud_adapters/aws/agentcore/request_interceptor.py` | `tests/test_agentcore.py` |
+| Gateway response interceptor (redaction + tool-list filter) | `cloud_adapters/aws/agentcore/response_interceptor.py` | `tests/test_agentcore.py` |
+| NHI → AgentCore Identity | `cloud_adapters/aws/agentcore/identity.py` | imports cleanly without the SDK |
+| Deploy steps | `cloud_adapters/aws/agentcore/README.md` | documented, not CI-run |
+
+The interceptors and the AWS chokepoints share one enforcement library
+(`governance/remote` over `governance/shared/enforcement`), so AWS-native and
+off-AWS deployments run identical controls. What is *not* in the repo: a live
+AgentCore deploy (account + SDK) and the IAM/Gateway wiring, which are operational
+steps.
+
+## Runtime decision (recorded)
+
+- **Lambda vs daemon:** Lambda was inherited from the original API Gateway →
+  Bedrock path. For the full trust-but-verify enforcement service the better fit
+  is a long-lived **Fargate/ECS** daemon (toolkit warm in memory, registry +
+  hot state held across requests); on AgentCore the equivalent is the Gateway
+  **interceptor** Lambdas, packaged as container images (`lambda/Dockerfile`).
+- **State:** stateful controls (drift/circuit/cost/rate) externalize to
+  **DynamoDB** via `governance/shared/state.py` (`DynamoDbState`), mirroring the
+  audit ledger's DynamoDB backend.
+
 ## Sources
 
 - [Amazon Bedrock AgentCore — Overview](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html)
