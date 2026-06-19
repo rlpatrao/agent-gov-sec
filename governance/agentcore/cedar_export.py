@@ -24,53 +24,37 @@ from governance.policy_export import KNOWN_AGENT_TYPES, resolve_policy
 from governance.shared.policy_registry import ControlPolicy
 
 
-def _quote_list(values) -> str:
-    return ", ".join(f'"{v}"' for v in values)
+def _statements(policy: ControlPolicy) -> list[str]:
+    """The agent's coarse-authz posture as individual, resource-scoped Cedar
+    statements. AgentCore Policy rejects an unconstrained `resource` (wildcard),
+    so each statement names one tool/recipient (`resource == Tool::"..."`).
+    An empty allow-list emits nothing — Cedar default-denies."""
+    at = policy.agent_type
+    stmts: list[str] = []
+    for t in policy.allowed_tools:
+        stmts.append(f'permit(principal == Agent::"{at}", action == Action::"invokeTool", resource == Tool::"{t}");')
+    for t in policy.denied_tools:
+        stmts.append(f'forbid(principal == Agent::"{at}", action == Action::"invokeTool", resource == Tool::"{t}");')
+    for r in policy.allowed_recipients:
+        stmts.append(f'permit(principal == Agent::"{at}", action == Action::"dispatch", resource == Agent::"{r}");')
+    return stmts
 
 
 def policy_to_cedar(policy: ControlPolicy) -> str:
-    """Render one agent's coarse-authz posture as Cedar statements."""
-    at = policy.agent_type
-    out: list[str] = [f"// ── {at} ──"]
+    """Render one agent's coarse-authz posture as a commented Cedar block."""
+    return "\n".join([f"// ── {policy.agent_type} ──", *_statements(policy)])
 
-    if policy.allowed_tools:
-        out.append(
-            f'permit(\n'
-            f'  principal == Agent::"{at}",\n'
-            f'  action == Action::"invokeTool",\n'
-            f'  resource\n'
-            f') when {{ resource.name in [{_quote_list(policy.allowed_tools)}] }};'
-        )
-    else:
-        # No tools permitted → an explicit forbid documents the deny-all intent
-        # (Cedar would deny by default, but this is clearer for auditors).
-        out.append(
-            f'forbid(\n'
-            f'  principal == Agent::"{at}",\n'
-            f'  action == Action::"invokeTool",\n'
-            f'  resource\n'
-            f');'
-        )
 
-    if policy.denied_tools:
-        out.append(
-            f'forbid(\n'
-            f'  principal == Agent::"{at}",\n'
-            f'  action == Action::"invokeTool",\n'
-            f'  resource\n'
-            f') when {{ resource.name in [{_quote_list(policy.denied_tools)}] }};'
-        )
-
-    if policy.allowed_recipients:
-        out.append(
-            f'permit(\n'
-            f'  principal == Agent::"{at}",\n'
-            f'  action == Action::"dispatch",\n'
-            f'  resource\n'
-            f') when {{ resource.agentType in [{_quote_list(policy.allowed_recipients)}] }};'
-        )
-
-    return "\n".join(out)
+def iter_cedar_statements(agent_types: tuple[str, ...] = KNOWN_AGENT_TYPES):
+    """Yield (policy_name, single_cedar_statement) pairs, one per permit/forbid,
+    for deployment to an AgentCore policy engine (one statement per create-policy)."""
+    for at in agent_types:
+        try:
+            policy = resolve_policy(at)
+        except Exception:
+            continue
+        for i, stmt in enumerate(_statements(policy)):
+            yield f"{at.lower()}_{i}", stmt
 
 
 def export_cedar(agent_types: tuple[str, ...] = KNOWN_AGENT_TYPES) -> str:
