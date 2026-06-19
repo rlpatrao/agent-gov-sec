@@ -52,3 +52,6 @@ galaxy-guardrail-report.html
 # ...but keep the one committed reference report (live AWS run) linked from the docs
 !docs/aws-guardrail-report.html
 docs/output/
+
+# Generated governance policy registry artifact (built at deploy time)
+cloud_adapters/aws/infra/lambda/agent-controls.json

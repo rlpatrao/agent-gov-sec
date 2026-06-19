@@ -1,0 +1,6 @@
+# Governance chokepoint runtime — the toolkit + its deps only (no agent framework).
+agent-os-kernel>=3.7.0
+agent-sre>=3.7.0
+agentmesh-platform>=3.7.0
+pydantic>=2.0
+PyYAML>=6.0

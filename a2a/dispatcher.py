@@ -31,7 +31,7 @@ from typing import Awaitable, Callable
 from agent_os.audit_logger import AuditEntry, GovernanceAuditLogger
 
 from a2a.envelope import A2AError, A2ARequest, A2AResponse, A2AStatus
-from governance.shared.policy_registry import authorize_recipient
+from governance.policy_export import authorize_recipient_live
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ async def a2a_call(
     # registry, not from anything the sender passes in. Fail-closed.
     if os.environ.get("GOV_A2A_BROKER_ENDPOINT"):
         sender_type = request.sender.split("-", 1)[0]
-        ok, reason = authorize_recipient(sender_type, request.recipient)
+        ok, reason = authorize_recipient_live(sender_type, request.recipient)
         if not ok:
             denied = A2AResponse.error(
                 request=request,

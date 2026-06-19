@@ -46,6 +46,12 @@ variable "project_tag" {
   default = "galaxy-rp"
 }
 
+variable "proxy_image_uri" {
+  type        = string
+  description = "ECR image URI for the governance chokepoint Lambda (built from lambda/Dockerfile)."
+  default     = ""
+}
+
 provider "aws" {
   region = var.region
   default_tags {
@@ -171,26 +177,34 @@ resource "aws_iam_role_policy" "proxy" {
   })
 }
 
-data "archive_file" "proxy" {
-  type        = "zip"
-  source_file = "${path.module}/lambda/bedrock_proxy.py"
-  output_path = "${path.module}/.build/bedrock_proxy.zip"
+# The chokepoint Lambda is now a container image: the handler imports the shared
+# enforcement library (governance/shared + governance/remote) and the
+# agent_os/agent_sre/agentmesh toolkit, which exceed a single-file zip. Build and
+# push the image (see lambda/Dockerfile) and pass its URI as var.proxy_image_uri.
+resource "aws_ecr_repository" "proxy" {
+  name                 = "${var.project_tag}-gov-proxy"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
 }
 
 resource "aws_lambda_function" "proxy" {
-  function_name    = "${var.project_tag}-bedrock-proxy"
-  role             = aws_iam_role.proxy.arn
-  runtime          = "python3.12"
-  handler          = "bedrock_proxy.handler"
-  filename         = data.archive_file.proxy.output_path
-  source_code_hash = data.archive_file.proxy.output_base64sha256
-  timeout          = 60
-  memory_size      = 256
+  function_name = "${var.project_tag}-bedrock-proxy"
+  role          = aws_iam_role.proxy.arn
+  package_type  = "Image"
+  image_uri     = var.proxy_image_uri # ${aws_ecr_repository.proxy.repository_url}:<tag>
+  timeout       = 60
+  memory_size   = 512 # toolkit + numpy: give the image headroom
+
+  image_config {
+    command = ["bedrock_proxy.handler"]
+  }
 
   environment {
     variables = {
       BEDROCK_MODEL_ID = var.bedrock_model_id
       BEDROCK_REGION   = var.region
+      # Policy registry baked into the image at build time (agent-controls.json).
+      GOV_POLICY_REGISTRY_PATH = "/var/task/agent-controls.json"
     }
   }
 }
