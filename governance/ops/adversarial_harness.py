@@ -24,7 +24,7 @@ from typing import Any, Callable, Optional, Sequence
 
 from agent_os.adversarial import AdversarialEvaluator, BUILTIN_VECTORS
 
-from governance.extensions.decision import GuardDecision
+from governance.shared.enforcement.decision import GuardDecision
 
 
 # Tool names that must never be reachable through governed tool calls.

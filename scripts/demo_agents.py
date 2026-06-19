@@ -56,15 +56,15 @@ from langchain_core.messages import AIMessage
 from a2a.dispatcher import a2a_call
 from a2a.envelope import A2ARequest, A2AResponse
 from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
-from governance.pipeline import GovernanceViolation
+from governance.shared.enforcement.pipeline import GovernanceViolation
 from payload_agents._runtime.contract import RunResult
 from payload_agents._runtime.models import build_chat_model, build_gemini_model, build_bedrock_model
 from core.nhi_registry import NHIRegistry
-from governance.extensions.data_drift import DataAccessDriftDetector, InMemoryBaselineStore, DriftConfig
-from governance.extensions.reasoning_guard import ReasoningStep, ReasoningStepValidator
-from governance.extensions.reasoning_trace import ReasoningTraceLogger
-from governance.guards.egress import check_outbound, load_egress_policy
-from governance.guards.escalation import build_escalation_manager, maybe_escalate
+from governance.shared.enforcement.data_drift import DataAccessDriftDetector, InMemoryBaselineStore, DriftConfig
+from governance.shared.enforcement.reasoning_guard import ReasoningStep, ReasoningStepValidator
+from governance.shared.enforcement.reasoning_trace import ReasoningTraceLogger
+from governance.shared.enforcement.guards.egress import check_outbound, load_egress_policy
+from governance.shared.enforcement.guards.escalation import build_escalation_manager, maybe_escalate
 from core.framework_factory import get_framework
 from payload_agents._lib.personas import load_catalog
 
@@ -449,7 +449,7 @@ def section_drift():
 # ── G. Reasoning guard + trace ──────────────────────────────────────────────────
 def section_reasoning():
     cat = load_catalog()
-    from governance.extensions.data_fgac import DataAccessMediator
+    from governance.shared.enforcement.data_fgac import DataAccessMediator
     med = DataAccessMediator(catalog=cat)
     v = ReasoningStepValidator(mediator=med)
 

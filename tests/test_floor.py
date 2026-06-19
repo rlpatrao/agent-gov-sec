@@ -7,7 +7,7 @@ field it clamps must be reported as a violation.
 
 from __future__ import annotations
 
-from governance.floor import GovernanceFloor, apply_floor
+from governance.inprocess.floor import GovernanceFloor, apply_floor
 from payload_agents.config import GovernanceConfig, load_agent_config
 
 

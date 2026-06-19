@@ -31,7 +31,7 @@ from typing import Awaitable, Callable
 from agent_os.audit_logger import AuditEntry, GovernanceAuditLogger
 
 from a2a.envelope import A2AError, A2ARequest, A2AResponse, A2AStatus
-from governance.policy_registry import authorize_recipient
+from governance.shared.policy_registry import authorize_recipient
 
 logger = logging.getLogger(__name__)
 

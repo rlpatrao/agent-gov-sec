@@ -139,7 +139,7 @@ def test_aws_gateway_direct_bedrock_mode(monkeypatch):
 # ── Egress allow-list ─────────────────────────────────────────────────────────
 
 def test_aws_egress_loads_from_path():
-    from governance.guards.egress import load_egress_policy
+    from governance.shared.enforcement.guards.egress import load_egress_policy
     policy = load_egress_policy(yaml_path=_AWS_EGRESS)
     assert policy.check_url("https://bedrock-runtime.us-east-1.amazonaws.com/model/invoke").allowed is True
     assert policy.check_url("https://secretsmanager.us-east-1.amazonaws.com/").allowed is True
@@ -148,7 +148,7 @@ def test_aws_egress_loads_from_path():
 
 def test_aws_egress_resolves_via_factory(monkeypatch):
     monkeypatch.setenv("CLOUD_PROVIDER", "aws")
-    from governance.guards.egress import load_egress_policy
+    from governance.shared.enforcement.guards.egress import load_egress_policy
     policy = load_egress_policy()
     assert policy.check_url("https://bedrock-runtime.us-east-1.amazonaws.com/").allowed is True
     assert policy.check_url("https://evil.example.com/").allowed is False
@@ -181,12 +181,12 @@ def test_aws_audit_stdout_mode_without_sdk(monkeypatch):
 
 # ── Gap 1 cloud-native FGAC pushdown (Lake Formation / Athena) ────────────────
 
-_CATALOG = Path(__file__).parent.parent / "governance" / "extensions" / "configs" / "data-classification.example.yaml"
+_CATALOG = Path(__file__).parent.parent / "governance" / "shared" / "enforcement" / "configs" / "data-classification.example.yaml"
 
 
 def _finops_decision():
-    from governance.extensions.data_classification import DataClassificationCatalog
-    from governance.extensions.data_fgac import DataAccessMediator
+    from governance.shared.enforcement.data_classification import DataClassificationCatalog
+    from governance.shared.enforcement.data_fgac import DataAccessMediator
     med = DataAccessMediator(catalog=DataClassificationCatalog.load(_CATALOG))
     return med.authorize(
         agent_type="FinOps", dataset="finops", table="billing",
@@ -208,7 +208,7 @@ def test_aws_fgac_scoped_query_projects_masks_and_filters():
 
 
 def test_aws_fgac_scoped_query_denied_raises():
-    from governance.extensions.data_fgac import DataAccessDecision
+    from governance.shared.enforcement.data_fgac import DataAccessDecision
     from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
     denied = DataAccessDecision(agent_type="FinOps", dataset="hr", table="employees", denied=True, reason="out of scope")
     with pytest.raises(PermissionError, match="denied"):
@@ -234,6 +234,6 @@ def test_aws_fgac_register_filter_requires_boto3(monkeypatch):
 
 
 def test_aws_fgac_satisfies_enforcer_protocol():
-    from governance.extensions.data_fgac import DataAccessEnforcer
+    from governance.shared.enforcement.data_fgac import DataAccessEnforcer
     from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
     assert isinstance(AwsLakeFormationEnforcer(), DataAccessEnforcer)

@@ -32,9 +32,9 @@ from pydantic_ai.tools import Tool
 
 from payload_agents._runtime.contract import RunResult, ToolCall, ToolSpec, Turn
 from core.nhi_registry import NHIRegistry
-from governance.extensions.data_classification import DataClassificationCatalog
-from governance.extensions.data_fgac import DataAccessMediator
-from governance.pipeline import GuardPipeline, build_guard_pipeline
+from governance.shared.enforcement.data_classification import DataClassificationCatalog
+from governance.shared.enforcement.data_fgac import DataAccessMediator
+from governance.shared.enforcement.pipeline import GuardPipeline, build_guard_pipeline
 from payload_agents.config import load_agent_config_cached
 
 logger = logging.getLogger(__name__)

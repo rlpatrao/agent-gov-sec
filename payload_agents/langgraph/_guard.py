@@ -3,14 +3,14 @@ payload_agents.langgraph._guard — the LangGraph framework binding for governan
 
 ``GalaxyGuardMiddleware`` is a **thin** LangChain ``AgentMiddleware`` shim: it maps
 LangChain's ``wrap_model_call`` / ``wrap_tool_call`` hooks onto the
-framework-neutral ``governance.pipeline.GuardPipeline``. No governance *logic*
+framework-neutral ``governance.shared.enforcement.pipeline.GuardPipeline``. No governance *logic*
 lives here — the orchestration (prompt-injection, credential, budget, reasoning
 trace, capability, blocked-pattern) and the audit logging are all in the
 pipeline, shared verbatim with the raw and Pydantic AI framework adapters. This
 file only translates LangChain's request/response objects to/from plain text and
 applies in-place credential redaction on LangChain messages.
 
-``GovernanceViolation`` is defined in ``governance.pipeline`` and re-exported here
+``GovernanceViolation`` is defined in ``governance.shared.enforcement.pipeline`` and re-exported here
 for backward-compatible imports.
 """
 
@@ -21,9 +21,9 @@ from typing import Any, Callable, Optional
 
 from langchain.agents.middleware import AgentMiddleware
 
-from governance.extensions.data_classification import DataClassificationCatalog
-from governance.extensions.data_fgac import DataAccessMediator
-from governance.pipeline import GovernanceViolation, GuardPipeline, build_guard_pipeline
+from governance.shared.enforcement.data_classification import DataClassificationCatalog
+from governance.shared.enforcement.data_fgac import DataAccessMediator
+from governance.shared.enforcement.pipeline import GovernanceViolation, GuardPipeline, build_guard_pipeline
 
 __all__ = ["GalaxyGuardMiddleware", "GovernanceViolation", "build_langgraph_governance"]
 
@@ -126,7 +126,7 @@ async def build_langgraph_governance(
 ) -> tuple[list, Any, Any, DataAccessMediator | None]:
     """Assemble the governance middleware for a LangGraph agent.
 
-    Builds the shared ``GuardPipeline`` (via ``governance.pipeline.build_guard_pipeline``)
+    Builds the shared ``GuardPipeline`` (via ``governance.shared.enforcement.pipeline.build_guard_pipeline``)
     and wraps it in a single ``GalaxyGuardMiddleware``. Returns
     ``(middleware_list, pg_backend, audit_logger, mediator)`` — unchanged surface."""
     pipeline, ledger, audit, mediator = await build_guard_pipeline(

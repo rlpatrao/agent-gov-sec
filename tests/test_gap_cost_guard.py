@@ -1,4 +1,4 @@
-"""Tests for governance.extensions.cost_guard.CostGuard.
+"""Tests for governance.shared.enforcement.cost_guard.CostGuard.
 
 Exercises the real ``agent_sre.cost.CostGuard`` symbol (no upstream mocking)
 via the discovery demo_scenario: a within-budget PASS and an over-limit /
@@ -7,7 +7,7 @@ budget-killed INTERCEPT. No wall-clock sleeps.
 
 from __future__ import annotations
 
-from governance.extensions.cost_guard import CostGuard
+from governance.shared.enforcement.cost_guard import CostGuard
 
 
 def _guard() -> CostGuard:

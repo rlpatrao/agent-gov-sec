@@ -8,9 +8,9 @@ expected stable code), drawn from the discovery demo scenarios.
 
 from __future__ import annotations
 
-from governance.extensions.constraint_graph_guard import ConstraintGraphGuard
-from governance.extensions.memory_guard import MemoryWriteGuard
-from governance.extensions.reversibility_guard import ReversibilityGuard
+from governance.shared.enforcement.constraint_graph_guard import ConstraintGraphGuard
+from governance.shared.enforcement.memory_guard import MemoryWriteGuard
+from governance.shared.enforcement.reversibility_guard import ReversibilityGuard
 
 
 # --- reversibility ---------------------------------------------------------

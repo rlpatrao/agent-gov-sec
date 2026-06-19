@@ -30,7 +30,7 @@ Deployment: bundle ``governance/enforcement_core.py`` and
 ``governance/policy_registry.py`` (both dependency-free at import) into the
 Lambda package, and supply the registry via ``GOV_POLICY_REGISTRY`` (JSON) or
 ``GOV_POLICY_REGISTRY_PATH`` (file). Build the registry with
-``governance.policy_registry.export_registry_json``. Pure boto3 + stdlib
+``governance.shared.policy_registry.export_registry_json``. Pure boto3 + stdlib
 otherwise.
 """
 
@@ -38,7 +38,7 @@ import json
 import os
 
 from governance import enforcement_core as ec
-from governance.policy_registry import load_registry, policy_for
+from governance.shared.policy_registry import load_registry, policy_for
 
 _MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-6")
 _REGION = os.environ.get("BEDROCK_REGION") or os.environ.get("AWS_REGION", "us-east-1")

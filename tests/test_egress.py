@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from governance.guards.egress import load_egress_policy
+from governance.shared.enforcement.guards.egress import load_egress_policy
 
 _AZURE_EGRESS = Path(__file__).parent.parent / "cloud_adapters" / "azure" / "egress.yaml"
 

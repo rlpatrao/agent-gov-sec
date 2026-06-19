@@ -17,7 +17,7 @@ resolves to deny-all (the mediator's existing behaviour), and an identity absent
 from the policy registry is rejected before any read.
 
 Unlike the Bedrock proxy, this function legitimately carries the FGAC engine
-(``governance.extensions`` → ``agent_os``); enforcing data classification is its
+(``governance.shared.enforcement`` → ``agent_os``); enforcing data classification is its
 entire purpose. The row source is pluggable (``_read_source``): the demo reads
 the bundled fixtures; a real deployment reads Athena / Lake Formation with the
 proxy's own credentials.
@@ -26,7 +26,7 @@ proxy's own credentials.
 import json
 import os
 
-from governance.policy_registry import load_registry, policy_for
+from governance.shared.policy_registry import load_registry, policy_for
 
 _catalog = None
 _mediator = None
@@ -41,8 +41,8 @@ def _mediator_engine():
     """Build (once) the FGAC mediator that owns the classification catalog."""
     global _catalog, _mediator
     if _mediator is None:
-        from governance.extensions.data_classification import DataClassificationCatalog
-        from governance.extensions.data_fgac import DataAccessMediator
+        from governance.shared.enforcement.data_classification import DataClassificationCatalog
+        from governance.shared.enforcement.data_fgac import DataAccessMediator
         path = os.environ.get("GOV_DATA_CLASSIFICATION_PATH") or _default_catalog_path()
         _catalog = DataClassificationCatalog.load(path)
         _mediator = DataAccessMediator(catalog=_catalog)
@@ -52,7 +52,7 @@ def _mediator_engine():
 def _default_catalog_path():
     from pathlib import Path
     return (Path(__file__).resolve().parents[4]
-            / "governance" / "extensions" / "configs" / "data-classification.example.yaml")
+            / "governance" / "shared" / "enforcement" / "configs" / "data-classification.example.yaml")
 
 
 def _registry():

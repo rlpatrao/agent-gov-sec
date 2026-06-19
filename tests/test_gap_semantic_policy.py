@@ -8,7 +8,7 @@ demo scenario.
 
 from agent_os.semantic_policy import IntentCategory
 
-from governance.extensions.semantic_policy_guard import SemanticPolicyGuard
+from governance.shared.enforcement.semantic_policy_guard import SemanticPolicyGuard
 
 
 def _guard() -> SemanticPolicyGuard:

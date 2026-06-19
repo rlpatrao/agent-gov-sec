@@ -6,7 +6,7 @@ Resolution applies the floor, export round-trips, and lookups are fail-closed.
 
 from __future__ import annotations
 
-from governance.policy_registry import (
+from governance.shared.policy_registry import (
     authorize_recipient,
     export_registry,
     load_registry,

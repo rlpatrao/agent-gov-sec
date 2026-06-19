@@ -16,8 +16,8 @@ import pytest
 
 from agent_os.escalation import EscalationManager, EscalationPolicy
 
-from governance.extensions.escalation_guard import HumanEscalationGuard
-from governance.extensions.transparency_guard import TransparencyGuard
+from governance.shared.enforcement.escalation_guard import HumanEscalationGuard
+from governance.shared.enforcement.transparency_guard import TransparencyGuard
 
 
 # --------------------------------------------------------------------------- #

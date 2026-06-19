@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from governance.policy_registry import export_registry_json
+from governance.shared.policy_registry import export_registry_json
 
 _LAMBDA_DIR = Path(__file__).resolve().parent.parent / "cloud_adapters" / "aws" / "infra" / "lambda"
 

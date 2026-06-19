@@ -1,7 +1,7 @@
 """
 governance.ops — operational (fleet-level) wrappers over ``agent_sre``.
 
-Unlike ``governance.extensions`` (per-agent-call guards on the GuardPipeline
+Unlike ``governance.shared.enforcement`` (per-agent-call guards on the GuardPipeline
 hooks), these are operational/reporting capabilities: SLO + error-budget
 evaluation, per-agent cost attribution, eval harness, golden-trace replay,
 adversarial red-team, accuracy declaration, SBOM, artifact signing, and the
@@ -10,5 +10,5 @@ them as standalone sections. Each helper returns a small report object so the
 demo and tests can assert on the outcome without printing the firehose.
 
 All are cloud-neutral and have no effect unless their ``GALAXY_OPS_*`` flag is
-enabled (see ``governance.extensions.flags``).
+enabled (see ``governance.shared.enforcement.flags``).
 """

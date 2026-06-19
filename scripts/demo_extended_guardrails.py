@@ -50,8 +50,8 @@ os.environ.setdefault("CLOUD_PROVIDER", "local")
 
 from payload_agents._runtime.contract import RunResult, ScriptStep, ToolCall, ToolSpec
 from payload_agents.raw import RawAgentBundle, ScriptedChatClient
-from governance.extensions.decision import GuardDecision
-from governance.pipeline import GovernanceViolation, build_guard_pipeline
+from governance.shared.enforcement.decision import GuardDecision
+from governance.shared.enforcement.pipeline import GovernanceViolation, build_guard_pipeline
 from report_html import EXTENDED_META   # control descriptions (what each guard does)
 
 
@@ -271,11 +271,11 @@ async def section_wired() -> None:
 
 async def section_registered() -> None:
     print(_c(_CYAN + _BOLD, "\n── REGISTERED — context-specific before_tool guards (per-agent) ──"))
-    from governance.extensions.transparency_guard import TransparencyGuard
-    from governance.extensions.reversibility_guard import ReversibilityGuard
-    from governance.extensions.constraint_graph_guard import ConstraintGraphGuard
-    from governance.extensions.mcp_gateway_guard import McpGatewayGuard
-    from governance.extensions.mcp_rate_limit_guard import McpRateLimitGuard
+    from governance.shared.enforcement.transparency_guard import TransparencyGuard
+    from governance.shared.enforcement.reversibility_guard import ReversibilityGuard
+    from governance.shared.enforcement.constraint_graph_guard import ConstraintGraphGuard
+    from governance.shared.enforcement.mcp_gateway_guard import McpGatewayGuard
+    from governance.shared.enforcement.mcp_rate_limit_guard import McpRateLimitGuard
 
     # transparency: blocks until the session confirms disclosure
     pipe, ledger, audit, med = await build_guard_pipeline(
@@ -332,11 +332,11 @@ async def section_registered() -> None:
 
 async def section_direct() -> None:
     print(_c(_CYAN + _BOLD, "\n── DIRECT — connect/transport/async guards + content quality ──"))
-    from governance.extensions.mcp_session_guard import McpSessionGuard
-    from governance.extensions.mcp_message_signer_guard import McpMessageSignerGuard
-    from governance.extensions.mcp_tool_screen import McpToolScreen
-    from governance.extensions.escalation_guard import HumanEscalationGuard
-    from governance.extensions.content_quality import ContentQualityGuard
+    from governance.shared.enforcement.mcp_session_guard import McpSessionGuard
+    from governance.shared.enforcement.mcp_message_signer_guard import McpMessageSignerGuard
+    from governance.shared.enforcement.mcp_tool_screen import McpToolScreen
+    from governance.shared.enforcement.escalation_guard import HumanEscalationGuard
+    from governance.shared.enforcement.content_quality import ContentQualityGuard
 
     # MCP session auth
     sg = McpSessionGuard()

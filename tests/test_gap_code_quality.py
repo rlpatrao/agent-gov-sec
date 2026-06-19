@@ -9,10 +9,10 @@ is executed — so there is no sleep/wall-clock risk.
 
 from __future__ import annotations
 
-from governance.extensions.decision import GuardDecision
-from governance.extensions.diff_policy_guard import DiffPolicyGuard
-from governance.extensions.secure_codegen_guard import SecureCodegenGuard
-from governance.extensions.secure_exec import SecureExecGuard
+from governance.shared.enforcement.decision import GuardDecision
+from governance.shared.enforcement.diff_policy_guard import DiffPolicyGuard
+from governance.shared.enforcement.secure_codegen_guard import SecureCodegenGuard
+from governance.shared.enforcement.secure_exec import SecureExecGuard
 
 
 # --------------------------------------------------------------------------- #

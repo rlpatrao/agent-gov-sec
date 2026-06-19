@@ -20,16 +20,16 @@ import json
 from pathlib import Path
 from typing import Literal, Optional
 
-from governance.extensions.data_classification import DataClassificationCatalog
-from governance.extensions.data_drift import DataAccessDriftDetector, JsonFileBaselineStore
-from governance.extensions.data_fgac import DataAccessMediator
+from governance.shared.enforcement.data_classification import DataClassificationCatalog
+from governance.shared.enforcement.data_drift import DataAccessDriftDetector, JsonFileBaselineStore
+from governance.shared.enforcement.data_fgac import DataAccessMediator
 from payload_agents._lib import demo_data
 from payload_agents._runtime.contract import ToolSpec
 
 # ── catalog + mediator (shared by every persona/framework) ─────────────────────
 CATALOG_PATH = (
     Path(__file__).resolve().parent.parent.parent
-    / "governance" / "extensions" / "configs" / "data-classification.example.yaml"
+    / "governance" / "shared" / "enforcement" / "configs" / "data-classification.example.yaml"
 )
 
 
