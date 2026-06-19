@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from governance.agentcore.cedar_export import export_cedar, policy_to_cedar
-from governance.policy_export import export_registry_json, resolve_policy
+from governance.agentcore.cedar_export import iter_agentcore_policies
+from governance.policy_export import export_registry_json
 
 _AC_DIR = Path(__file__).resolve().parent.parent / "cloud_adapters" / "aws" / "agentcore"
 
@@ -35,20 +35,30 @@ def _registry_env(monkeypatch):
 # ── Cedar generation ──────────────────────────────────────────────────────────
 
 class TestCedarExport:
-    def test_finops_tool_and_dispatch_permits(self):
-        cedar = policy_to_cedar(resolve_policy("finops"))
-        assert 'action == Action::"invokeTool"' in cedar
-        assert '"query_billing"' in cedar and '"summarize_costs"' in cedar
-        assert 'action == Action::"dispatch"' in cedar and '"Auditor"' in cedar
+    GW = "arn:aws:bedrock-agentcore:us-east-2:111122223333:gateway/gw-abc"
+    TOOLS = ["query_billing", "summarize_costs", "query_dataset"]
 
-    def test_rogue_is_forbidden(self):
-        cedar = policy_to_cedar(resolve_policy("rogue"))
-        assert "forbid(" in cedar  # empty allow-list → explicit deny-all
+    def _policies(self):
+        return dict(iter_agentcore_policies(
+            gateway_arn=self.GW, target_name="galaxy-tools",
+            gateway_tools=self.TOOLS, account_id="111122223333"))
 
-    def test_export_covers_all_agents(self):
-        cedar = export_cedar()
-        for at in ("FinOps", "Auditor", "Rogue"):
-            assert f"── {at} ──" in cedar
+    def test_agentcore_entity_and_resource_format(self):
+        p = self._policies()["finops_query_billing"]
+        assert p.startswith("permit(principal == AgentCore::IamEntity::")
+        assert 'action == AgentCore::Action::"galaxy-tools___query_billing"' in p
+        assert f'resource == AgentCore::Gateway::"{self.GW}"' in p
+        assert "galaxy-rp-finops" in p
+
+    def test_permit_for_allowed_forbid_for_disallowed(self):
+        p = self._policies()
+        assert p["finops_query_billing"].startswith("permit(")     # FinOps allows it
+        assert p["finops_query_dataset"].startswith("forbid(")     # FinOps does not
+        assert p["auditor_query_dataset"].startswith("permit(")    # Auditor allows it
+        assert all(p[f"rogue_{t}"].startswith("forbid(") for t in self.TOOLS)  # Rogue denied all
+
+    def test_covers_every_agent_and_tool(self):
+        assert len(self._policies()) == 3 * len(self.TOOLS)
 
 
 # ── Request interceptor ───────────────────────────────────────────────────────

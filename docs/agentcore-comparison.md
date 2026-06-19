@@ -165,9 +165,26 @@ The integration above is implemented as an offline-verified spike:
 
 The interceptors and the AWS chokepoints share one enforcement library
 (`governance/remote` over `governance/shared/enforcement`), so AWS-native and
-off-AWS deployments run identical controls. What is *not* in the repo: a live
-AgentCore deploy (account + SDK) and the IAM/Gateway wiring, which are operational
-steps.
+off-AWS deployments run identical controls.
+
+**Live deployment (verified).** The Policy/Identity/Gateway layer has been
+provisioned end-to-end on us-east-2 (acct 774435790385) via
+`scripts/deploy_agentcore.py` (idempotent, with `--teardown`):
+
+| Resource | Live id |
+|---|---|
+| MCP Gateway (AWS_IAM auth, ENFORCE) | `galaxy-governance-gw` |
+| Gateway target (3 tools, Lambda-backed) | `galaxy-tools` |
+| Policy engine | `galaxy_governance` |
+| Cedar policies (per agent × tool, permit/forbid) | 9 |
+| Workload identities (NHI → Identity) | `galaxy_{finops,auditor,rogue}` |
+
+The Cedar form was corrected to what AgentCore Policy accepts
+(`principal == AgentCore::IamEntity::"…"`, `action == AgentCore::Action::"<target>___<tool>"`,
+`resource == AgentCore::Gateway::"<arn>"`). Still not wired: the **interceptor
+Lambdas** (need the container image build/push) and a real agent on Runtime — the
+Gateway currently fronts a stub tool Lambda, and the content controls remain
+offline-verified.
 
 ## Runtime decision (recorded)
 
