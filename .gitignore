@@ -55,3 +55,6 @@ docs/output/
 
 # Generated governance policy registry artifact (built at deploy time)
 cloud_adapters/aws/infra/lambda/agent-controls.json
+
+# Lambda build artifacts
+.build/

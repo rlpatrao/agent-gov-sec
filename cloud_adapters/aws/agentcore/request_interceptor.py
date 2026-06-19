@@ -1,94 +1,68 @@
 """
-cloud_adapters/aws/agentcore/request_interceptor.py — AgentCore Gateway request interceptor.
+cloud_adapters/aws/agentcore/request_interceptor.py — AgentCore Gateway REQUEST interceptor.
 
-A thin transport adapter: it translates an AgentCore Gateway *request* interceptor
-event into `governance.remote.enforce` calls and back. AgentCore Policy (Cedar)
-handles the coarse allow/deny; this interceptor adds the content controls Cedar
-cannot express — prompt-injection, credential handling, and context-budget on LLM
-requests, and the blocked-pattern scan on tool-call arguments — re-verifying the
-same governance library the in-process pipeline runs (trust-but-verify).
+Runs the framework's content controls on inbound MCP requests, over the same
+`governance` enforcement library used in-process (trust-but-verify). Division of
+labor: AgentCore Policy (Cedar) does per-agent tool authorization; this
+interceptor does the identity-independent content safety Cedar cannot express —
+prompt-injection detection and credential blocking on tool-call arguments.
 
-Event contract (the relevant subset of the AgentCore interceptor payload):
-    {
-      "requestContext": {"agentType": "FinOps", "nhiId": "..."},
-      "target": "model" | "tool" | "agent",
-      "input":  {"messages": [...], "system": [...]},   # for target == "model"
-      "tool":   {"name": "...", "arguments": {...}},     # for target == "tool"
-    }
-Returns ``{"decision": "allow"|"deny", "reason": ..., "input"/"tool": <transformed>}``.
-The registry is supplied via GOV_POLICY_REGISTRY / GOV_POLICY_REGISTRY_PATH and is
-shared with the LLM/data/A2A chokepoints.
+AgentCore interceptor contract (gateway-interceptors-examples):
+  input :  event["mcp"]["gatewayRequest"]["body"]  = the MCP JSON-RPC request
+  output:  {"interceptorOutputVersion":"1.0","mcp":{"transformedGatewayRequest":{"body": <body>}}}
+           to allow; include "transformedGatewayResponse" instead to short-circuit
+           (deny) — the gateway returns that immediately.
 """
 
 import json
-import os
 
-from governance.remote import enforce
-from governance.shared.policy_registry import load_registry
+from governance.shared.enforcement.session import build_enforcement
 
-_registry_cache = None
-
-
-def _log(event, **fields):
-    print(json.dumps({"event": event, **fields}))
-
-
-def _registry():
-    global _registry_cache
-    if _registry_cache is None:
-        raw = os.environ.get("GOV_POLICY_REGISTRY")
-        if not raw:
-            path = os.environ.get("GOV_POLICY_REGISTRY_PATH")
-            if path and os.path.exists(path):
-                with open(path, encoding="utf-8") as fh:
-                    raw = fh.read()
-        _registry_cache = load_registry(raw) if raw else {}
-    return _registry_cache
+# Identity-independent content posture (Cedar owns per-agent tool authz). Injection
+# blocks at medium+, credentials are denied outright, budget is irrelevant for a
+# single tool call. The blocked-pattern set guards tool arguments.
+_POSTURE = {"model_boundary": {
+    "injection_enabled": True, "injection_threshold": "medium",
+    "credential_enabled": True, "credential_mode": "deny",
+    "budget_enabled": False, "output_pii_enabled": True,
+    "blocked_patterns": ["DROP TABLE", "DELETE FROM", "rm -rf"],
+}}
+_session = None
 
 
-def _input_text(inp):
-    parts = [b.get("text", "") for b in (inp.get("system") or []) if isinstance(b, dict)]
-    for m in inp.get("messages") or []:
-        c = m.get("content")
-        if isinstance(c, str):
-            parts.append(c)
-        elif isinstance(c, list):
-            parts += [b.get("text", "") for b in c if isinstance(b, dict)]
-    return "\n".join(p for p in parts if p)
+def _sess():
+    global _session
+    if _session is None:
+        _session = build_enforcement(_POSTURE, agent_id="gateway", agent_type="gateway")
+    return _session
 
 
-def _deny(agent_type, code, reason):
-    _log("agentcore.request_denied", agent=agent_type, code=code)
-    return {"decision": "deny", "code": code, "reason": reason}
-
-
-def handle(event):
-    """Pure handler (testable offline). The Lambda `handler` wraps it."""
-    ctx = event.get("requestContext") or {}
-    agent_type = ctx.get("agentType")
-    session = enforce.session_for(agent_type, _registry(), nhi_id=ctx.get("nhiId"))
-    if session is None:
-        return _deny(agent_type, "no_governance_policy", f"no policy for {agent_type!r}")
-
-    target = event.get("target") or ("tool" if event.get("tool") else "model")
-
-    if target in ("model", "agent"):
-        v = enforce.enforce_input(session, _input_text(event.get("input") or {}))
-        if v.blocked:
-            return _deny(agent_type, v.code, v.reason)
-        # Return the (possibly credential-redacted) input.
-        out = dict(event.get("input") or {})
-        return {"decision": "allow", "input": out, "redacted_text": v.text}
-
-    if target == "tool":
-        tool = event.get("tool") or {}
-        v = enforce.enforce_tool_plan(session, [(tool.get("name", ""), tool.get("arguments", {}))])
-        if v.blocked:
-            return _deny(agent_type, v.code, v.reason)
-        return {"decision": "allow", "tool": tool}
-
-    return {"decision": "allow"}
+def _scannable_text(body):
+    """Text to content-scan from an MCP JSON-RPC request: tool name + arguments."""
+    params = (body or {}).get("params") or {}
+    parts = []
+    name = params.get("name")
+    if isinstance(name, str):
+        parts.append(name)
+    args = params.get("arguments")
+    if isinstance(args, dict):
+        parts.append(json.dumps(args))
+    elif isinstance(args, str):
+        parts.append(args)
+    return "\n".join(parts)
 
 
 def handler(event, context):
-    return handle(event)
+    body = (event.get("mcp", {}) or {}).get("gatewayRequest", {}).get("body", {}) or {}
+    text = _scannable_text(body)
+    if text:
+        v = _sess().check_input(text)
+        if v.blocked:
+            print(json.dumps({"event": "interceptor.request_blocked",
+                              "code": v.code, "method": body.get("method")}))
+            err = {"jsonrpc": "2.0", "id": body.get("id"),
+                   "error": {"code": -32600, "message": f"governance blocked: {v.code} — {v.reason}"}}
+            return {"interceptorOutputVersion": "1.0",
+                    "mcp": {"transformedGatewayResponse": {"body": err, "statusCode": 200}}}
+    return {"interceptorOutputVersion": "1.0",
+            "mcp": {"transformedGatewayRequest": {"body": body}}}

@@ -40,6 +40,13 @@ LAMBDA_FN = "galaxy-tools"
 TARGET_NAME = "galaxy-tools"
 GW_TOOLS = ["query_billing", "summarize_costs", "query_dataset"]
 
+# Content-control interceptors (the rewritten model-boundary controls). Deployed
+# as zip Lambdas (the container/ECR path is blocked by SCP in some org accounts);
+# build the zip with scripts/build_interceptor_zip.sh.
+INTERCEPTOR_REQ = "galaxy-gov-request"
+INTERCEPTOR_RESP = "galaxy-gov-response"
+INTERCEPTOR_ZIP = "/.build/interceptor.zip"  # relative to repo root, see below
+
 _TOOL_SCHEMA = [
     {"name": "query_billing", "description": "Read finops billing columns",
      "inputSchema": {"type": "object", "properties": {"columns": {"type": "array", "items": {"type": "string"}}}, "required": ["columns"]}},
@@ -173,11 +180,63 @@ def deploy(region):
         except Exception as e:
             print(f"workload-identity: {'exists' if _exists(e) else 'FAILED'} galaxy_{at.lower()}")
 
+    interceptors = _deploy_interceptors(lam, region, account, gw_arn)
+
     engine_arn = f"arn:aws:bedrock-agentcore:{region}:{account}:policy-engine/{engine_id}"
-    c.update_gateway(gatewayIdentifier=gw_id, name=GW_NAME, roleArn=gw_role_arn,
-                     protocolType="MCP", authorizerType="AWS_IAM",
-                     policyEngineConfiguration={"arn": engine_arn, "mode": "ENFORCE"})
-    print(f"\nDone. Gateway {gw_id} ENFORCE-bound to policy engine {engine_id} in {region}.")
+    kwargs = dict(gatewayIdentifier=gw_id, name=GW_NAME, roleArn=gw_role_arn,
+                  protocolType="MCP", authorizerType="AWS_IAM",
+                  policyEngineConfiguration={"arn": engine_arn, "mode": "ENFORCE"})
+    if interceptors:
+        kwargs["interceptorConfigurations"] = interceptors
+    c.update_gateway(**kwargs)
+    print(f"\nDone. Gateway {gw_id} ENFORCE-bound to policy engine {engine_id}"
+          f"{' + content interceptors' if interceptors else ''} in {region}.")
+
+
+def _zip_path():
+    import os
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + INTERCEPTOR_ZIP
+
+
+def _deploy_interceptors(lam, region, account, gw_arn):
+    """Create/update the request+response interceptor Lambdas from the prebuilt
+    zip and return the gateway interceptor-configurations. Skips (returns []) if
+    the zip is absent — run scripts/build_interceptor_zip.sh first."""
+    import os
+    zip_path = _zip_path()
+    if not os.path.exists(zip_path):
+        print(f"interceptors: SKIP (build first: scripts/build_interceptor_zip.sh) — {zip_path} missing")
+        return []
+    with open(zip_path, "rb") as fh:
+        blob = fh.read()
+    role = f"arn:aws:iam::{account}:role/{LAMBDA_ROLE}"
+    arns = {}
+    for fn, handler in ((INTERCEPTOR_REQ, "request_interceptor.handler"),
+                        (INTERCEPTOR_RESP, "response_interceptor.handler")):
+        try:
+            r = lam.create_function(FunctionName=fn, Runtime="python3.12", Role=role, Handler=handler,
+                                    Code={"ZipFile": blob}, Timeout=30, MemorySize=512,
+                                    Environment={"Variables": {"GOV_POLICY_REGISTRY_PATH": "/var/task/agent-controls.json"}})
+            print(f"interceptor: created {fn}")
+        except Exception as e:
+            if _exists(e):
+                lam.update_function_code(FunctionName=fn, ZipFile=blob)
+                print(f"interceptor: updated {fn}")
+                r = lam.get_function(FunctionName=fn)["Configuration"]
+            else:
+                print(f"interceptor: FAILED {fn} → {str(e)[:120]}"); return []
+        arns[fn] = r.get("FunctionArn") or f"arn:aws:lambda:{region}:{account}:function:{fn}"
+        try:
+            lam.add_permission(FunctionName=fn, StatementId="agentcore-gw", Action="lambda:InvokeFunction",
+                               Principal="bedrock-agentcore.amazonaws.com", SourceArn=gw_arn)
+        except Exception:
+            pass
+    return [
+        {"interceptor": {"lambda": {"arn": arns[INTERCEPTOR_REQ]}}, "interceptionPoints": ["REQUEST"],
+         "inputConfiguration": {"passRequestHeaders": True}},
+        {"interceptor": {"lambda": {"arn": arns[INTERCEPTOR_RESP]}}, "interceptionPoints": ["RESPONSE"],
+         "inputConfiguration": {"passRequestHeaders": True}},
+    ]
 
 
 def teardown(region):
@@ -201,11 +260,12 @@ def teardown(region):
             c.delete_workload_identity(name=f"galaxy_{at.lower()}")
         except Exception:
             pass
-    try:
-        lam.delete_function(FunctionName=LAMBDA_FN)
-        print(f"deleted lambda {LAMBDA_FN}")
-    except Exception:
-        pass
+    for fn in (LAMBDA_FN, INTERCEPTOR_REQ, INTERCEPTOR_RESP):
+        try:
+            lam.delete_function(FunctionName=fn)
+            print(f"deleted lambda {fn}")
+        except Exception:
+            pass
     for role, inline in ((GW_ROLE, "galaxy-gw-perms"), (LAMBDA_ROLE, None)):
         try:
             if inline:

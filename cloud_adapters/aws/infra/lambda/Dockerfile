@@ -25,6 +25,9 @@ COPY core/ ${LAMBDA_TASK_ROOT}/core/
 COPY cloud_adapters/aws/infra/lambda/bedrock_proxy.py ${LAMBDA_TASK_ROOT}/
 COPY cloud_adapters/aws/infra/lambda/data_proxy.py ${LAMBDA_TASK_ROOT}/
 COPY cloud_adapters/aws/infra/lambda/a2a_broker.py ${LAMBDA_TASK_ROOT}/
+# AgentCore Gateway interceptor handlers (request/response content controls).
+COPY cloud_adapters/aws/agentcore/request_interceptor.py ${LAMBDA_TASK_ROOT}/
+COPY cloud_adapters/aws/agentcore/response_interceptor.py ${LAMBDA_TASK_ROOT}/
 
 # Bake the resolved registry artifact (override at build with --build-arg if desired).
 COPY cloud_adapters/aws/infra/lambda/agent-controls.json ${LAMBDA_TASK_ROOT}/agent-controls.json

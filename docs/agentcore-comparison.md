@@ -181,10 +181,20 @@ provisioned end-to-end on us-east-2 (acct 774435790385) via
 
 The Cedar form was corrected to what AgentCore Policy accepts
 (`principal == AgentCore::IamEntity::"…"`, `action == AgentCore::Action::"<target>___<tool>"`,
-`resource == AgentCore::Gateway::"<arn>"`). Still not wired: the **interceptor
-Lambdas** (need the container image build/push) and a real agent on Runtime — the
-Gateway currently fronts a stub tool Lambda, and the content controls remain
-offline-verified.
+`resource == AgentCore::Gateway::"<arn>"`).
+
+The **content-control interceptors are also deployed and verified live.** The
+ECR/container path is blocked by an org SCP (`ecr:UploadLayerPart` denied), so the
+interceptors ship as **zip Lambdas** (`galaxy-gov-request` / `galaxy-gov-response`,
+toolkit + `governance/{shared,remote}` resolved with Linux wheels via uv, ~33 MB;
+`scripts/build_interceptor_zip.sh`) attached to the gateway's
+`interceptorConfigurations`. End-to-end as `galaxy-rp-finops`: a benign `tools/list`
+passes and returns the Cedar-filtered tools; a `tools/call` with an injection
+payload in the arguments is **blocked at the gateway** by the request interceptor
+(`prompt_injection`, threat=high). Division of labor holds: Cedar does per-agent
+tool authz; the interceptors do identity-independent content safety (injection /
+credential / PII). Still not wired: a real agent on **Runtime** (the gateway
+fronts a stub tool Lambda).
 
 ## Runtime decision (recorded)
 
