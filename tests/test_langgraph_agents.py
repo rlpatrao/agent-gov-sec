@@ -159,7 +159,7 @@ async def test_aws_pushdown_scoped_sql_and_denied(tmp_path: Path):
     fin = b.mediator.authorize(agent_type="FinOps", dataset="finops", table="billing",
                                columns=["account_id", "cost_usd", "region", "customer_email", "tax_id"])
     sql = enf.scoped_query(fin, database="finops", table="billing")
-    assert "'***REDACTED***' AS customer_email" in sql and "WHERE region IN" in sql
+    assert '\'***REDACTED***\' AS "customer_email"' in sql and 'WHERE "region" IN' in sql
     rogue = b.mediator.authorize(agent_type="Rogue", dataset="finops", table="billing", columns=["cost_usd"])
     with pytest.raises(PermissionError):
         enf.scoped_query(rogue, database="finops", table="billing")

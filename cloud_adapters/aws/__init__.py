@@ -13,8 +13,9 @@ resolves the AWS bindings:
 
 Every accessor lazy-imports its implementation, and each implementation
 lazy-imports ``boto3``, so importing this package (or the provider factory)
-needs no AWS SDK. The framework axis (``runtime_adapter``) is intentionally
-``None`` — AWS would wire LangGraph / Bedrock Agents (WS5.8), not MAF.
+needs no AWS SDK. The framework axis (``runtime_adapter``) returns the AgentCore
+Runtime binding (``agentcore.runtime_adapter.AwsRuntimeAdapter``); the personas
+are deployed as AgentCore Runtimes by ``scripts/deploy_agentcore.py``.
 
 See docs/REFACTOR_AND_GAPS_PLAN.md WS5 and docs/aws-deployment-topology.html.
 """
@@ -49,8 +50,10 @@ class AwsProvider:
         return AwsLLMGateway()
 
     def runtime_adapter(self):
-        # AWS uses its own framework adapter (LangGraph / Bedrock Agents), not MAF — WS5.8.
-        return None
+        # AWS hosts the personas on AgentCore Runtime; the adapter wires OTel
+        # observability onto the managed-runtime traces (deploy: scripts/deploy_agentcore.py).
+        from cloud_adapters.aws.agentcore.runtime_adapter import AwsRuntimeAdapter
+        return AwsRuntimeAdapter()
 
     async def audit_backend(self, run_id: str):
         from cloud_adapters.aws.audit import DynamoDbHashChainBackend

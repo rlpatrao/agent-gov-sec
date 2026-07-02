@@ -1,0 +1,38 @@
+<!--
+  cloud_adapters/azure/infra/apim-policy.xml — API Management inbound policy for the
+  Galaxy governance egress chokepoint (Azure "Method 1").
+
+  The Azure counterpart of the AWS API Gateway usage-plan + API-key guard. APIM is
+  the single managed LLM-egress edge: it validates the caller's subscription key,
+  requires the governance headers, rate-limits, and — for the direct-AOAI route —
+  injects the real Azure OpenAI key from a Key-Vault-backed named value so the key
+  never leaves the edge. The AzureLLMGateway adapter ("apim" mode) sends the
+  Ocp-Apim-Subscription-Key and x-agent-type / x-nhi-id headers this policy checks.
+-->
+<policies>
+  <inbound>
+    <base />
+    <!-- Subscription key is validated by the product/subscription binding; require the governance headers. -->
+    <check-header name="x-agent-type" failed-check-httpcode="400" failed-check-error-message="x-agent-type header required" ignore-case="true" />
+    <check-header name="x-nhi-id" failed-check-httpcode="400" failed-check-error-message="x-nhi-id header required" ignore-case="true" />
+    <!-- Per-subscription throttle — mirrors the AWS usage-plan (burst 10 / rate 20). -->
+    <rate-limit-by-key calls="20" renewal-period="1" counter-key="@(context.Subscription?.Id ?? context.Request.IpAddress)" />
+    <!-- Inject the real Azure OpenAI key at the edge (Key-Vault-backed named value); the caller never holds it. -->
+    <set-header name="api-key" exists-action="override">
+      <value>{{azure-openai-key}}</value>
+    </set-header>
+    <!-- Never forward the caller's subscription key to the backend. -->
+    <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+    <!-- Defence in depth: strip any provider header that could leak the deployment topology. -->
+    <set-header name="x-ms-region" exists-action="delete" />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

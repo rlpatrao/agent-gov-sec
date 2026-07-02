@@ -7,10 +7,10 @@ cloud-resolved credentials via its own native model classes — no hand-rolled
 client. Governance is the **same shared `GuardPipeline`**, wired through a thin
 model wrapper (no LangChain, no second tracer):
 
-  GovernedModel.request()  → pipeline.before_model(text)        (B4/B5/B6)
+  GovernedModel.request()  → pipeline.before_model(text)        (B1/B2/B3)
                            → inner model request
-                           → pipeline.before_tool(name, args)   (B7/G19/B8) per tool call
-                           → pipeline.after_model(response text) (CoT/CoVe, G20)
+                           → pipeline.before_tool(name, args)   (C1/H1/C2) per tool call
+                           → pipeline.after_model(response text) (CoT/CoVe, H2)
 
 Running governance in the wrapper (rather than wrapping each tool fn) keeps the
 tools as raw typed functions, so their JSON-schema (incl. the FinOps column enum)
@@ -70,7 +70,7 @@ class GovernedModel(WrapperModel):
         self._pipeline = pipeline
 
     async def request(self, messages, model_settings, model_request_parameters):
-        self._pipeline.before_model(_messages_text(messages))   # B4/B5/B6 — raises to block
+        self._pipeline.before_model(_messages_text(messages))   # B1/B2/B3 — raises to block
         response = await super().request(messages, model_settings, model_request_parameters)
         for part in getattr(response, "parts", []):
             if type(part).__name__ == "ToolCallPart":
@@ -80,8 +80,8 @@ class GovernedModel(WrapperModel):
                         args = json.loads(args) if args else {}
                     except ValueError:
                         args = {"_raw": args}
-                self._pipeline.before_tool(part.tool_name, args or {})   # B7/G19/B8 — raises to block
-        self._pipeline.after_model(_response_text(response))    # G20 CoT/CoVe trace
+                self._pipeline.before_tool(part.tool_name, args or {})   # C1/H1/C2 — raises to block
+        self._pipeline.after_model(_response_text(response))    # H2 CoT/CoVe trace
         return response
 
 

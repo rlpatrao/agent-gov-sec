@@ -7,9 +7,9 @@ PromptInjectionDetector / CredentialRedactor / ContextScheduler plus this repo's
 WS7 extensions: FGAC mediator, reasoning-step validator, CoT/CoVe trace) and runs
 the fixed governance sequence at three framework-agnostic hooks:
 
-  before_model(text)        prompt-injection (B4) → credential (B5) → budget (B6)
-  after_model(response)     reasoning-trace capture (CoT/CoVe)            (G20)
-  before_tool(name, args)   capability/reasoning-step (B7/G19) → blocked-pattern (B8)
+  before_model(text)        prompt-injection (B1) → credential (B2) → budget (B3)
+  after_model(response)     reasoning-trace capture (CoT/CoVe)            (H2)
+  before_tool(name, args)   capability/reasoning-step (C1/H1) → blocked-pattern (C2)
 
 Every framework adapter (LangGraph middleware, the raw loop, Pydantic AI) is a
 thin shim that maps its own hooks onto these three calls — no governance *logic*
@@ -128,7 +128,7 @@ class GuardPipeline:
         self._reasoning = reasoning_validator
         self._trace = reasoning_trace
 
-        # Sweep-era guard registries. Each entry is (label, callable->GuardDecision).
+        # Flag-gated guard registries. Each entry is (label, callable->GuardDecision).
         # ``build_guard_pipeline`` populates these from the enabled GALAXY_* flags;
         # an unconfigured pipeline keeps them empty, so behaviour is unchanged.
         # before_tool: fn(name, args) -> GuardDecision
@@ -141,7 +141,7 @@ class GuardPipeline:
         # held by reference (not just a before_tool callable) — see after_tool / on_tool_error.
         self._circuit_breaker: Any = None
 
-    # ── sweep guard registration (called by build_guard_pipeline) ────────────
+    # ── flag-gated guard registration (called by build_guard_pipeline) ────────────
     def register_before_tool(self, label: str, fn: Callable[[str, Any], GuardDecision]) -> None:
         self._before_tool_guards.append((label, fn))
 
@@ -158,12 +158,12 @@ class GuardPipeline:
         self.register_before_tool("circuit_breaker", lambda name, args: cb.allow_call(name))
 
     def _apply_guard_decision(self, event_type: str, action: str, decision: GuardDecision) -> None:
-        """Audit + raise for a sweep guard verdict (block path)."""
+        """Audit + raise for a flag-gated guard verdict (block path)."""
         self._log(event_type, action, "deny", decision.reason,
                   {"code": decision.code, "signals": decision.signals, **decision.metadata})
         raise GovernanceViolation(decision.code or "policy_denied", decision.reason)
 
-    # ── per-model-call governance (B4/B5/B6) ────────────────────────────────
+    # ── per-model-call governance (B1/B2/B3) ────────────────────────────────
     def before_model(self, text: str) -> bool:
         """Run the pre-call guards. Returns ``True`` if the caller should redact
         credentials from the outgoing messages in place (credential redact mode).
@@ -172,7 +172,7 @@ class GuardPipeline:
             safe = (self.redactor.redact(text) if self.redactor else text) or ""
             logger.debug("guard.prompt   agent=%s nhi=%s :: %r", self._agent_type, self._nhi_id, safe[:240])
 
-        # 1. Prompt injection (B4)
+        # 1. Prompt injection (B1)
         if self._enable_pi and self._detector and text:
             result = self._detector.detect(text, source=self._agent_id)
             rank = _THREAT_RANK.get(result.threat_level.value, 0)
@@ -192,7 +192,7 @@ class GuardPipeline:
                     f"confidence={result.confidence:.2f})",
                 )
 
-        # 2. Credential redactor (B5)
+        # 2. Credential redactor (B2)
         should_redact = False
         if self._enable_cred and self.redactor and text and self.redactor.contains_credentials(text):
             types = sorted({m.name for m in self.redactor.find_matches(text)})
@@ -206,7 +206,7 @@ class GuardPipeline:
                       f"Redacted credential(s): {', '.join(types)}",
                       {"credential_types": types, "mode": "redact"})
 
-        # 3. Context budget (B6)
+        # 3. Context budget (B3)
         if self._enable_budget and self._scheduler and text:
             estimated = max(1, len(text) // 4)
             try:
@@ -231,9 +231,9 @@ class GuardPipeline:
 
         return should_redact
 
-    # ── post-model-call (G20 + output guards) ───────────────────────────────
+    # ── post-model-call (H2 + output guards) ───────────────────────────────
     def after_model(self, response_text: str) -> str:
-        """Capture the CoT/CoVe trace (G20) and run output guards (content
+        """Capture the CoT/CoVe trace (H2) and run output guards (content
         quality, output PII). Returns the response text, possibly redacted by an
         output guard; raises ``GovernanceViolation`` if an output guard blocks.
         Adapters that forward the model's text downstream should use the return
@@ -288,7 +288,7 @@ class GuardPipeline:
             except Exception as e:
                 logger.debug("circuit_breaker.record_failure_failed", extra={"error": str(e)})
 
-    # ── per-tool-call governance (B7/G19, B8) ───────────────────────────────
+    # ── per-tool-call governance (C1/H1, C2) ───────────────────────────────
     def before_tool(self, name: str, args: Any) -> None:
         """Capability allow-list + blocked-pattern scan. Raises on a block."""
         if self._reasoning is not None:
@@ -308,7 +308,7 @@ class GuardPipeline:
                           f"blocked pattern '{pat}' in tool args", {"tool": name, "pattern": pat})
                 raise GovernanceViolation("blocked_pattern", f"Blocked pattern '{pat}' in tool '{name}' arguments")
 
-        # Sweep-era before_tool guards (egress, circuit breaker, transparency,
+        # Flag-gated before_tool guards (egress, circuit breaker, transparency,
         # semantic policy, code/diff/exec review, reversibility, constraint graph,
         # memory-write, MCP gateway/rate-limit, cost, escalation gate). Each is
         # registered only when its GALAXY_* flag is on; absent flags → no-op.
@@ -393,17 +393,17 @@ async def build_guard_pipeline(
         mediator=mediator, reasoning_validator=reasoning_validator, reasoning_trace=reasoning_trace,
     )
 
-    sweep = _register_sweep_guards(pipeline, agent_id)
+    flag_gated = _register_flag_gated_guards(pipeline, agent_id)
 
     logger.info("governance.shared.enforcement.pipeline.built",
                 extra={"agent_id": agent_id, "fgac": enable_data_fgac, "drift": enable_data_drift,
                        "reasoning_guard": enable_reasoning_guard, "reasoning_trace": enable_reasoning_trace,
-                       "sweep_guards": sweep})
+                       "flag_gated_guards": flag_gated})
     return pipeline, ledger, audit, mediator
 
 
-def _register_sweep_guards(pipeline: "GuardPipeline", agent_id: str) -> list[str]:
-    """Register the shape-safe sweep guards whose GALAXY_* flag is enabled.
+def _register_flag_gated_guards(pipeline: "GuardPipeline", agent_id: str) -> list[str]:
+    """Register the shape-safe flag-gated guards whose GALAXY_* flag is enabled.
 
     Only guards that no-op on non-matching tool shapes (or block clearly-malicious
     input while passing benign input) are wired here, so enabling a flag never

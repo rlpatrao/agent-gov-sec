@@ -99,7 +99,7 @@ class TestFloorFailsClosedOnDataGates:
 
 class TestShippedConfigsMeetFloor:
     """The three demo personas must satisfy the floor with zero clamping, so the
-    baseline matrix (37/37) does not regress when the floor is wired in."""
+    default-on matrix (37/37) does not regress when the floor is wired in."""
 
     def test_finops_unclamped(self):
         _assert_no_clamp("finops")

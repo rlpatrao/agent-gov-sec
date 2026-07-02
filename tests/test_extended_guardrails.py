@@ -1,9 +1,9 @@
 """
-tests/test_extended_guardrails.py — assert the full-sweep guardrail walk.
+tests/test_extended_guardrails.py — assert the flag-gated guardrail walk.
 
 Drives ``scripts/demo_extended_guardrails.py`` end to end and asserts every
 control's pass case and intercept case behave as expected. This is the
-regression gate for the sweep: it exercises each guard *through the live
+regression gate for the flag-gated controls: it exercises each guard *through the live
 GuardPipeline / governed agent invocation* (not just the wrapper), so a change
 that silently un-wires a guard fails here.
 """
@@ -60,9 +60,9 @@ def test_every_control_has_pass_and_intercept(walk):
     # capabilities that assert the compliant-vs-breach outcome in a single combined
     # row (SLO burn, accuracy breach, eval fail, replay regression, tamper detect,
     # withheld certification, adversarial defense rate).
-    intercept_only = {"CB02", "SLO21", "AC22", "EV23", "RP24", "SG26", "CT27", "AD28"}
+    intercept_only = {"J1", "N1", "N2", "N3", "N4", "N6", "N7", "N8"}
     # controls with no intercept case (a generation/reporting capability, not a gate)
-    pass_only = {"SB25"}  # SBOM generation — produces an artifact, nothing to block
+    pass_only = {"N5"}  # SBOM generation — produces an artifact, nothing to block
     for code, rs in by_code.items():
         has_intercept = any(r.intercepted and r.ok for r in rs)
         has_pass = any((not r.intercepted) and r.ok for r in rs)

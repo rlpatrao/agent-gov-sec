@@ -58,7 +58,7 @@ class FloorViolation:
 @dataclass(frozen=True)
 class GovernanceFloor:
     """The minimum governance posture. Tuned so the shipped finops/auditor/rogue
-    configs already satisfy it (zero clamping on the baseline matrix); it exists
+    configs already satisfy it (zero clamping on the default-on matrix); it exists
     to stop *future* configs from regressing below this line.
 
     Clamp directions:

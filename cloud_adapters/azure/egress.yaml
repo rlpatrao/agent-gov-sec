@@ -1,10 +1,10 @@
 # Egress allow-list — loaded by governance.guards.egress.load_egress_policy()
 # and passed into agent_os.egress_policy.EgressPolicy.
 #
-# Today our agents (Scanner, ASTAnalyzer) are LLM-only and don't make outbound
-# tool calls beyond APIM, so this acts as a *reference* declaration. When a
-# tool-using agent (Coder, Reviewer) lands, the same policy gets bound to a
-# FunctionMiddleware that intercepts every HTTP-shaped tool call.
+# The demo personas (FinOps, Auditor, Rogue) reach the model only through APIM /
+# Azure OpenAI, so this acts as a *reference* declaration. When a tool-using
+# agent makes outbound HTTP-shaped tool calls, the same policy is bound to a
+# FunctionMiddleware that intercepts every such call.
 #
 # Loader format is `agent_os.egress_policy.EgressPolicy.load_from_yaml`'s
 # minimal stdlib parser:

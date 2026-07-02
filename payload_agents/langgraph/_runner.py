@@ -11,9 +11,9 @@ cross-cutting governance posture around a LangGraph ``create_agent``:
     hand back an egress credential — the chokepoint working as designed — and
     the factory falls back to the supplied offline model. The agent never holds
     a raw provider key.
-  - **Governance (B–G, H21/H22):** builds the ``GalaxyGuardMiddleware`` stack
+  - **Governance (B–G, M1/H22):** builds the ``GalaxyGuardMiddleware`` stack
     (``build_langgraph_governance``) from the per-agent YAML config.
-  - **Audit ledger (H21):** the hash-chained ``PostgresHashChainBackend`` is
+  - **Audit ledger (M1):** the hash-chained ``PostgresHashChainBackend`` is
     returned in the bundle for end-of-run flush + chain verification.
 
 YAML is authoritative: every governance toggle, the tool allow-list, and the

@@ -28,7 +28,7 @@ from governance.shared.enforcement.output_pii import OutputPiiGuard
 from governance.shared.enforcement.pipeline import (
     GovernanceViolation,
     GuardPipeline,
-    _register_sweep_guards,
+    _register_flag_gated_guards,
 )
 from governance.shared.enforcement.reasoning_guard import ReasoningStepValidator
 
@@ -119,10 +119,10 @@ def build_enforcement(
     )
 
     if register_sweep:
-        _register_sweep_guards(pipeline, agent_id)
+        _register_flag_gated_guards(pipeline, agent_id)
 
     # Output PII/credential redaction is part of the model boundary, so enable it
-    # at the boundary regardless of the GALAXY_* sweep flag (unless already wired).
+    # at the boundary regardless of the GALAXY_* flag (unless already wired).
     if mb.get("output_pii_enabled", True) and not any(
         label == "output_pii" for label, _ in pipeline._after_model_guards
     ):

@@ -1,0 +1,42 @@
+%%{init: {"flowchart": {"nodeSpacing": 30, "rankSpacing": 40}, "themeVariables": {"fontSize": "15px"}}}%%
+flowchart TB
+  subgraph M1["Method 1 · Bedrock proxy — reference Terraform"]
+    direction TB
+    AG1["Agent<br/>NHI role galaxy-rp-type"] -->|"POST /invoke · x-api-key"| APIGW["API Gateway<br/>galaxy-rp-bedrock-gw<br/>(usage plan 20 req/s)"]
+    APIGW --> PROXY["Lambda · galaxy-rp-bedrock-proxy<br/>EnforcementSession<br/>input · tool-plan · output redaction"]
+  end
+
+  subgraph M2["Method 2 · AgentCore — live, us-east-2"]
+    direction TB
+    RT["AgentCore Runtime<br/>galaxy_finops / _auditor / _rogue"] -->|"SigV4 tools/call"| MCPGW["MCP Gateway<br/>galaxy-governance-gw (AWS_IAM)"]
+    MCPGW --> RQ["Request interceptor<br/>galaxy-gov-request"]
+    RQ --> CEDAR["Cedar policy engine<br/>galaxy_governance · ENFORCE"]
+    CEDAR --> TOOL["Tool Lambda<br/>galaxy-tools"]
+    TOOL --> RSP["Response interceptor<br/>galaxy-gov-response"]
+  end
+
+  subgraph SH["Shared AWS services"]
+    direction LR
+    BEDROCK["Amazon Bedrock<br/>claude-sonnet-4-6"]
+    DDB["DynamoDB<br/>galaxy-trace-ledger<br/>(hash-chain audit)"]
+    IAM["IAM galaxy-rp-* · STS"]
+    SECRETS["Secrets Manager<br/>galaxy/bedrock-gateway-key"]
+    XRAY["X-Ray / CloudWatch<br/>(OTel via ADOT)"]
+  end
+
+  PROXY --> BEDROCK
+  RT -.model.-> BEDROCK
+  PROXY -.audit.-> DDB
+  RSP -.audit.-> DDB
+  AG1 -.assume role.-> IAM
+  RT -.exec role.-> IAM
+  APIGW -.api key.-> SECRETS
+  PROXY -.spans.-> XRAY
+  RT -.spans.-> XRAY
+
+  classDef m1 fill:#e6efff,stroke:#2f6df0,color:#13284d
+  classDef m2 fill:#e3f6ee,stroke:#1f8f7a,color:#0d3b2e
+  classDef sh fill:#f6f7fb,stroke:#9aa1ad,color:#1b2030
+  class AG1,APIGW,PROXY m1
+  class RT,MCPGW,RQ,CEDAR,TOOL,RSP m2
+  class BEDROCK,DDB,IAM,SECRETS,XRAY sh

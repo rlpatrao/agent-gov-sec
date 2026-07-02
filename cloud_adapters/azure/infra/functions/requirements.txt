@@ -1,0 +1,7 @@
+# Azure Functions host requirement.
+azure-functions>=1.20.0
+
+# The governance library (governance/{shared,remote}) and the toolkit
+# (agent_os / agent_sre / agentmesh) are bundled into the deployment package at
+# build time — the chokepoints re-run the SAME enforcement code as the in-process
+# pipeline (trust-but-verify). Pin them from the repo's pyproject/requirements.

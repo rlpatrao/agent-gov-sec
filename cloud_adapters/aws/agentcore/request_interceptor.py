@@ -52,17 +52,31 @@ def _scannable_text(body):
     return "\n".join(parts)
 
 
+def _deny(body, code, reason):
+    """Short-circuit the gateway with an MCP error (the deny envelope)."""
+    err = {"jsonrpc": "2.0", "id": (body or {}).get("id"),
+           "error": {"code": -32600, "message": f"governance blocked: {code} — {reason}"}}
+    return {"interceptorOutputVersion": "1.0",
+            "mcp": {"transformedGatewayResponse": {"body": err, "statusCode": 200}}}
+
+
 def handler(event, context):
     body = (event.get("mcp", {}) or {}).get("gatewayRequest", {}).get("body", {}) or {}
-    text = _scannable_text(body)
-    if text:
-        v = _sess().check_input(text)
-        if v.blocked:
-            print(json.dumps({"event": "interceptor.request_blocked",
-                              "code": v.code, "method": body.get("method")}))
-            err = {"jsonrpc": "2.0", "id": body.get("id"),
-                   "error": {"code": -32600, "message": f"governance blocked: {v.code} — {v.reason}"}}
-            return {"interceptorOutputVersion": "1.0",
-                    "mcp": {"transformedGatewayResponse": {"body": err, "statusCode": 200}}}
-    return {"interceptorOutputVersion": "1.0",
-            "mcp": {"transformedGatewayRequest": {"body": body}}}
+    try:
+        text = _scannable_text(body)
+        if text:
+            v = _sess().check_input(text)
+            if v.blocked:
+                print(json.dumps({"event": "interceptor.request_blocked",
+                                  "code": v.code, "method": body.get("method")}))
+                return _deny(body, v.code, v.reason)
+        return {"interceptorOutputVersion": "1.0",
+                "mcp": {"transformedGatewayRequest": {"body": body}}}
+    except Exception as e:
+        # Fail closed: any internal guard error denies the request rather than
+        # letting an un-inspected call through the gateway.
+        print(json.dumps({"event": "interceptor.request_error_failclosed",
+                          "error": f"{type(e).__name__}: {str(e)[:200]}",
+                          "method": (body or {}).get("method")}))
+        return _deny(body, "interceptor_error",
+                     "request interceptor failed; denied (fail-closed)")

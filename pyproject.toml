@@ -23,8 +23,8 @@ dependencies = [
 ]
 
 # Cloud adapters are opt-in. Install the one you target:
-#   pip install '.[azure]'   (the only fully implemented provider today)
-#   pip install '.[aws]'     (WS5 — skeleton)
+#   pip install '.[azure]'   (default provider; fully implemented)
+#   pip install '.[aws]'     (fully implemented; AgentCore live on us-east-2)
 #   pip install '.[gcp]'     (WS6 — skeleton)
 [project.optional-dependencies]
 # Azure cloud bindings + the Microsoft Agent Framework (MAF) glue.
@@ -36,6 +36,7 @@ azure = [
     "azure-monitor-opentelemetry-exporter>=1.0.0b50",
     "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
     "asyncpg>=0.29.0",
+    "azure-mgmt-appcontainers>=3.0.0",  # Container-Apps-Jobs orchestrator (lazy-imported)
 ]
 # WS5: boto3 (Secrets Manager/SSM/STS/Bedrock/DynamoDB/Batch) + OTLP→ADOT/X-Ray exporter.
 aws = [

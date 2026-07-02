@@ -10,11 +10,11 @@ LangGraph middleware or a Pydantic AI model wrapper.
 
   RawAgentBundle.invoke(prompt):
       loop (capped):
-        pipeline.before_model(text)          (B4/B5/B6 — raises to block)
+        pipeline.before_model(text)          (B1/B2/B3 — raises to block)
         res = client.generate(messages, tool_specs)
-        pipeline.after_model(res.text)       (CoT/CoVe capture, G20)
+        pipeline.after_model(res.text)       (CoT/CoVe capture, H2)
         for each tool call:
-          pipeline.before_tool(name, args)   (B7/G19/B8 — raises to block)
+          pipeline.before_tool(name, args)   (C1/H1/C2 — raises to block)
           run the tool fn, feed the result back into messages
 
 ``build_agent`` mirrors ``payload_agents.pydantic._runner.build_agent``: it resolves the
@@ -97,10 +97,10 @@ class RawAgentBundle:
                 str(m.get("content", "")) for m in msgs
                 if m.get("role") in ("user", "tool") and m.get("content")
             ).strip()
-            self.pipeline.before_model(text)          # B4/B5/B6 — raises to block
+            self.pipeline.before_model(text)          # B1/B2/B3 — raises to block
 
             res = self.client.generate(msgs, self.tool_specs)
-            # after_model returns the (possibly output-redacted) text — G20 trace
+            # after_model returns the (possibly output-redacted) text — H2 trace
             # plus output guards (content quality, output PII).
             res_text = self.pipeline.after_model(res.text or "")
 
@@ -115,7 +115,7 @@ class RawAgentBundle:
                     "tool_calls": [{"id": tc.id, "name": tc.name, "args": tc.args} for tc in res.tool_calls],
                 })
                 for tc in res.tool_calls:
-                    self.pipeline.before_tool(tc.name, tc.args)   # B7/G19/B8 + sweep before_tool guards
+                    self.pipeline.before_tool(tc.name, tc.args)   # C1/H1/C2 + flag-gated before_tool guards
                     fn = fns.get(tc.name)
                     if fn is None:
                         out = f"(no such tool: {tc.name})"

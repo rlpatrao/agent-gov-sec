@@ -25,7 +25,7 @@
   </defs>
 
   <rect x="0" y="0" width="1240" height="560" fill="#ffffff"/>
-  <text class="title" x="40" y="32">Agent-Gov-Sec — AWS Infrastructure View (egress chokepoint + ledger)</text>
+  <text class="title" x="40" y="32">Agent-Gov-Sec — AWS Infrastructure · Method 1: Bedrock proxy (egress chokepoint + ledger)</text>
   <text class="titsub" x="40" y="52">Reference topology provisioned by cloud_adapters/aws/infra/main.tf — the agent reaches the LLM only through the governed API Gateway → Lambda → Bedrock path.</text>
 
   <!-- AWS account boundary -->
@@ -36,7 +36,7 @@
   <rect class="agent" x="44" y="110" width="300" height="106" rx="10"/>
   <text class="b-t" x="58" y="134">Agent runtime (ECS / EKS)</text>
   <text class="b-s" x="58" y="154">framework: langgraph · pydantic · raw</text>
-  <text class="b-s" x="58" y="171">+ GuardPipeline + extensions/ + ops/</text>
+  <text class="b-s" x="58" y="171">+ GuardPipeline + shared/enforcement/ + ops/</text>
   <text class="b-s" x="58" y="188">NHI = IAM role  galaxy-rp-&lt;agent&gt;</text>
   <text class="b-s" x="58" y="205">holds the gateway API key only</text>
 
@@ -126,4 +126,5 @@
   <text class="note" x="44" y="466">never reach the agent; Bedrock errors are returned to the caller as HTTP 502 with an error body.</text>
   <text class="note" x="44" y="488">Resilience: every adapter imports boto3 lazily and guarded — with no SDK or credentials it degrades to env-var / in-memory mode.</text>
   <text class="note" x="44" y="514">Legend:  orange = governed egress chokepoint  ·  blue = agent compute (NHI)  ·  grey = AWS service  ·  dashed = optional (tracing)  ·  dotted = Secrets Manager supplies the x-api-key.</text>
+  <text class="note" x="44" y="534">Scope: Method 1 (Bedrock proxy), from main.tf. Method 2 = AgentCore (gateway · Cedar · interceptors · runtimes), from deploy_agentcore.py — see the two-option topology diagram.</text>
 </svg>

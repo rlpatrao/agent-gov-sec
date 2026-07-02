@@ -58,3 +58,6 @@ cloud_adapters/aws/infra/lambda/agent-controls.json
 
 # Lambda build artifacts
 .build/
+
+# AWS demo run artifacts (contain resolved ARNs)
+docs/aws/output/

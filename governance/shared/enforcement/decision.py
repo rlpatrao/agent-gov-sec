@@ -1,8 +1,8 @@
 """
-governance.shared.enforcement.decision — the uniform verdict the sweep-era guard
+governance.shared.enforcement.decision — the uniform verdict the flag-gated guard
 wrappers return.
 
-Every guard wrapper added under the full-sweep effort exposes pure methods that
+Every guard wrapper added under the flag-gated effort exposes pure methods that
 return a ``GuardDecision`` rather than raising. Keeping the wrappers free of any
 ``GuardPipeline`` import (a) avoids a circular dependency (the pipeline imports
 the wrappers, not the other way round) and (b) lets each wrapper be unit-tested

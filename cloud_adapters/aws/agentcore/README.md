@@ -7,7 +7,7 @@ cannot express; both read the one NHI-keyed registry.
 
 The interceptor and identity code here is verified offline (`tests/test_agentcore.py`).
 The Cedar + Policy/Identity/Gateway provisioning is also **verified live** on
-us-east-2 (acct 774435790385) and codified in `scripts/deploy_agentcore.py`
+us-east-2 (acct <ACCOUNT_ID>) and codified in `scripts/deploy_agentcore.py`
 (idempotent; `--teardown` removes everything). AgentCore's Terraform surface is
 still maturing, so provisioning uses the control-plane API (boto3) rather than
 fabricated `aws_bedrockagentcore_*` resources.
@@ -18,19 +18,47 @@ fabricated `aws_bedrockagentcore_*` resources.
 # 1. Build the content-control interceptor zip (no Docker; Linux wheels via uv):
 scripts/build_interceptor_zip.sh            # → .build/interceptor.zip
 
-# 2. Provision everything (idempotent):
-AWS_PROFILE=<profile> PYTHONPATH=. python scripts/deploy_agentcore.py --region us-east-2
-AWS_PROFILE=<profile> PYTHONPATH=. python scripts/deploy_agentcore.py --region us-east-2 --teardown
+# 2. Build the Runtime code artifact (vendors aws-opentelemetry-distro + boto3 for
+#    GenAI observability; aarch64 wheels). Skipping it deploys a stdlib-only agent
+#    that runs and enforces but emits no GenAI spans.
+scripts/build_runtime_zip.sh                # → .build/runtime.zip
+
+# 3. Provision everything (idempotent):
+AWS_PROFILE=<profile> PYTHONPATH=<repo> python scripts/deploy_agentcore.py --region us-east-2
+AWS_PROFILE=<profile> PYTHONPATH=<repo> python scripts/deploy_agentcore.py --region us-east-2 --teardown
 ```
+
+Observability prerequisites (one-time, account-level): CloudWatch **Transaction
+Search** must be enabled (X-Ray trace-segment destination = CloudWatchLogs) for the
+agent spans to surface in **CloudWatch → GenAI Observability → Bedrock AgentCore**.
 
 It provisions, in order: two IAM roles → a stub tool Lambda → an MCP Gateway
 (AWS_IAM auth) + a Lambda target exposing the tools → a Policy engine + one Cedar
 policy per (agent, tool) from `cedar_export` → a workload identity per agent →
 the **content-control interceptor Lambdas** (`galaxy-gov-request` /
-`galaxy-gov-response`, from `.build/interceptor.zip`) → and binds the policy engine
-(**ENFORCE**) + attaches the interceptors to the gateway. Live result: gateway
+`galaxy-gov-response`, from `.build/interceptor.zip`) → binds the policy engine
+(**ENFORCE**) + attaches the interceptors to the gateway → and a **per-persona
+AgentCore Runtime** (`galaxy_{finops,auditor,rogue}`, from an S3 code artifact),
+each under its `galaxy-rp-<type>` execution role. Live result: gateway
 `galaxy-governance-gw` with Cedar authz **and** content interceptors, policy engine
-`galaxy_governance` (9 policies), identities `galaxy_{finops,auditor,rogue}`.
+`galaxy_governance` (9 policies), identities `galaxy_{finops,auditor,rogue}`, and
+three observable Runtimes that call the governed gateway under their own identity.
+
+```bash
+# Drive a deployed persona Runtime end-to-end (allow for finops, Cedar forbid for rogue):
+AWS_PROFILE=<profile> python scripts/deploy_agentcore.py --region us-east-2 --invoke rogue
+
+# Print the create_agent_runtime calls without provisioning:
+AWS_PROFILE=<profile> python scripts/deploy_agentcore.py --region us-east-2 --dry-run
+```
+
+Why per-persona Runtimes (the observability + security goal): each persona becomes
+a first-class Runtime in the AgentCore console, and because each runs under its own
+`galaxy-rp-<type>` role, the gateway authorizes its tool calls per agent (Cedar) and
+content-screens them (interceptors) — the per-agent decision is observed at the
+boundary. The hosted agent is `runtime_agent.py`; it uses the S3 `codeConfiguration`
+path (the ECR path is the same SCP-blocked route as the interceptors) and keeps the
+stub tool backend, since the focus is observability and security, not agent function.
 
 Why zip and not a container image: the ECR push path is blocked by an org SCP in
 this account (`ecr:UploadLayerPart` denied), so the interceptors ship as zip

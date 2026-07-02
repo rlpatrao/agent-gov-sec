@@ -81,6 +81,32 @@ def _input_text(body):
     return "\n".join(parts)
 
 
+def _redact_output(node, session):
+    """Recursively run output guards over every string the model emitted — not
+    just top-level text blocks. Covers toolUse.input, reasoningContent, nested
+    toolResult/json content. Returns (redacted_node, blocked_verdict_or_None)."""
+    if isinstance(node, str):
+        ov = enforce.enforce_output(session, node)
+        return (None, ov) if ov.blocked else (ov.text, None)
+    if isinstance(node, dict):
+        out = {}
+        for k, val in node.items():
+            new, blk = _redact_output(val, session)
+            if blk is not None:
+                return None, blk
+            out[k] = new
+        return out, None
+    if isinstance(node, list):
+        out = []
+        for item in node:
+            new, blk = _redact_output(item, session)
+            if blk is not None:
+                return None, blk
+            out.append(new)
+        return out, None
+    return node, None
+
+
 def handler(event, context):
     headers = {(k or "").lower(): v for k, v in (event.get("headers") or {}).items()}
     agent_type = headers.get("x-agent-type")
@@ -124,13 +150,11 @@ def handler(event, context):
         _log("proxy.tool_plan_blocked", agent=agent_type, code=tv.code)
         return _resp(403, {"error": tv.code, "reason": tv.reason})
 
-    # Output guards: redact / block per text block.
-    for block in content:
-        if isinstance(block, dict) and isinstance(block.get("text"), str):
-            ov = enforce.enforce_output(session, block["text"])
-            if ov.blocked:
-                _log("proxy.output_blocked", agent=agent_type, code=ov.code)
-                return _resp(403, {"error": ov.code, "reason": ov.reason})
-            block["text"] = ov.text
+    # Output guards: redact / block over ALL model-emitted content (text,
+    # toolUse.input, reasoning, nested blocks) — not just top-level text.
+    output, ov = _redact_output(output, session)
+    if ov is not None:
+        _log("proxy.output_blocked", agent=agent_type, code=ov.code)
+        return _resp(403, {"error": ov.code, "reason": ov.reason})
 
     return _resp(200, {"output": output, "stopReason": out.get("stopReason"), "usage": out.get("usage", {})})

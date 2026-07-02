@@ -1,5 +1,5 @@
 """
-governance.shared.enforcement.flags — feature flags for the gap / sweep guard modules.
+governance.shared.enforcement.flags — feature flags for the flag-gated guard modules.
 
 Every gap module is **off by default**. Enable per-module via env var (truthy =
 ``1``/``true``/``yes``/``on``, case-insensitive). Centralised so the wiring layer
@@ -12,7 +12,7 @@ WS7 gap modules:
   GALAXY_GAP_REASONING_GUARD  → Gap 4  reasoning-step validation
   GALAXY_GAP_REASONING_TRACE  → Gap 4+ CoT/CoVe trace logging
 
-Full-sweep per-call guards (wired into the GuardPipeline hooks; each is a thin
+Flag-gated per-call guards (wired into the GuardPipeline hooks; each is a thin
 wrapper over an ``agent_os`` / ``agent_sre`` primitive — see
 ``governance.shared.enforcement`` and ``governance.ops``). All default OFF, so an
 unconfigured run behaves exactly as before:
@@ -66,7 +66,7 @@ DATA_DRIFT = "GALAXY_GAP_DATA_DRIFT"
 REASONING_GUARD = "GALAXY_GAP_REASONING_GUARD"
 REASONING_TRACE = "GALAXY_GAP_REASONING_TRACE"
 
-# ── sweep: before_tool guards ─────────────────────────────────────────────────
+# ── flag-gated: before_tool guards ─────────────────────────────────────────────────
 EGRESS_POLICY = "GALAXY_GAP_EGRESS_POLICY"
 CIRCUIT_BREAKER = "GALAXY_GAP_CIRCUIT_BREAKER"
 TRANSPARENCY = "GALAXY_GAP_TRANSPARENCY"
@@ -83,14 +83,14 @@ MCP_SESSION_AUTH = "GALAXY_GAP_MCP_SESSION_AUTH"
 MCP_MESSAGE_SIGNING = "GALAXY_GAP_MCP_MESSAGE_SIGNING"
 COST_GUARD = "GALAXY_OPS_COST_GUARD"
 
-# ── sweep: after_model guards ─────────────────────────────────────────────────
+# ── flag-gated: after_model guards ─────────────────────────────────────────────────
 CONTENT_QUALITY = "GALAXY_GAP_CONTENT_QUALITY"
 OUTPUT_PII = "GALAXY_GAP_OUTPUT_PII"
 
-# ── sweep: after_tool guards ──────────────────────────────────────────────────
+# ── flag-gated: after_tool guards ──────────────────────────────────────────────────
 MCP_RESPONSE_SCAN = "GALAXY_GAP_MCP_RESPONSE_SCAN"
 
-# ── sweep: connect / registration-time (not a per-call hook) ──────────────────
+# ── flag-gated: connect / registration-time (not a per-call hook) ──────────────────
 MCP_TOOL_SCREEN = "GALAXY_GAP_MCP_TOOL_SCREEN"
 HUMAN_ESCALATION = "GALAXY_GAP_HUMAN_ESCALATION"
 

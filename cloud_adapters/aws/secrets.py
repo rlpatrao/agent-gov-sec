@@ -36,6 +36,10 @@ class SecretsManagerProvider:
     """
 
     _TTL_SECONDS = 300
+    # Hard ceiling on serving a cached key after a refresh failure. Past this the
+    # provider refuses the stale value and fails over (env / error) rather than
+    # presenting a key that may have been rotated/revoked.
+    _MAX_STALE_SECONDS = 3600
 
     def __init__(
         self,
@@ -81,9 +85,16 @@ class SecretsManagerProvider:
                     return value
             except Exception as e:
                 logger.error("aws_secret.fetch_failed", extra={"error": str(e), "secret": self._secret_name})
-                if self._cached_key:
-                    logger.warning("aws_secret.using_stale_cached_key")
+                if self._cached_key and (now - self._fetched_at) < self._MAX_STALE_SECONDS:
+                    logger.warning("aws_secret.using_stale_cached_key",
+                                   extra={"age_seconds": int(now - self._fetched_at)})
                     return self._cached_key
+                if self._cached_key:
+                    # Stale beyond the ceiling — drop it and fail over rather than
+                    # serve a possibly-revoked key.
+                    logger.error("aws_secret.stale_cache_expired",
+                                 extra={"age_seconds": int(now - self._fetched_at)})
+                    self._cached_key = None
 
         env_key = os.environ.get(self._env_var)
         if env_key:

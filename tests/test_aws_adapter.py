@@ -31,8 +31,11 @@ def test_factory_resolves_aws():
     assert p.identity_provider() is not None
     assert p.trace_exporter_factory() is not None
     assert p.llm_gateway() is not None
-    # AWS uses its own framework adapter (WS5.8), not MAF.
-    assert p.runtime_adapter() is None
+    # AWS now ships the AgentCore Runtime adapter (personas hosted as AgentCore
+    # Runtimes); it implements the AgentRuntimeAdapter protocol.
+    from core.interfaces import AgentRuntimeAdapter
+    rt = p.runtime_adapter()
+    assert rt is not None and isinstance(rt, AgentRuntimeAdapter)
     egress = p.egress_config_path()
     assert egress is not None and egress.name == "egress.yaml"
 
@@ -197,14 +200,29 @@ def _finops_decision():
 def test_aws_fgac_scoped_query_projects_masks_and_filters():
     from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
     sql = AwsLakeFormationEnforcer().scoped_query(_finops_decision(), database="finops", table="billing")
-    # allowed columns projected
+    # allowed columns projected (identifiers are double-quoted for injection safety)
     assert "account_id" in sql and "cost_usd" in sql and "region" in sql
-    assert "FROM finops.billing" in sql
+    assert 'FROM "finops"."billing"' in sql
     # masked columns redacted at the store (the raw value is never selected)
-    assert "AS customer_email" in sql and "AS tax_id" in sql
+    assert 'AS "customer_email"' in sql and 'AS "tax_id"' in sql
     assert "'***REDACTED***'" in sql
     # row filter pushed down as WHERE ... IN (...)
-    assert "WHERE region IN ('us-east-1', 'us-west-2')" in sql
+    assert 'WHERE "region" IN (\'us-east-1\', \'us-west-2\')' in sql
+
+
+def test_aws_fgac_rejects_injection_in_identifiers():
+    """A malicious column/table name must be rejected, not interpolated into SQL."""
+    from governance.shared.enforcement.data_fgac import DataAccessDecision
+    from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    enf = AwsLakeFormationEnforcer()
+    bad_col = DataAccessDecision(agent_type="FinOps", dataset="finops", table="billing",
+                                 allowed_columns=["cost_usd FROM x; DROP TABLE y --"])
+    with pytest.raises(ValueError, match="invalid SQL identifier"):
+        enf.scoped_query(bad_col, database="finops", table="billing")
+    ok_cols = DataAccessDecision(agent_type="FinOps", dataset="finops", table="billing",
+                                 allowed_columns=["cost_usd"])
+    with pytest.raises(ValueError, match="invalid SQL identifier"):
+        enf.scoped_query(ok_cols, database="finops; DROP TABLE x", table="billing")
 
 
 def test_aws_fgac_scoped_query_denied_raises():

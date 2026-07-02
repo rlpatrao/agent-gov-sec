@@ -1,19 +1,23 @@
-// infra/aca_jobs.bicep
-// Deploys one Container App Job per Galaxy agent (18 total).
-// Each job has its own User-Assigned Managed Identity and mounts the shared
-// Azure Files share at /data for artifact handoff between pipeline stages.
+// cloud_adapters/azure/infra/aca_jobs.bicep
+// Deploys one Container Apps Job per governance persona (finops · auditor · rogue).
+//
+// This is the Azure "Method 2 / fan-out" shape: each persona runs as its own job
+// under its own User-Assigned Managed Identity (the persona's NHI), started by
+// cloud_adapters/azure/orchestrator.py. It mirrors the AWS Batch orchestrator
+// (cloud_adapters/aws/orchestrator.py) and the AWS per-agent IAM roles. The three
+// personas match the AWS agent_types in cloud_adapters/aws/infra/main.tf.
 //
 // Deploy with:
 //   az deployment group create \
-//     --resource-group galaxyscanner-rg \
-//     --template-file infra/aca_jobs.bicep \
-//     --parameters acrPassword=<acr-admin-password>
+//     --resource-group <rg> \
+//     --template-file aca_jobs.bicep \
+//     --parameters acrPassword=<acr-admin-password> storageAccountKey=<sa-key>
 
 @description('Azure region for all resources')
-param location string = 'eastus'
+param location string = resourceGroup().location
 
 @description('Name of the existing Container Apps environment')
-param environmentName string = 'galaxyscanner-aca-env'
+param environmentName string = 'galaxy-aca-env'
 
 @description('ACR login server')
 param registryServer string = 'examplecr.azurecr.io'
@@ -26,10 +30,10 @@ param registryUsername string = 'examplecr'
 param acrPassword string
 
 @description('Container image tag to deploy')
-param imageTag string = '0.2.1'
+param imageTag string = '0.3.0'
 
-@description('Storage account name for Azure Files artifact share')
-param storageAccountName string = 'galaxyscannersa'
+@description('Storage account name for the Azure Files artifact share')
+param storageAccountName string = 'galaxysa'
 
 @description('Azure Files share name for run artifacts')
 param fileShareName string = 'galaxy-runs'
@@ -40,13 +44,13 @@ param storageAccountKey string
 
 // ── Reference existing environment ───────────────────────────────────────────
 
-resource acaEnv 'Microsoft.App/managedEnvironments@2023-05-01' existing = {
+resource acaEnv 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
   name: environmentName
 }
 
-// ── Wire Azure Files share to the environment ─────────────────────────────────
+// ── Wire the Azure Files share to the environment ─────────────────────────────
 
-resource envStorage 'Microsoft.App/managedEnvironments/storages@2023-05-01' = {
+resource envStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
   name: fileShareName
   parent: acaEnv
   properties: {
@@ -59,43 +63,27 @@ resource envStorage 'Microsoft.App/managedEnvironments/storages@2023-05-01' = {
   }
 }
 
-// ── Agent definitions ─────────────────────────────────────────────────────────
-// name: short slug used in resource names (no uppercase, no spaces)
+// ── Persona definitions ───────────────────────────────────────────────────────
+// name:      short slug used in resource names (no uppercase, no spaces)
 // agentType: value injected as AGENT_TYPE env var (matches NHIRegistry keys)
-// miName: existing User-Assigned MI resource name
-// miClientId: Entra client ID (not a secret)
+// miName:    User-Assigned MI resource name (the persona's NHI — see main.bicep)
 
-var agents = [
-  { name: 'classifier',         agentType: 'Classifier',         miName: 'galaxy-classifier-mi',         miClientId: '' }
-  { name: 'scanner',            agentType: 'Scanner',            miName: 'galaxyscanner-mi',              miClientId: '' }
-  { name: 'astanalyzer',        agentType: 'ASTAnalyzer',        miName: 'galaxy-astanalyzer-mi',         miClientId: '' }
-  { name: 'analyzer',           agentType: 'Analyzer',           miName: 'galaxy-analyzer-mi',            miClientId: '' }
-  { name: 'lambdaanalyzer',     agentType: 'LambdaAnalyzer',     miName: 'galaxy-lambdaanalyzer-mi',      miClientId: '' }
-  { name: 'architect',          agentType: 'Architect',          miName: 'galaxy-architect-mi',           miClientId: '' }
-  { name: 'coder',              agentType: 'Coder',              miName: 'galaxy-coder-mi',               miClientId: '' }
-  { name: 'reviewer',           agentType: 'Reviewer',           miName: 'galaxy-reviewer-mi',            miClientId: '' }
-  { name: 'security',           agentType: 'Security',           miName: 'galaxy-security-mi',            miClientId: '' }
-  { name: 'securityreviewer',   agentType: 'SecurityReviewer',   miName: 'galaxy-securityreviewer-mi',    miClientId: '' }
-  { name: 'tester',             agentType: 'Tester',             miName: 'galaxy-tester-mi',              miClientId: '' }
-  { name: 'iacgen',             agentType: 'IaCGen',             miName: 'galaxy-iacgen-mi',              miClientId: '' }
-  { name: 'slowatcher',         agentType: 'SLOWatcher',         miName: 'galaxy-slowatcher-mi',          miClientId: '' }
-  { name: 'discoveryscanner',   agentType: 'DiscoveryScanner',   miName: 'galaxy-discoveryscanner-mi',    miClientId: '' }
-  { name: 'discoverygrapher',   agentType: 'DiscoveryGrapher',   miName: 'galaxy-discoverygrapher-mi',    miClientId: '' }
-  { name: 'discoverybrd',       agentType: 'DiscoveryBRD',       miName: 'galaxy-discoverybrd-mi',        miClientId: '' }
-  { name: 'discoveryarchitect', agentType: 'DiscoveryArchitect', miName: 'galaxy-discoveryarchitect-mi',  miClientId: '' }
-  { name: 'discoverystories',   agentType: 'DiscoveryStories',   miName: 'galaxy-discoverystories-mi',    miClientId: '' }
+var personas = [
+  { name: 'finops',  agentType: 'finops',  miName: 'galaxy-finops-mi' }
+  { name: 'auditor', agentType: 'auditor', miName: 'galaxy-auditor-mi' }
+  { name: 'rogue',   agentType: 'rogue',   miName: 'galaxy-rogue-mi' }
 ]
 
-// ── Create one Container App Job per agent ────────────────────────────────────
+// ── Create one Container Apps Job per persona ─────────────────────────────────
 
-resource jobs 'Microsoft.App/jobs@2023-05-01' = [for agent in agents: {
-  dependsOn: [envStorage]
-  name: 'galaxy-${agent.name}-job'
+resource jobs 'Microsoft.App/jobs@2024-03-01' = [for p in personas: {
+  dependsOn: [ envStorage ]
+  name: 'galaxy-${p.name}-job'
   location: location
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', agent.miName)}': {}
+      '${resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', p.miName)}': {}
     }
   }
   properties: {
@@ -109,10 +97,7 @@ resource jobs 'Microsoft.App/jobs@2023-05-01' = [for agent in agents: {
         replicaCompletionCount: 1
       }
       secrets: [
-        {
-          name: 'acr-password'
-          value: acrPassword
-        }
+        { name: 'acr-password', value: acrPassword }
       ]
       registries: [
         {
@@ -126,20 +111,17 @@ resource jobs 'Microsoft.App/jobs@2023-05-01' = [for agent in agents: {
       containers: [
         {
           name: 'agent'
-          image: '${registryServer}/galaxy-scanner:${imageTag}'
+          image: '${registryServer}/galaxy-agent:${imageTag}'
           resources: {
             cpu: json('0.5')
             memory: '1Gi'
           }
           env: [
-            { name: 'AGENT_TYPE',    value: agent.agentType }
-            { name: 'NHI_CLIENT_ID', value: agent.miClientId }
+            { name: 'AGENT_TYPE', value: p.agentType }
+            { name: 'CLOUD_PROVIDER', value: 'azure' }
           ]
           volumeMounts: [
-            {
-              volumeName: 'galaxy-runs'
-              mountPath: '/data'
-            }
+            { volumeName: 'galaxy-runs', mountPath: '/data' }
           ]
         }
       ]
@@ -156,4 +138,4 @@ resource jobs 'Microsoft.App/jobs@2023-05-01' = [for agent in agents: {
 
 // ── Outputs ───────────────────────────────────────────────────────────────────
 
-output jobNames array = [for (agent, i) in agents: jobs[i].name]
+output jobNames array = [for (p, i) in personas: jobs[i].name]

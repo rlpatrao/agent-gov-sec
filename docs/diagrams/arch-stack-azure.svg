@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="866" viewBox="0 0 1000 866" font-family="Helvetica, Arial, sans-serif">
+  <style>
+    .band   { fill:#eceff1; stroke:#cfd8dc; stroke-width:1.5; }
+    .box    { fill:#ffffff; stroke:#b0bec5; stroke-width:1.5; }
+    .focus  { fill:#e3f2fd; stroke:#0078d4; stroke-width:2; }
+    .pipe   { fill:#e5f4fb; stroke:#0078d4; stroke-width:2; }
+    .band-title { font-size:15px; font-weight:700; fill:#37474f; }
+    .sub        { font-size:11px; fill:#78909c; }
+    .box-t      { font-size:13.5px; font-weight:600; fill:#263238; }
+    .box-t.foc  { fill:#005a9e; }
+    .box-s      { font-size:10px; fill:#607d8b; }
+    .pipe-t     { font-size:12.5px; font-weight:700; fill:#005a9e; }
+    .pipe-s     { font-size:10.5px; fill:#0078d4; }
+    .mod-h      { font-size:12.5px; font-weight:700; fill:#37474f; }
+    .bullet     { font-size:9.5px; fill:#546e7a; }
+    .leg        { font-size:11.5px; fill:#546e7a; }
+    .title      { font-size:20px; font-weight:700; fill:#263238; }
+    .titsub     { font-size:11.5px; fill:#78909c; }
+  </style>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto">
+      <path d="M0,0 L7,5 L0,10 Z" fill="#90a4ae"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="866" fill="#ffffff"/>
+  <text class="title" x="40" y="34">Agent-Gov-Sec — Layered Architecture (framework × cloud)</text>
+  <text class="titsub" x="40" y="54">Highlighted: Microsoft Agent Framework adapter + Azure cloud adapter.  Cloud axis: Azure and local.</text>
+
+  <g stroke="#90a4ae" stroke-width="2" marker-end="url(#arr)">
+    <line x1="500" y1="166" x2="500" y2="178"/>
+    <line x1="500" y1="286" x2="500" y2="298"/>
+    <line x1="500" y1="522" x2="500" y2="534"/>
+    <line x1="500" y1="642" x2="500" y2="654"/>
+  </g>
+
+  <!-- Band 1: Payload -->
+  <rect class="band" x="40" y="70" width="920" height="94" rx="14"/>
+  <text class="band-title" x="500" y="92" text-anchor="middle">Payload agents</text>
+  <text class="sub" x="500" y="108" text-anchor="middle">framework-neutral personas — prompt + ToolSpecs + NHI</text>
+  <rect class="box" x="60"  y="120" width="273" height="36" rx="8"/>
+  <text class="box-t" x="196" y="142" text-anchor="middle">FinOpsAnalyst</text>
+  <rect class="box" x="363" y="120" width="273" height="36" rx="8"/>
+  <text class="box-t" x="499" y="142" text-anchor="middle">Auditor</text>
+  <rect class="box" x="666" y="120" width="273" height="36" rx="8"/>
+  <text class="box-t" x="802" y="142" text-anchor="middle">Rogue</text>
+
+  <!-- Band 2: Framework axis -->
+  <rect class="band" x="40" y="180" width="920" height="104" rx="14"/>
+  <text class="band-title" x="500" y="201" text-anchor="middle">Framework axis  ·  --framework  (payload_agents/&lt;fw&gt;/)</text>
+  <text class="sub" x="500" y="217" text-anchor="middle">each adapter maps its own hooks onto the shared GuardPipeline — all implemented</text>
+  <rect class="box focus" x="60"  y="230" width="200" height="46" rx="8"/>
+  <text class="box-t foc" x="160" y="251" text-anchor="middle">maf</text>
+  <text class="box-s"     x="160" y="267" text-anchor="middle">Microsoft Agent Framework middleware</text>
+  <rect class="box" x="277" y="230" width="200" height="46" rx="8"/>
+  <text class="box-t" x="377" y="251" text-anchor="middle">langgraph</text>
+  <text class="box-s"  x="377" y="267" text-anchor="middle">create_agent + GalaxyGuardMiddleware</text>
+  <rect class="box" x="522" y="230" width="200" height="46" rx="8"/>
+  <text class="box-t" x="622" y="251" text-anchor="middle">raw</text>
+  <text class="box-s"  x="622" y="267" text-anchor="middle">provider-native tool loop (no framework)</text>
+  <rect class="box" x="739" y="230" width="200" height="46" rx="8"/>
+  <text class="box-t" x="839" y="251" text-anchor="middle">pydantic</text>
+  <text class="box-s"  x="839" y="267" text-anchor="middle">Pydantic AI · model-wrapper governance</text>
+
+  <!-- Band 3: Agnostic core -->
+  <rect class="band" x="40" y="300" width="920" height="220" rx="14"/>
+  <text class="band-title" x="500" y="321" text-anchor="middle">Agent-Gov-Sec core — agnostic kit</text>
+  <text class="sub" x="500" y="337" text-anchor="middle">core/ and governance/ import no cloud SDK and no agent framework</text>
+  <rect class="pipe" x="60" y="348" width="880" height="40" rx="8"/>
+  <text class="pipe-t" x="500" y="367" text-anchor="middle">GuardPipeline  ·  governance/shared/enforcement/  ·  4 hooks</text>
+  <text class="pipe-s" x="500" y="382" text-anchor="middle">before_model → after_model → before_tool → after_tool   ·   raises GovernanceViolation</text>
+
+  <rect class="box" x="60" y="402" width="277" height="106" rx="8"/>
+  <text class="mod-h" x="74" y="423">core/</text>
+  <text class="bullet" x="74" y="443">• interfaces.py — the Protocol seam</text>
+  <text class="bullet" x="74" y="460">• provider_factory.py — CLOUD_PROVIDER</text>
+  <text class="bullet" x="74" y="477">• nhi_registry.py — NHI resolution</text>
+  <text class="bullet" x="74" y="494">• run_tracer · trace_ledger</text>
+
+  <rect class="box" x="361" y="402" width="277" height="106" rx="8"/>
+  <text class="mod-h" x="375" y="423">governance/</text>
+  <text class="bullet" x="375" y="443">• shared/enforcement/ · GuardPipeline · floor</text>
+  <text class="bullet" x="375" y="460">• FGAC · drift · reasoning · CoT/CoVe</text>
+  <text class="bullet" x="375" y="477">• MCP-sec · secure-exec · diff-policy</text>
+  <text class="bullet" x="375" y="494">• ops/: SLO · eval · SBOM · red-team</text>
+
+  <rect class="box" x="662" y="402" width="277" height="106" rx="8"/>
+  <text class="mod-h" x="676" y="423">a2a/</text>
+  <text class="bullet" x="676" y="443">• envelope.py — typed A2A messages</text>
+  <text class="bullet" x="676" y="460">• dispatcher.py — audited dispatch</text>
+  <text class="bullet" x="676" y="477">• recipient allow-list</text>
+  <text class="bullet" x="676" y="494">• schema validation</text>
+
+  <!-- Band 4: Cloud axis (Azure + local only) -->
+  <rect class="band" x="40" y="536" width="920" height="104" rx="14"/>
+  <text class="band-title" x="500" y="557" text-anchor="middle">Cloud axis  ·  CLOUD_PROVIDER  (cloud_adapters/&lt;cloud&gt;/)</text>
+  <text class="sub" x="500" y="573" text-anchor="middle">get_provider() lazy-imports only the selected adapter</text>
+  <rect class="box focus" x="60"  y="586" width="419" height="46" rx="8"/>
+  <text class="box-t foc" x="269" y="607" text-anchor="middle">azure</text>
+  <text x="269" y="623" text-anchor="middle" font-size="9.5" fill="#607d8b">secrets · identity · gateway · tracing · audit  (APIM→AOAI + MAF middleware)</text>
+  <rect class="box" x="519" y="586" width="420" height="46" rx="8"/>
+  <text class="box-t" x="729" y="607" text-anchor="middle">local</text>
+  <text class="box-s"  x="729" y="623" text-anchor="middle">env vars · in-memory ledger · no managed egress</text>
+
+  <!-- Band 5: Azure services -->
+  <rect class="band" x="40" y="656" width="920" height="120" rx="14"/>
+  <text class="band-title" x="500" y="677" text-anchor="middle">Azure cloud services — egress chokepoints (APIM proxy + MAF middleware) + ledger</text>
+  <rect class="box focus" x="60"    y="692" width="137" height="72" rx="8"/>
+  <text class="box-t foc" x="128.5" y="716" text-anchor="middle">Azure OpenAI</text>
+  <text class="box-s"     x="128.5" y="732" text-anchor="middle">gpt-4o</text>
+  <rect class="box focus" x="208.6" y="692" width="137" height="72" rx="8"/>
+  <text class="box-t foc" x="277.1" y="725" text-anchor="middle">Entra ID</text>
+  <text class="box-s"     x="277.1" y="741" text-anchor="middle">managed identities</text>
+  <rect class="box focus" x="357.2" y="692" width="137" height="72" rx="8"/>
+  <text class="box-t foc" x="425.7" y="725" text-anchor="middle">Key Vault</text>
+  <text class="box-s"     x="425.7" y="741" text-anchor="middle">secrets</text>
+  <rect class="box focus" x="505.8" y="692" width="137" height="72" rx="8"/>
+  <text class="box-t foc" x="574.3" y="716" text-anchor="middle">PostgreSQL</text>
+  <text class="box-s"     x="574.3" y="732" text-anchor="middle">hash-chain ledger</text>
+  <rect class="box focus" x="654.4" y="692" width="137" height="72" rx="8"/>
+  <text class="box-t foc" x="722.9" y="716" text-anchor="middle">App Insights</text>
+  <text class="box-s"     x="722.9" y="732" text-anchor="middle">tracing</text>
+  <rect class="box focus" x="803"   y="692" width="136" height="72" rx="8"/>
+  <text class="box-t foc" x="871"   y="716" text-anchor="middle">API Management</text>
+  <text class="box-s"     x="871"   y="732" text-anchor="middle">edge chokepoint</text>
+
+  <!-- Legend -->
+  <rect class="box focus" x="60"  y="788" width="16" height="14" rx="3"/>
+  <text class="leg" x="84"  y="800">Azure / Microsoft Agent Framework — focus path</text>
+  <rect class="pipe" x="380" y="788" width="16" height="14" rx="3"/>
+  <text class="leg" x="404" y="800">shared GuardPipeline (framework-neutral)</text>
+  <text class="leg" x="60" y="824">governance/ lists this repo's added guards (shared/enforcement/) + fleet ops (ops/) layered on the agent_os primitives — see the Platform delta diagram.</text>
+  <text x="60" y="848" font-size="9.5" fill="#546e7a">Two Azure methods — Method 1: APIM proxy (API Management → Function → Azure OpenAI); Method 2: Microsoft Agent Framework (in-process governance middleware) — see the two-option topology.</text>
+</svg>

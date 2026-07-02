@@ -63,7 +63,7 @@ class GalaxyGuardMiddleware(AgentMiddleware):
     def __init__(self, pipeline: GuardPipeline) -> None:
         self._pipeline = pipeline
 
-    # ── per-model-call governance (B4/B5/B6 + G20) ──────────────────────────
+    # ── per-model-call governance (B1/B2/B3 + H2) ──────────────────────────
     def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         text = _model_input_text(request)
         if self._pipeline.before_model(text):   # True → redact credentials in place
@@ -72,7 +72,7 @@ class GalaxyGuardMiddleware(AgentMiddleware):
         self._pipeline.after_model(_response_text(response))
         return response
 
-    # ── per-tool-call governance (B7/G19 + B8 + sweep before_tool/after_tool) ─
+    # ── per-tool-call governance (C1/H1 + C2 + flag-gated before_tool/after_tool) ─
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         tool_call = getattr(request, "tool_call", {}) or {}
         name = tool_call.get("name", "<unknown>") if isinstance(tool_call, dict) else str(tool_call)

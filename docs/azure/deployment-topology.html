@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galaxy Agentic Governance Platform — Azure Deployment Topology</title>
+<style>
+  :root {
+    --green:  #2e9c5a;
+    --purple: #6c47d6;
+    --teal:   #1f8f7a;
+    --blue:   #0078d4;
+    --azure:  #005a9e;
+    --card-bg:    #f6f7fb;
+    --card-line:  #d3d7e3;
+    --title-ink:  #1b2030;
+    --sub-ink:    #6b7280;
+    --muted:      #9aa1ad;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    background: #ffffff;
+    color: var(--title-ink);
+    margin: 0;
+    padding: 32px 28px 40px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  .topnote {
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    letter-spacing: .2px;
+    margin: 0 0 6px;
+  }
+  .subnote {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12.5px;
+    margin: 0 0 18px;
+  }
+
+  .connector {
+    width: 2px;
+    height: 22px;
+    background: #c7ccd8;
+    margin: 0 auto;
+  }
+
+  .layer {
+    border: 2.5px solid var(--bc, #ccc);
+    border-radius: 14px;
+    padding: 12px 14px 13px;
+  }
+  .layer h2 {
+    margin: 2px 0 10px;
+    font-size: 19px;
+    font-weight: 800;
+    color: var(--bc, #333);
+    letter-spacing: .1px;
+  }
+  .layer h2 .dim { color: var(--title-ink); font-weight: 800; }
+
+  .cards { display: flex; gap: 12px; flex-wrap: wrap; }
+  .card {
+    flex: 1 1 0;
+    min-width: 200px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-line);
+    border-radius: 9px;
+    padding: 9px 11px 10px;
+  }
+  .card.full { flex-basis: 100%; }
+  .card.half { flex-basis: 48%; }
+  .card.hl { border-color: #7a8190; border-width: 1.5px; }
+  .card .t { font-size: 14px; font-weight: 700; color: var(--title-ink); margin-bottom: 3px; }
+  .card .s { font-size: 12.5px; color: var(--sub-ink); line-height: 1.4; }
+  .mtag {
+    display: inline-block; font-size: 10.5px; font-weight: 800; letter-spacing: .3px;
+    border-radius: 999px; padding: 1px 8px; vertical-align: middle; margin-right: 6px;
+  }
+  .mtag.one { color: #1b4db3; background: #e6efff; border: 1px solid #bcd3ff; }
+  .mtag.two { color: #1b6da8; background: #e5f4fb; border: 1px solid #b7d9ef; }
+
+  .layer.green  { --bc: var(--green); }
+  .layer.purple { --bc: var(--purple); }
+  .layer.teal   { --bc: var(--teal); }
+  .layer.blue   { --bc: var(--blue); }
+  .layer.orange { --bc: var(--azure); }
+
+  .footer {
+    margin-top: 20px;
+    font-size: 12.5px;
+    color: var(--sub-ink);
+    line-height: 1.55;
+    border-top: 1px solid #ededf2;
+    padding-top: 14px;
+  }
+  .footer b { color: var(--title-ink); }
+  .pill {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    color: #1b6da8; background: #e5f4fb; border: 1px solid #b7d9ef;
+    border-radius: 999px; padding: 1px 9px; vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="topnote">Azure subscription · &lt;SUBSCRIPTION_ID&gt; · in-process governance live (default cloud) · APIM proxy reference IaC (region configurable)</p>
+  <p class="subnote"><span class="pill">Two enforcement methods</span> &nbsp;APIM proxy and Microsoft Agent Framework — both enforce the same policy registry and run the full 47-control / 84-check matrix</p>
+
+  <!-- Layer 1 — Agent application -->
+  <div class="layer green">
+    <h2>Agent application · <span class="dim">3 governed personas</span></h2>
+    <div class="cards">
+      <div class="card">
+        <div class="t">FinOps · Auditor · Rogue</div>
+        <div class="s">Scoped reader, privileged cross-dataset reader, and an untrusted agent that trips every guard.</div>
+      </div>
+      <div class="card">
+        <div class="t">Framework axis</div>
+        <div class="s">Each persona runs on Microsoft Agent Framework, LangGraph, a raw loop, or Pydantic AI — governance is identical across all four.</div>
+      </div>
+      <div class="card">
+        <div class="t">Per-agent NHI</div>
+        <div class="s">Each persona maps to its own least-privilege Entra managed identity (galaxy-&lt;persona&gt;-mi) from the NHI registry.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"></div>
+
+  <!-- Layer 2 — Governance core (cloud-agnostic) -->
+  <div class="layer purple">
+    <h2>Governance core · <span class="dim">cloud-agnostic</span></h2>
+    <div class="cards">
+      <div class="card full">
+        <div class="t">GuardPipeline · 4 hooks</div>
+        <div class="s">before_model, after_model, before_tool, and after_tool hooks run the guard library — injection, credential redaction, context budget, capability allow-list, FGAC, MCP guards, reasoning trace, drift, fleet ops. Guard logic is upstream; composition and bindings are this repo's.</div>
+      </div>
+      <div class="card">
+        <div class="t">Policy registry</div>
+        <div class="s">One control policy per agent, exported once. Both methods consume the same registry; authorization fails closed.</div>
+      </div>
+      <div class="card">
+        <div class="t">A2A · NHI registry</div>
+        <div class="s">Typed envelopes, recipient allow-list, audited dispatch; per-agent identity binding.</div>
+      </div>
+      <div class="card">
+        <div class="t">Hash-chained ledger schema</div>
+        <div class="s">SHA-256 chain schema and verification; the backend is the cloud adapter.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"></div>
+
+  <!-- Layer 3 — Azure enforcement (two methods) -->
+  <div class="layer teal">
+    <h2>Azure enforcement · <span class="dim">two methods</span></h2>
+    <div class="cards">
+      <div class="card half hl">
+        <div class="t"><span class="mtag one">Method 1</span>APIM proxy — API Management edge chokepoint</div>
+        <div class="s">API Management edge → Function llm_proxy → Azure OpenAI. The Function re-runs enforcement from the policy (input guards, tool-plan check, output redaction) and injects the deployment server-side. Sibling Function chokepoints: data_proxy and a2a_broker.</div>
+      </div>
+      <div class="card half hl">
+        <div class="t"><span class="mtag two">Method 2</span>Microsoft Agent Framework — governance middleware</div>
+        <div class="s">MAF agents on Foundry Agent Service / Container Apps run governance middleware in-process (guard, policy, capability, rogue). Authorization is in-process middleware, fail-closed per agent × tool. There is no managed policy engine on Azure.</div>
+      </div>
+      <div class="card full">
+        <div class="t">Data FGAC — separate chokepoint</div>
+        <div class="s">Data reads bypass the LLM path. A separate data_proxy Function runs under its own identity and applies column masking and row filters before rows reach an agent.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"></div>
+
+  <!-- Layer 4 — Azure platform services -->
+  <div class="layer blue">
+    <h2>Azure platform services</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="t">Azure OpenAI</div>
+        <div class="s">gpt-4o — reached only via the APIM proxy or an in-process model call, never directly from agent code.</div>
+      </div>
+      <div class="card hl">
+        <div class="t">Key Vault</div>
+        <div class="s">Azure OpenAI key and APIM subscription key with short-TTL cache and env fallback.</div>
+      </div>
+      <div class="card">
+        <div class="t">Entra Managed Identities</div>
+        <div class="s">Per-agent least-privilege identities (galaxy-&lt;persona&gt;-mi) with Entra token issuance.</div>
+      </div>
+      <div class="card">
+        <div class="t">PostgreSQL trace_ledger</div>
+        <div class="s">Hash-chain ledger table (append-only, SHA-256 chain) shared by both methods.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"></div>
+
+  <!-- Layer 5 — Observability -->
+  <div class="layer orange">
+    <h2>Observability</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="t">OTel → Azure Monitor</div>
+        <div class="s">OTel gen_ai.* spans export to Azure Monitor; governance decisions ride as span events. The MAF agent owns the TracerProvider.</div>
+      </div>
+      <div class="card">
+        <div class="t">Application Insights</div>
+        <div class="s">Function and Container Apps logs; agent runs surface as traces and dependencies.</div>
+      </div>
+      <div class="card">
+        <div class="t">Hash-chain ledger</div>
+        <div class="s">Both methods write the same ledger; chain verification detects tampering.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p><b>How to read this.</b> The top two layers are cloud-agnostic and depend only on the Protocol seam; the bottom three are Azure-specific. The enforcement layer shows the two methods side by side — both consume the same policy registry and write the same ledger. Azure has no managed Cedar policy engine — authorization is in-process MAF middleware (Method 2) and the policy registry plus APIM edge (Method 1).</p>
+    <p><b>Status.</b> In-process governance is live and is the default cloud path. The APIM proxy (Method 1) and the Container Apps jobs are reference IaC; the Function chokepoints (llm_proxy, data_proxy, a2a_broker) are built but not deployed. There is no live governance-persona deployment on Azure — the live persona deployment is AWS AgentCore in us-east-2.</p>
+  </div>
+
+</div>
+</body>
+</html>

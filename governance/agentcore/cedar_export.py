@@ -70,8 +70,8 @@ def export_cedar(**kwargs) -> str:
 
 if __name__ == "__main__":
     print(export_cedar(
-        gateway_arn=os.environ.get("GW_ARN", "arn:aws:bedrock-agentcore:us-east-2:774435790385:gateway/galaxy-governance-gw-kni5tdrzrt"),
+        gateway_arn=os.environ.get("GW_ARN", "arn:aws:bedrock-agentcore:us-east-2:<ACCOUNT_ID>:gateway/galaxy-governance-gw"),
         target_name=os.environ.get("GW_TARGET", "galaxy-tools"),
         gateway_tools=os.environ.get("GW_TOOLS", "query_billing,summarize_costs,query_dataset").split(","),
-        account_id=os.environ.get("GW_ACCOUNT", "774435790385"),
+        account_id=os.environ.get("GW_ACCOUNT", "<ACCOUNT_ID>"),
     ))

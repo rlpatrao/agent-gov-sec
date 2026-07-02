@@ -79,6 +79,8 @@ resource "aws_iam_role" "agent" {
       Effect    = "Allow"
       Principal = { Service = "ecs-tasks.amazonaws.com" }
       Action    = "sts:AssumeRole"
+      # Confused-deputy guard: only this account's tasks may assume the role.
+      Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }
     }]
   })
 }
@@ -92,7 +94,12 @@ resource "aws_iam_role_policy" "agent" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      { Effect = "Allow", Action = ["bedrock:InvokeModel"], Resource = "*" },
+      # Scoped to the configured model: the cross-region inference profile plus
+      # the Anthropic foundation models it fans out to — not Resource "*".
+      { Effect = "Allow", Action = ["bedrock:InvokeModel"], Resource = [
+        "arn:aws:bedrock:*::foundation-model/anthropic.*",
+        "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/${var.bedrock_model_id}",
+      ] },
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
@@ -157,6 +164,8 @@ resource "aws_iam_role" "proxy" {
       Effect    = "Allow"
       Principal = { Service = "lambda.amazonaws.com" }
       Action    = "sts:AssumeRole"
+      # Confused-deputy guard: only this account's Lambda service may assume it.
+      Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }
     }]
   })
 }
@@ -167,7 +176,11 @@ resource "aws_iam_role_policy" "proxy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      { Effect = "Allow", Action = ["bedrock:InvokeModel"], Resource = "*" },
+      # Scoped to the configured model (see the per-agent role) — not Resource "*".
+      { Effect = "Allow", Action = ["bedrock:InvokeModel"], Resource = [
+        "arn:aws:bedrock:*::foundation-model/anthropic.*",
+        "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/${var.bedrock_model_id}",
+      ] },
       {
         Effect   = "Allow"
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]

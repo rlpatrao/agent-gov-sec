@@ -1,0 +1,24 @@
+%%{init: {"flowchart": {"nodeSpacing": 40, "rankSpacing": 55}, "themeVariables": {"fontSize": "16px"}}}%%
+flowchart TB
+  UP["Upstream Toolkit — agent_os · agent_sre · agentmesh<br/>Detection & decision primitives (the guard logic)<br/>• Prompt-injection · credential · context-budget · policy engine<br/>• escalation · anomaly/drift · audit interface<br/>• MCP gateway/session/signer/scanner · sandbox · circuit-breaker<br/>• semantic-policy · content-governance · SLO · evals · replay · SBOM · signing"]
+  SEAM["Added Capabilities — Platform Core<br/>• Cloud / framework seam + factories (core/interfaces)<br/>• Per-agent identity binding — NHI registry → cloud IAM<br/>• Hash-chained audit ledger — SHA-256 chain logic<br/>• Agent-to-agent protocol — a2a/ envelopes + dispatch<br/>• Single enforcement path — EnforcementSession + floor"]
+  EXT["Wired & Composed — Guard Library<br/>Artifact: governance/shared/enforcement/<br/>Logic: agent_os primitives · our wrappers / config / composition<br/>• Data: FGAC — masking + Lake Formation pushdown is ours · drift · reasoning · CoT/CoVe<br/>• MCP security: gateway · rate-limit · session · signing · tool-screen · response<br/>• Code / runtime: secure-codegen/exec · diff · reversibility · constraint-graph<br/>• Content / cost: output-PII · quality · cost · breaker"]
+  OPS["Wired & Composed — Fleet Ops<br/>Artifact: governance/ops/<br/>Logic: agent_sre modules · our wiring<br/>• SLO / error-budget · accuracy<br/>• Eval-judge · golden-replay<br/>• SBOM · artifact-signing · certification-gate · red-team"]
+  UP --> SEAM --> EXT --> OPS
+
+  subgraph Legend [" "]
+    direction LR
+    LU["Upstream toolkit — guard logic"]
+    LO["Added capabilities"]
+    LW["Upstream logic · our wiring"]
+  end
+
+  classDef up fill:#777,color:#fff
+  classDef ours fill:#06f,color:#fff
+  classDef wired fill:#cfe0fb,color:#0b2a5b,stroke:#06f,stroke-width:2px
+  class UP up
+  class SEAM ours
+  class EXT,OPS wired
+  class LU up
+  class LO ours
+  class LW wired

@@ -28,19 +28,33 @@ def _sess():
     return _session
 
 
+def _envelope(new_body, status):
+    return {"interceptorOutputVersion": "1.0",
+            "mcp": {"transformedGatewayResponse": {"body": new_body, "statusCode": status}}}
+
+
 def handler(event, context):
     gw_resp = (event.get("mcp", {}) or {}).get("gatewayResponse", {}) or {}
     body = gw_resp.get("body", {})
     status = gw_resp.get("statusCode", 200)
 
-    text = body if isinstance(body, str) else json.dumps(body)
-    v = _sess().check_output(text)
-    if v.text != text:
-        print(json.dumps({"event": "interceptor.response_redacted"}))
     try:
-        new_body = json.loads(v.text)
-    except (ValueError, TypeError):
-        new_body = v.text
-
-    return {"interceptorOutputVersion": "1.0",
-            "mcp": {"transformedGatewayResponse": {"body": new_body, "statusCode": status}}}
+        text = body if isinstance(body, str) else json.dumps(body)
+        v = _sess().check_output(text)
+        if v.blocked:
+            # An output guard rejected the result — drop the body rather than
+            # return the un-cleared content.
+            print(json.dumps({"event": "interceptor.response_blocked", "code": v.code}))
+            return _envelope("[redacted: governance blocked response]", status)
+        if v.text != text:
+            print(json.dumps({"event": "interceptor.response_redacted"}))
+        try:
+            new_body = json.loads(v.text)
+        except (ValueError, TypeError):
+            new_body = v.text
+        return _envelope(new_body, status)
+    except Exception as e:
+        # Fail closed: never return the un-inspected body on an internal error.
+        print(json.dumps({"event": "interceptor.response_error_failclosed",
+                          "error": f"{type(e).__name__}: {str(e)[:200]}"}))
+        return _envelope("[redacted: response interceptor failed]", status)

@@ -1,0 +1,43 @@
+sequenceDiagram
+    autonumber
+    actor U as Caller
+    participant FA as Framework adapter<br/>(agent runtime: langgraph / raw / pydantic)
+    participant GP as In-process GuardPipeline<br/>(defense-in-depth · tamper-evident)
+    participant PX as Out-of-process chokepoint<br/>API Gateway -> bedrock_proxy Lambda<br/>(separate IAM identity · tamper-resistant)
+    participant M as Model (Bedrock)
+    participant DP as Data chokepoint<br/>data_proxy (FGAC, out-of-process)
+    participant L as Audit ledger<br/>(DynamoDB, hash-chained)
+
+    U->>FA: invoke(prompt)
+
+    rect rgb(245,233,233)
+    note over FA,GP: Agent trust domain - in-process (developer-owned)
+    FA->>GP: before_model(text)
+    GP->>GP: prompt-injection (B1) · credential (B2) · budget (B3)
+    GP->>L: log decision
+    GP-->>FA: ok (+ redact creds in place) — or raise GovernanceViolation
+    end
+
+    rect rgb(228,238,246)
+    note over PX: Governing-team boundary - out-of-process (trust-but-verify)
+    FA->>PX: POST /invoke · x-api-key · x-agent-type · x-nhi-id · no modelId
+    PX->>PX: resolve policy from agent-controls.json (NHI-keyed · fail-closed)
+    PX->>PX: EnforcementSession.check_input — re-run B1/B2/B3
+    PX->>L: log decision
+    Note right of PX: unknown NHI or block -> 403<br/>(holds even if the runtime is hostile)
+    PX->>M: Converse (modelId injected server-side)
+    M-->>PX: response (text + tool calls)
+    PX->>PX: check_output — re-redact PII / credentials
+    PX-->>FA: governed response
+    end
+
+    FA->>GP: after_model(response) — CoT/CoVe trace (H2)
+    loop each tool call
+        FA->>GP: before_tool(name, args) — capability (C1/H1) · blocked-pattern (C2)
+        GP->>L: log decision
+        FA->>DP: read via data_proxy
+        DP->>DP: EnforcementSession + FGAC — mask columns / row-filter / deny
+        DP->>L: log decision
+        DP-->>FA: masked rows
+    end
+    FA-->>U: final answer
