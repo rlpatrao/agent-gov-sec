@@ -74,8 +74,8 @@ uv pip install --python .venv/bin/python -e '.[aws]'         # live AWS (boto3: 
 > `langchain` / cloud extras and cause `ModuleNotFoundError`.
 
 `scripts/demo_agents.py` is the consolidated runner. The full guard matrix —
-**49 controls · 84 checks**, each with a pass case and an intercept case — always runs;
-there is no reduced or baseline mode.
+**47 controls · 84 checks**, each with a pass case and an intercept case — always runs
+(**49 · 90** with AgentCore deployed); there is no reduced or baseline mode.
 
 ```bash
 # Deterministic, offline (this is what CI runs)
