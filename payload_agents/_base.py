@@ -30,13 +30,15 @@ from typing import Any, Callable, Optional
 
 from agent_framework import Agent
 from agent_framework_openai import OpenAIChatClient
-from agent_os.audit_logger import GovernanceAuditLogger
+from agent_os.audit_logger import AuditBackend, GovernanceAuditLogger
 
 from payload_agents.config import AgentConfigModel, load_agent_config_cached
 from core.interfaces import SecretProvider
 from core.nhi_registry import NHIRegistry
 from core.provider_factory import get_provider
-from cloud_adapters.azure.audit import PostgresHashChainBackend
+# This factory is the Microsoft Agent Framework (MAF) binding; the MAF middleware
+# stack is the Azure framework path. Cross-cloud agents use the LangGraph / raw /
+# Pydantic runners, which reach the platform only through get_provider().
 from cloud_adapters.azure.maf.middleware import build_governance_stack
 
 logger = logging.getLogger(__name__)
@@ -55,7 +57,7 @@ class AgentBundle:
         await bundle.pg_backend.close()
     """
     agent: Agent
-    pg_backend: PostgresHashChainBackend
+    pg_backend: AuditBackend       # the cloud audit backend (Azure → Postgres hash-chain)
     audit_logger: GovernanceAuditLogger
     config: AgentConfigModel
     agent_id: str        # "<AgentType>-<nhi-client-id>"
@@ -158,7 +160,7 @@ async def build_agent(
             "nhi_id": identity.client_id,
             "deployment": deployment,
             "egress": egress,
-            "endpoint": endpoint,
+            "endpoint": egress_resolution.endpoint,
             "tool_count": len(tools or []),
             "governance": {
                 "prompt_injection":  cfg.governance.enable_prompt_injection_guard,

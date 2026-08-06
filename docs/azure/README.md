@@ -6,6 +6,9 @@ It constitutes the Azure stack of a three-stack documentation set; AWS (`../aws/
 `../shared/`. Azure is the default cloud binding (`CLOUD_PROVIDER=azure`); the same
 governance runs unchanged on the other clouds.
 
+Agent builders start with [`../../ONBOARDING.md`](../../ONBOARDING.md) and the packaging /
+delivery model in [`../shared/PACKAGING.md`](../shared/PACKAGING.md).
+
 The platform governs agents through a framework-neutral `GuardPipeline` reached by a
 per-framework adapter. It provides the following capabilities:
 

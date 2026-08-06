@@ -1,0 +1,47 @@
+# deploy/docker-compose.yml — local dev/prod parity for the enforcement service.
+#
+# Brings up the governance enforcement service and a local hash-chain ledger so
+# the payload-agent team develops against the SAME out-of-process authority that
+# runs in production — they point their agents at http://localhost:8080 and get
+# real allow/deny/redaction decisions, without any ability to modify the service.
+#
+#   docker compose -f deploy/docker-compose.yml up --build
+#   curl localhost:8080/health
+#
+# Then run an agent against it:
+#   GOV_LLM_ENDPOINT=http://localhost:8080/llm \
+#   GOV_DATA_ENDPOINT=http://localhost:8080/data \
+#   GOV_A2A_BROKER_ENDPOINT=http://localhost:8080/a2a \
+#   .venv/bin/python scripts/demo_agents.py --aws --extended
+services:
+  enforcement:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.service
+    image: galaxy-enforcement:local
+    ports:
+      - "8080:8080"
+    environment:
+      GOV_POLICY_REGISTRY_PATH: /app/cloud_adapters/aws/infra/lambda/agent-controls.json
+      POSTGRES_DSN: postgresql://galaxy:galaxy@ledger:5432/ledger
+      GALAXY_LOG_LEVEL: INFO
+    depends_on:
+      ledger:
+        condition: service_healthy
+
+  ledger:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: galaxy
+      POSTGRES_PASSWORD: galaxy
+      POSTGRES_DB: ledger
+    ports:
+      - "5432:5432"
+    # Initialise the append-only trace_ledger schema on first start.
+    volumes:
+      - ../cloud_adapters/azure/infra/ledger_schema.sql:/docker-entrypoint-initdb.d/01-ledger.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U galaxy -d ledger"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

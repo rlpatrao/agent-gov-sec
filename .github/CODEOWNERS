@@ -1,12 +1,17 @@
 # CODEOWNERS — ownership boundary between the governing team and developers.
 #
-# Mechanism 1 of the governance-authority model (see docs/governance-authority.md).
+# Mechanism 1 of the governance-authority model (see docs/shared/governance-authority.md).
 #
 # The paths below define WHO MAY APPROVE A CHANGE, not who may run the code.
 # GitHub blocks merging a PR that touches an owned path until a listed owner
 # approves it. This puts the authority over governance configuration with the
 # governing team even though the controls execute in the agent's process: a
 # developer can open a PR that weakens a guard, but they cannot merge it.
+#
+# The runtime companion to this file is the out-of-process enforcement service
+# (mechanism 4): even a change that slips past review is stopped at runtime,
+# because the chokepoints run under a separate identity the developer cannot
+# assume. See docs/shared/PACKAGING.md.
 #
 # Required repo settings for this to have force:
 #   - Branch protection on the default branch with "Require review from Code
@@ -23,7 +28,14 @@
 
 # The non-overridable runtime floor (mechanism 2). The floor is the root of the
 # "config can only tighten" guarantee — it must not be editable by developers.
-/governance/floor.py                    @org/agent-governance
+/governance/inprocess/floor.py          @org/agent-governance
+
+# The NHI-keyed policy registry (mechanism 3) — the single authoritative posture
+# both the in-process pipeline and the out-of-process chokepoints resolve.
+/governance/shared/policy_registry.py   @org/agent-governance
+
+# The data-classification catalogue that drives field-grained access control.
+/governance/shared/enforcement/configs/ @org/agent-governance
 
 # Per-agent governance blocks live inside these YAMLs. Developers legitimately
 # tune prompts and a2a limits, but the `governance:` block and the egress
@@ -31,11 +43,17 @@
 /payload_agents/config/                 @org/agent-governance
 /cloud_adapters/*/egress.yaml           @org/agent-governance
 
-# The out-of-process egress chokepoint (mechanism 4). The proxy enforces policy
-# the agent process cannot alter; its code and IaC are governance-owned.
+# The out-of-process enforcement chokepoints (mechanism 4) and their IaC — the
+# proxy/interceptors, the API Management / gateway policy, and the deployment
+# templates enforce policy the agent process cannot alter, in a separate
+# environment under a separate identity. Governance-owned on every cloud.
 /cloud_adapters/aws/infra/              @org/agent-governance
+/cloud_adapters/azure/infra/            @org/agent-governance
+/governance/remote/                     @org/agent-governance
+/deploy/                                @org/agent-governance
 
 # This file and the authority documentation are themselves governance-owned,
 # so the ownership boundary cannot be quietly removed in a developer PR.
 /.github/CODEOWNERS                     @org/agent-governance
-/docs/governance-authority.md           @org/agent-governance
+/docs/shared/governance-authority.md    @org/agent-governance
+/docs/shared/PACKAGING.md               @org/agent-governance

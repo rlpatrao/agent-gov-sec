@@ -125,6 +125,18 @@ the build-time producer (it imports the agent config; the consumer half does not
 and an import-boundary test keeps `shared`/`remote` free of any agent-codebase
 dependency so they vendor cleanly into a Lambda or a Fargate daemon.
 
+The chokepoints are also packaged as a standalone, independently-deployable
+**enforcement service**. [`governance/remote/server.py`](../../governance/remote/server.py)
+routes `POST /llm`, `POST /data`, and `POST /a2a` over the same enforcement library;
+it is containerized via [`deploy/Dockerfile.service`](../../deploy/Dockerfile.service)
+and brought up locally with [`deploy/docker-compose.yml`](../../deploy/docker-compose.yml)
+(`docker compose -f deploy/docker-compose.yml up --build` → `http://localhost:8080`) so
+the agent team develops against an identical copy of what enforces in production
+(dev/prod parity). The governance team deploys this container in a separate environment
+under a separate identity the agent team cannot assume, which is what makes mechanism 4
+authoritative rather than cooperative. See [`PACKAGING.md`](PACKAGING.md) for the delivery
+model.
+
 ### 4a — LLM proxy (model boundary)
 [`cloud_adapters/aws/infra/lambda/bedrock_proxy.py`](../../cloud_adapters/aws/infra/lambda/bedrock_proxy.py)
 (API Gateway → Lambda → Bedrock; Azure APIM / GCP Apigee are equivalents). The

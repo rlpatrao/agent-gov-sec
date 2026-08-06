@@ -11,6 +11,10 @@ team owns and approves the control surface. The boundary is enforced by
 This guide assumes the demonstration payload conventions (`payload_agents/`).
 The same structure applies to any agent built on the platform.
 
+For the agent-team quick start see [`../../ONBOARDING.md`](../../ONBOARDING.md); for
+how the platform is packaged and delivered (the SDK wheel, the enforcement service,
+and the boundary) see [`PACKAGING.md`](PACKAGING.md).
+
 ---
 
 ## 1. The two axes
@@ -30,6 +34,12 @@ touch `governance/` or `core/`.
 ---
 
 ## 2. Files a developer creates
+
+The `galaxy new-agent <Type>` console command
+([`governance/tooling/scaffold.py`](../../governance/tooling/scaffold.py)) scaffolds the
+config, prompt, and test for a new agent with a floor-safe default posture, so the
+developer edits generated files rather than hand-creating them from scratch. The list
+below is what those files are and who owns each for review.
 
 For an agent named `myagent` (PascalCase type `MyAgent`):
 

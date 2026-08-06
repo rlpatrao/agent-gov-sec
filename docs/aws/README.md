@@ -5,6 +5,9 @@ It constitutes the AWS stack of a three-stack documentation set; Azure (`../azur
 GCP (`../gcp/`) are placeholders at present. The cloud-neutral platform reference resides
 in `../shared/`.
 
+Agent builders start with [`../../ONBOARDING.md`](../../ONBOARDING.md) and the packaging /
+delivery model in [`../shared/PACKAGING.md`](../shared/PACKAGING.md).
+
 The platform governs agents through a framework-neutral `GuardPipeline` reached by a
 per-framework adapter. It provides the following capabilities:
 

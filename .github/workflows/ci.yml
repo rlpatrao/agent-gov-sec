@@ -1,0 +1,56 @@
+# CI — the payload check (for agent developers) and the governance gate.
+#
+# payload-check   : what an agent developer must pass — tests + the offline
+#                   conformance matrix. Fast, no cloud credentials.
+# governance-gate : the platform-owner gate — full test suite + the offline
+#                   matrix + a clean wheel build of the platform package.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  payload-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install (platform + LangGraph framework axis)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[langgraph]'
+      - name: Tests
+        run: python -m pytest -q
+      - name: Offline conformance matrix
+        run: python scripts/demo_agents.py --fake --extended
+
+  governance-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install (platform + build tooling)
+        run: |
+          python -m pip install --upgrade pip build
+          pip install -e '.[langgraph]'
+      - name: Full test suite
+        run: python -m pytest -q
+      - name: Build the platform wheel
+        run: python -m build --wheel
+      - name: Confirm the wheel excludes payload_agents / tests
+        run: |
+          python - <<'PY'
+          import zipfile, glob, sys
+          whl = sorted(glob.glob("dist/*.whl"))[-1]
+          names = zipfile.ZipFile(whl).namelist()
+          leaked = [n for n in names if n.startswith(("payload_agents/", "tests/", "docs/"))]
+          if leaked:
+              print("wheel leaks non-platform files:", leaked[:10]); sys.exit(1)
+          print(f"{whl}: platform-only wheel OK ({len(names)} entries)")
+          PY

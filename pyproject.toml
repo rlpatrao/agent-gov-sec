@@ -1,5 +1,9 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "agentic-sdlc"
+name = "galaxy-governance"
 version = "0.1.0"
 description = "Cloud-agnostic agent governance platform (MSGK-based) with pluggable cloud adapters."
 readme = "README.md"
@@ -75,6 +79,18 @@ agent-engine = [
     "google-cloud-aiplatform[agent_engines]>=1.95.0",
     "cloudpickle>=3.0",
 ]
+
+# The `galaxy` command scaffolds a new governed agent (see docs/shared/adding-an-agent.md).
+[project.scripts]
+galaxy = "governance.tooling.scaffold:main"
+
+# The platform wheel ships only the governance platform — the agnostic core, the
+# guard/enforcement library, the A2A protocol, and the cloud adapters. It does
+# NOT ship payload_agents (that is example/demo code, or the consuming team's
+# own repo), tests, docs, or the local-only archive.
+[tool.setuptools.packages.find]
+include = ["core*", "governance*", "a2a*", "cloud_adapters*"]
+exclude = ["payload_agents*", "tests*", "archive*", "docs*", "scripts*", "deploy*"]
 
 [tool.pytest.ini_options]
 # The repo's tests only — never recurse into the local-only archive/.

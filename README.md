@@ -20,6 +20,11 @@ AWS is the cloud with a live persona deployment. It runs two ways — **Bedrock*
 
 ## Documentation
 
+Teams building agents on the platform start with [`ONBOARDING.md`](ONBOARDING.md) (quick
+start); how the platform is packaged and delivered — the SDK wheel, the enforcement
+service, and the developer/governance boundary — is described in
+[`docs/shared/PACKAGING.md`](docs/shared/PACKAGING.md).
+
 Documentation is organized as per-cloud stacks plus a cloud-neutral shared set.
 
 | Stack | Status | Contents |
