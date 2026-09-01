@@ -1,0 +1,10 @@
+Galaxy Agentic Governance Platform
+Copyright 2026 Virtusa Corporation
+
+This product includes software developed by Microsoft Corporation
+(https://github.com/microsoft/agent-governance-toolkit), licensed under the
+MIT License: agent-os-kernel, agent-sre, and agentmesh-platform.
+
+Third-party dependencies and their license texts are listed in
+THIRD_PARTY_NOTICES.md, which is generated from the resolved runtime
+dependency set by scripts/gen_third_party_notices.py.

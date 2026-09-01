@@ -12,12 +12,12 @@ agent-framework-foundry>=1.8.1
 # agent_sre.anomaly.RogueAgentDetector) is released — agent-os-kernel was already
 # at 3.7.0, and agent-sre 3.7.0 keeps the same symbol; the maf_adapter import +
 # full suite verified green. All three governance packages now align at 3.7.0.
-agent-os-kernel>=3.7.0
-agent-sre>=3.7.0
+agent-os-kernel>=3.7.0,<4
+agent-sre>=3.7.0,<4
 # agent_os.integrations.maf_adapter imports from agentmesh.governance.
 # Normally pulled by agent-governance-toolkit[full]; we pin it explicitly
 # because we don't use the [full] extra (it drags the broken azure-ai-search).
-agentmesh-platform>=3.7.0
+agentmesh-platform>=3.7.0,<4
 
 # ── Standards-based policy engine (Cedar) for the WS7 gap modules ────────────
 # Evaluated via cedarpy directly: MSGK 3.7.0's CedarBackend targets the cedarpy
