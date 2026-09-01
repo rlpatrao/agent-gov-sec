@@ -144,14 +144,11 @@ def _registry() -> dict:
     """Load the deployed policy registry using the same contract the chokepoint
     handlers use, so the control plane reports readiness against exactly the
     artifact that enforces."""
-    from governance.shared.policy_registry import load_registry
-    raw = os.environ.get("GOV_POLICY_REGISTRY")
-    if not raw:
-        path = os.environ.get("GOV_POLICY_REGISTRY_PATH")
-        if path and os.path.exists(path):
-            with open(path, encoding="utf-8") as fh:
-                raw = fh.read()
-    return load_registry(raw) if raw else {}
+    from governance.shared.policy_registry import RegistryUnavailable, resolve_registry
+    try:
+        return resolve_registry()
+    except RegistryUnavailable:
+        return {}
 
 
 def _registry_digest() -> dict:

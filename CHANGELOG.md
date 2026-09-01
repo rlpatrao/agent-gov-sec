@@ -68,6 +68,20 @@ versioning of the platform wheel (`galaxy-agentkit`).
   `galaxy export-registry` (emit the policy registry plus derived provisioning inputs,
   with `--check` as a CI staleness gate), and `galaxy verify [<Type>]` (report which of
   the two keys — identity, policy — are turned).
+- **Centralized policy store.** The policy registry is now one versioned object every
+  enforcement tier reads, instead of a copy per deployment. New in
+  `governance/shared/policy_registry.py`: `resolve_registry()`, the single loading
+  contract, with precedence `GOV_POLICY_REGISTRY` (inline JSON) → `GOV_POLICY_REGISTRY_URI`
+  (`s3://bucket/key`) → `GOV_POLICY_REGISTRY_PATH` (a file baked into the image), and a
+  `GOV_POLICY_REGISTRY_TTL_SECONDS` cache (default 300). The enforcement authority and the
+  LLM and data chokepoints call it instead of each reimplementing the environment lookup.
+  A refresh that fails past the TTL keeps serving the last good document and logs its age
+  and the S3 `VersionId` it came from; when no document has ever loaded, resolution raises
+  and the reader denies. `galaxy export-registry --publish` uploads the exported registry
+  to the store and prints the returned `VersionId` and the sha256 digest of the bytes it
+  wrote. The bucket is declared in `cloud_adapters/aws/infra/policy_store.tf` — versioning
+  enabled, public access blocked, AES256 — behind the opt-in `deploy_policy_store`
+  variable, with the bucket name and the suggested `GOV_POLICY_REGISTRY_URI` as outputs.
 
 ### Known gaps
 - **The service image's dependencies are not pinned.** `requirements-proxy.txt` carries

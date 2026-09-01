@@ -26,11 +26,10 @@ proxy's own credentials.
 import json
 import os
 
-from governance.shared.policy_registry import load_registry, policy_for
+from governance.shared.policy_registry import RegistryUnavailable, policy_for, resolve_registry
 
 _catalog = None
 _mediator = None
-_registry_cache = None
 
 
 def _log(event, **fields):
@@ -56,16 +55,13 @@ def _default_catalog_path():
 
 
 def _registry():
-    global _registry_cache
-    if _registry_cache is None:
-        raw = os.environ.get("GOV_POLICY_REGISTRY")
-        if not raw:
-            path = os.environ.get("GOV_POLICY_REGISTRY_PATH")
-            if path and os.path.exists(path):
-                with open(path, encoding="utf-8") as fh:
-                    raw = fh.read()
-        _registry_cache = load_registry(raw) if raw else {}
-    return _registry_cache
+    """Resolve the registry through the centralized-store contract (inline JSON >
+    GOV_POLICY_REGISTRY_URI > baked file, TTL-cached). An unresolvable registry
+    yields an empty document, which denies every request at policy_for."""
+    try:
+        return resolve_registry()
+    except RegistryUnavailable:
+        return {}
 
 
 def _read_source(dataset, table):

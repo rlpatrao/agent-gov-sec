@@ -254,6 +254,10 @@ def _export_registry_cmd(argv: list[str]) -> int:
     ap.add_argument("--tfvars", help="Also write agent_types as a .tfvars.json file")
     ap.add_argument("--check", action="store_true",
                     help="Exit non-zero if --out is missing or stale, without writing")
+    ap.add_argument("--publish", action="store_true",
+                    help="Also upload the registry to the centralized policy store "
+                         "(destination: --uri, else GOV_POLICY_REGISTRY_URI)")
+    ap.add_argument("--uri", help="Policy store destination for --publish (s3://bucket/key)")
     a = ap.parse_args(argv)
 
     from governance.policy_export import discover_agent_types, export_registry_json
@@ -295,6 +299,18 @@ def _export_registry_cmd(argv: list[str]) -> int:
             json.dumps({"agent_types": [t.lower() for t in types]}, indent=2) + "\n",
             encoding="utf-8")
         print(f"wrote tfvars:   {a.tfvars} (lowercased to match the Cedar principal)")
+
+    if a.publish:
+        uri = a.uri or os.environ.get("GOV_POLICY_REGISTRY_URI")
+        if not uri:
+            print("error: --publish needs --uri or GOV_POLICY_REGISTRY_URI", file=sys.stderr)
+            return 2
+        from governance.policy_export import publish_registry
+        # Publish exactly the bytes written to --out, so the local artifact and the
+        # stored object share one digest.
+        result = publish_registry(uri, body + "\n")
+        print(f"published:      {result['uri']} "
+              f"(version {result['version_id'] or 'unversioned bucket'}, {result['digest']})")
     return 0
 
 
