@@ -11,6 +11,10 @@ Data plane — enforcement, called on every agent request:
   POST /a2a      → agent-to-agent authorization (recipient allow-list)
   GET  /health  → liveness, plus the image version and revision
 
+Operational view:
+
+  GET  /dashboard → the Governance Dashboard (see docs/shared/dashboard.md)
+
 Control plane — identity enrollment, called rarely and by humans:
 
   POST /enroll           → record an agent_type → cloud principal binding (Registrar)
@@ -65,6 +69,8 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
+from governance.remote.decision_log import DECISIONS
 
 logger = logging.getLogger(__name__)
 
@@ -265,6 +271,18 @@ class _Handler(BaseHTTPRequestHandler):
                 "control_plane": "enabled" if _control_token() else "disabled",
             })
             return
+        if route == "/dashboard":
+            from governance.remote.dashboard import render_dashboard
+            page = render_dashboard(
+                version=service_version(), revision=service_revision(),
+                uptime=DECISIONS.uptime(), registry=_registry(), log=DECISIONS,
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("content-type", "text/html; charset=utf-8")
+            self.send_header("content-length", str(len(page)))
+            self.end_headers()
+            self.wfile.write(page)
+            return
         if route == "/registry/digest":
             self._send(200, _registry_digest())
             return
@@ -318,6 +336,8 @@ class _Handler(BaseHTTPRequestHandler):
             payload = json.loads(resp.get("body") or "{}")
         except (TypeError, ValueError):
             payload = {"body": resp.get("body")}
+        DECISIONS.record(route=route, agent_type=self.headers.get("x-agent-type"),
+                         nhi_id=self.headers.get("x-nhi-id"), status=status, payload=payload)
         self._send(status, payload)
 
     def log_message(self, fmt, *args):  # route access logs through logging, not stderr
