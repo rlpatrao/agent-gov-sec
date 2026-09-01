@@ -34,6 +34,18 @@
 # both the in-process pipeline and the out-of-process chokepoints resolve.
 /governance/shared/policy_registry.py   @org/agent-governance
 
+# The identity control plane (mechanism 5): the Registrar that records
+# agent_type → cloud principal bindings, the store those bindings live in, and the
+# recorded bindings themselves. A developer must not be able to bind an agent to a
+# principal, or edit a binding, without governing-team approval.
+/governance/remote/registrar.py         @org/agent-governance
+/governance/remote/identity_store.py    @org/agent-governance
+/governance/configs/                    @org/agent-governance
+
+# Read-only principal verification. Owned here so the "the authority never holds
+# iam:CreateRole" property cannot be relaxed in a developer PR.
+/cloud_adapters/*/principal_verify.py   @org/agent-governance
+
 # The data-classification catalogue that drives field-grained access control.
 /governance/shared/enforcement/configs/ @org/agent-governance
 
@@ -51,6 +63,16 @@
 /cloud_adapters/azure/infra/            @org/agent-governance
 /governance/remote/                     @org/agent-governance
 /deploy/                                @org/agent-governance
+
+# The release path for the authority image. Whoever can change this decides what
+# bytes run as the enforcement service, so it belongs with the governing team
+# alongside deploy/VERSION (covered by /deploy/ above).
+/scripts/publish_service_image.py       @org/agent-governance
+
+# The client-side package. Developers build *with* it, but it decides what counts
+# as a complete governance configuration and refuses to start an agent without
+# one — a control surface, so the governing team approves changes to it.
+/galaxy_agentkit/                       @org/agent-governance
 
 # This file and the authority documentation are themselves governance-owned,
 # so the ownership boundary cannot be quietly removed in a developer PR.

@@ -39,6 +39,13 @@ _BLOCK_AT_OR_ABOVE: dict[str, int] = {
 }
 
 
+def _packaged_config() -> Path:
+    """The prompt-injection rules shipped with the governance package."""
+    import governance
+
+    return Path(governance.__file__).parent / "configs" / "prompt-injection.yaml"
+
+
 class PromptInjectionGuardMiddleware(AgentMiddleware):
     """Pre-dispatch guard. Calls `detector.detect()` on the last user message;
     raises MiddlewareTermination when threat >= block_threshold."""
@@ -50,8 +57,12 @@ class PromptInjectionGuardMiddleware(AgentMiddleware):
         config_path: Optional[Path] = None,
         block_threshold: ThreatLevel = ThreatLevel.MEDIUM,
     ) -> None:
-        if config_path and config_path.exists():
-            cfg = load_prompt_injection_config(str(config_path))
+        # No explicit path means the packaged rules, not sample rules. The
+        # previous default built the detector with `None`, which silently fell
+        # back to the toolkit's built-in samples while still reporting success.
+        resolved = config_path or _packaged_config()
+        if resolved.is_file():
+            cfg = load_prompt_injection_config(str(resolved))
             # Toolkit packaging bug: load_prompt_injection_config doesn't set
             # several attrs that _detect_impl reads. Backfill empty defaults
             # so detection actually runs (without these the detector
@@ -62,7 +73,11 @@ class PromptInjectionGuardMiddleware(AgentMiddleware):
             if not hasattr(cfg, "sensitivity"):
                 cfg.sensitivity = "balanced"
         else:
-            cfg = None  # detector falls back to its sample rules
+            raise FileNotFoundError(
+                f"prompt-injection rules not found at {resolved}. Refusing to "
+                "build the guard: the detector would fall back to the toolkit's "
+                "built-in sample rules and keep reporting success."
+            )
         self._detector = PromptInjectionDetector(cfg)
         self._agent_id = agent_id
         self._audit = audit_log

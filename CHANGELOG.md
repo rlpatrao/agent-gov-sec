@@ -2,11 +2,127 @@
 
 All notable changes to the Galaxy governance platform are recorded here. The format
 follows [Keep a Changelog](https://keepachangelog.com/); versions follow semantic
-versioning of the platform wheel (`galaxy-governance`).
+versioning of the platform wheel (`galaxy-agentkit`).
 
 ## [Unreleased]
 
 ### Added
+- **`galaxy_agentkit` — the client-side package.** What an agent team installs and
+  imports. `govern()` returns one handle carrying the agent's identity, a client for the
+  enforcement service (`/llm`, `/data`, `/a2a`, `/health`), and the in-process
+  `GuardPipeline` on request. Identity and endpoint are resolved from the environment
+  (`GALAXY_AGENT_TYPE`, `GALAXY_NHI_ID`, `GALAXY_ENFORCEMENT_ENDPOINT`, `GALAXY_MODE`)
+  and validated on load, so an agent cannot assert its own identity from code. There was
+  previously no client path to the enforcement service at all: `GOV_LLM_ENDPOINT` and
+  `GOV_DATA_ENDPOINT` were documented in `deploy/docker-compose.yml` but nothing read
+  them. The distribution is renamed `galaxy-governance` → `galaxy-agentkit` so the
+  install name matches the import name.
+- **`galaxy-agentkit init <project>`** scaffolds a complete governed-agent project —
+  `.env.example`, the floor-safe `governance:` request config, the data-classification
+  catalogue, prompt, a working governed entry point, and tests.
+- **The SDK wheel now ships its package data.** `[tool.setuptools.package-data]` declares
+  the guard rule files, the `galaxy-*.yaml` policies, `authz.cedar`, the data
+  classification catalogue, and the per-cloud `egress.yaml`. Previously the wheel
+  contained **no** non-Python files, so an installed client resolved none of them.
+  Declared explicitly rather than by a blanket glob so `cloud_adapters/*/infra` —
+  an importable package holding Terraform and its state — cannot be swept in.
+- **Versioned enforcement service image, published to ECR.** `deploy/VERSION` is the
+  single source of truth for the service image version, governance-owned via the
+  `/deploy/` CODEOWNERS rule. The version is stamped into the image as an OCI label and
+  as `GALAXY_SERVICE_VERSION`, and `GET /health` now reports `version` and `revision` so
+  an operator can identify the running build.
+  `scripts/publish_service_image.py` builds, tags, and pushes: every build gets an
+  immutable `<version>-<sha>` tag, the bare `<version>` tag requires `--release` from a
+  clean tree, and there is no `latest` tag. The ECR repository is declared in Terraform
+  (`aws_ecr_repository.enforcement`, output `enforcement_image_repo`) with immutable
+  tags, scan-on-push, AES256 encryption, and a 14-day untagged-image expiry. The
+  governance gate asserts the label, the environment variable, and the service's own
+  report all agree with `deploy/VERSION`. Versioning policy — including what MAJOR means
+  for a component that allows and denies — is in `docs/shared/PACKAGING.md`.
+- **Corporate TLS support in the service build.** `deploy/Dockerfile.service` accepts a
+  private TLS root as a BuildKit secret (`--secret id=pip_ca`), used only for the
+  dependency-install layer and never written into the image, for networks that terminate
+  TLS with a private CA. `--pip-ca` on the publish script passes it through.
+- **Licensing and third-party attribution.** The platform is licensed under Apache-2.0
+  (`LICENSE`, `NOTICE`); the wheel declares `License-Expression: Apache-2.0` and bundles
+  `LICENSE`, `NOTICE`, and `THIRD_PARTY_NOTICES.md`, and the enforcement image copies the
+  same three files. `scripts/gen_third_party_notices.py` generates the notices from the
+  resolved dependency closure of both artifacts and runs as a CI staleness gate
+  (`--check`). The three toolkit packages are upper-bounded (`>=3.7.0,<4`) so a rebuild
+  cannot pull an unreviewed major version. See `docs/shared/PACKAGING.md`.
+- **Identity Registrar (mechanism 5).** `governance/remote/registrar.py` records
+  `agent_type → cloud principal` bindings in an authority-side store
+  (`governance/remote/identity_store.py`), served by a control plane on the authority
+  (`POST /enroll`, `GET /identity`, `GET /registry/digest`) that is disabled unless
+  `GOV_CONTROL_TOKEN` is set. `core/nhi_registry.py` resolves the binding from the
+  authority when `GOV_AUTHORITY_ENDPOINT` is configured and no longer consults the
+  `NHI_CLIENT_ID_<TYPE>` env bridge in that case, so an agent can no longer assert its
+  own identity. Enrollment binds identity only and grants no capability: an enrolled
+  agent without an approved control policy reports `pending_policy` and is still denied
+  with `403 no_governance_policy`.
+- **Read-only principal verification.** `cloud_adapters/aws/principal_verify.py` confirms
+  a claimed IAM role exists using `sts:GetCallerIdentity` and `iam:GetRole` only. No code
+  path creates or mutates an identity; roles are provisioned by Terraform or by the
+  developer's own AWS SSO session.
+- **Developer commands.** `galaxy enroll <Type>` (bind an identity under an SSO login),
+  `galaxy export-registry` (emit the policy registry plus derived provisioning inputs,
+  with `--check` as a CI staleness gate), and `galaxy verify [<Type>]` (report which of
+  the two keys — identity, policy — are turned).
+
+### Known gaps
+- **The service image's dependencies are not pinned.** `requirements-proxy.txt` carries
+  ranges, so each image build resolves transitive dependencies afresh: the pushed image
+  contains `cryptography` 48.0.1 while `THIRD_PARTY_NOTICES.md`, generated from the
+  development venv, records 46.0.7. The package list is the same either way, so
+  attribution is complete, but the version column can lag a given image and two builds of
+  the same commit are not byte-identical. A lock file installed by
+  `deploy/Dockerfile.service` would fix reproducibility, notices accuracy, and CVE
+  attribution together.
+- **Base-image CVEs in the enforcement image.** ECR enhanced scanning on the first push
+  reported 4 CRITICAL and 10 HIGH findings. All four criticals are `python:3.14-slim` OS
+  packages (perl, glibc) with no fix available upstream yet; the actionable ones are
+  `cryptography` (fixed in 49/50) and `sqlite3`, which pinning plus a rebuild cadence
+  would address.
+- **Provenance is not wired.** SBOM (N5) and artifact signing (N6) exist as flag-gated
+  runtime controls in `agent_sre`; neither runs against the wheel or the service image.
+- The identity control plane is **not production-ready**. `GET /identity` and
+  `POST /enroll` share one bearer token, and `GOV_CONTROL_TRUST_HEADER=1` (set by
+  `deploy/docker-compose.yml` for local development) makes the enrolling identity a
+  forgeable request header. The store's write lock is process-local, so the authority
+  is single-replica only. Enrollment does not inspect the role's trust policy, is not
+  written to the tamper-evident ledger, and revocation does not reach an agent that
+  already resolved its NHI. Full list with severities and sequencing in
+  `docs/shared/agent-registration-plan.md`.
+
+### Changed
+- **Guards fail closed on missing configuration instead of degrading.**
+  `_build_injection_detector()` raises `GovernanceConfigError` when
+  `prompt-injection.yaml` is absent, and the Azure MAF guard now defaults to the packaged
+  rules rather than to `None`. Both previously constructed `PromptInjectionDetector(None)`,
+  which falls back to the upstream toolkit's **sample** rules and keeps reporting success
+  — so a packaging mistake silently downgraded the control while every guard still looked
+  green. This is what made the missing package data invisible.
+- **Python 3.14 throughout the components this repo controls.** The documented
+  prerequisite is now 3.14 only (README, AWS and Azure user guides), and the enforcement
+  service image builds on `python:3.14-slim` (was 3.12). The Lambda base image, the
+  AgentCore runtimes, and the Azure Function App stay on 3.12 — those runtimes are set by
+  the cloud provider; they copy platform source rather than installing the wheel, so
+  `requires-python` does not gate them.
+- **One source of truth for which agents exist.** `governance.policy_export` now derives
+  agent types from `payload_agents/config/*.yaml` via `discover_agent_types()` instead of
+  the hand-maintained `KNOWN_AGENT_TYPES` tuple. That tuple was consumed by the registry
+  export, the Terraform `agent_types` variable, AgentCore provisioning (workload
+  identities, runtimes, Cedar policies), and a separate hardcoded list in
+  `payload_agents/__init__.py` — none of which was checked against the filesystem, so a
+  scaffolded agent was silently absent from all of them. `KNOWN_AGENT_TYPES` is retained
+  as a derived value for compatibility. Verified to produce a byte-identical
+  `agent-controls.json`.
+- **Import-boundary rule made precise.** `tests/test_governance_tiers.py` previously
+  forbade `governance/remote/` from importing itself, which blocked any internal structure
+  in that tier. It now permits `governance.shared` and `governance.remote` and explicitly
+  forbids the build-time producer (`governance.policy_export`) and `governance.inprocess`,
+  which is what the rule was protecting.
+
 - **Platform packaging.** The platform now builds as a versioned wheel
   (`galaxy-governance`) via a declared build system; the wheel ships the agnostic core,
   the guard/enforcement library, the A2A protocol, and the cloud adapters, and excludes

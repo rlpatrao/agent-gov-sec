@@ -56,6 +56,16 @@ _THRESHOLD_MAP: dict[str, ThreatLevel] = {
 _THREAT_RANK: dict[str, int] = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
 
+class GovernanceConfigError(RuntimeError):
+    """Governance configuration required by a guard is missing or unreadable.
+
+    Distinct from :class:`GovernanceViolation`: that one means a control fired,
+    this one means a control could not be constructed as configured. Both are
+    fatal, but only this one indicates a broken deployment rather than a blocked
+    agent action.
+    """
+
+
 class GovernanceViolation(Exception):
     """Raised by a guard hook to block a model or tool call. Carries a machine
     code so callers / the demo can assert which control fired."""
@@ -66,17 +76,32 @@ class GovernanceViolation(Exception):
 
 
 def _build_injection_detector() -> PromptInjectionDetector:
-    """Construct the detector, backfilling the toolkit-config attrs that
-    ``load_prompt_injection_config`` omits (without these it fails-closed)."""
-    if _PROMPT_INJECTION_CONFIG.exists():
-        cfg = load_prompt_injection_config(str(_PROMPT_INJECTION_CONFIG))
-        for attr in ("allowlist", "blocklist", "custom_patterns"):
-            if not hasattr(cfg, attr):
-                setattr(cfg, attr, [])
-        if not hasattr(cfg, "sensitivity"):
-            cfg.sensitivity = "balanced"
-    else:
-        cfg = None
+    """Construct the detector from the configured rules, backfilling the
+    toolkit-config attrs that ``load_prompt_injection_config`` omits (without
+    these it fails-closed).
+
+    Raises if the rule file is absent. ``PromptInjectionDetector(None)`` does not
+    fail — it falls back to the toolkit's built-in *sample* patterns and keeps
+    reporting success, so a packaging mistake would silently downgrade the
+    control while every guard still looked green. Failing here makes that
+    condition loud and unmissable.
+    """
+    if not _PROMPT_INJECTION_CONFIG.is_file():
+        raise GovernanceConfigError(
+            "prompt-injection rules are missing: expected "
+            f"{_PROMPT_INJECTION_CONFIG}. Refusing to build the guard pipeline, "
+            "because the detector would otherwise fall back to the toolkit's "
+            "built-in sample rules and still report success. If this is an "
+            "installed package, the wheel was built without its package data — "
+            'check with `python -c "import galaxy_agentkit; '
+            'galaxy_agentkit.check_install()"`.'
+        )
+    cfg = load_prompt_injection_config(str(_PROMPT_INJECTION_CONFIG))
+    for attr in ("allowlist", "blocklist", "custom_patterns"):
+        if not hasattr(cfg, attr):
+            setattr(cfg, attr, [])
+    if not hasattr(cfg, "sensitivity"):
+        cfg.sensitivity = "balanced"
     return PromptInjectionDetector(cfg)
 
 
