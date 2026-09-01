@@ -17,7 +17,7 @@ that is plainly absent.
 
 Scaffold a new project with::
 
-    galaxy-agentkit init my-agent
+    galaxy init my-agent
 
 See ``docs/shared/agentkit.md`` for the full integration guide.
 """

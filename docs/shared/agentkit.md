@@ -36,7 +36,7 @@ python -c "import galaxy_agentkit; galaxy_agentkit.check_install()"
 ## Start a new agent
 
 ```bash
-galaxy-agentkit init payroll-agent
+galaxy init payroll-agent
 ```
 
 That generates a complete project:

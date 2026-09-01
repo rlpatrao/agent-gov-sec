@@ -37,7 +37,7 @@ yours rather than `payload_agents/`:
 
 ```bash
 pip install "galaxy-agentkit[langgraph]"
-galaxy-agentkit init payroll-agent
+galaxy init payroll-agent
 ```
 
 [`docs/shared/agentkit.md`](docs/shared/agentkit.md) is the full integration guide —

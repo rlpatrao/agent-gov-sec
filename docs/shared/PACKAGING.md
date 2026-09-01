@@ -12,7 +12,7 @@ The platform ships as two artifacts with two different owners and lifecycles.
 
 | Artifact | Owner | What it is | How it is consumed |
 |---|---|---|---|
-| **Galaxy agentkit** (`galaxy-agentkit` wheel) | platform team | The client-side package `galaxy_agentkit` (governed-agent wrapper, enforcement client, project scaffolder) over the agnostic core, the guard/enforcement library, the A2A protocol, and the cloud adapters. Excludes `payload_agents`, tests, and docs. | The agent team installs it (`pip install "galaxy-agentkit[aws,langgraph]"`), imports it, and builds agents on top. See [`agentkit.md`](agentkit.md). |
+| **Galaxy agentkit** (`galaxy-agentkit` wheel) | platform team | The client-side package `galaxy_agentkit` (governed-agent wrapper, enforcement client) and the `galaxy` command line, whose `init` subcommand scaffolds a project, over the agnostic core, the guard/enforcement library, the A2A protocol, and the cloud adapters. Excludes `payload_agents`, tests, and docs. | The agent team installs it (`pip install "galaxy-agentkit[aws,langgraph]"`), imports it, and builds agents on top. See [`agentkit.md`](agentkit.md). |
 | **Galaxy Enforcement Service** (container) | governance team | The out-of-process chokepoints (LLM / data / A2A). Ships only `governance/` + `core/` + the handlers. | Deployed in a governance-owned environment; agents *call* it and cannot modify it. |
 
 The SDK is what a developer builds *with*; the enforcement service is what governs them at
@@ -88,7 +88,8 @@ Both are supported by the same packaging:
 - **Separate repo.** The agent team's repo depends on the `galaxy-agentkit` wheel at a
   pinned version and imports the platform; they cannot edit platform internals at all, and
   upgrades are an explicit version bump. Strongest isolation; the wheel is already built to
-  support this (it contains no `payload_agents`).
+  support this (it contains no `payload_agents`). `galaxy init <project>` generates the
+  starting layout for such a repository.
 
 ## Release & CI
 

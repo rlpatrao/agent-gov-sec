@@ -17,7 +17,7 @@ versioning of the platform wheel (`galaxy-agentkit`).
   `GOV_DATA_ENDPOINT` were documented in `deploy/docker-compose.yml` but nothing read
   them. The distribution is renamed `galaxy-governance` → `galaxy-agentkit` so the
   install name matches the import name.
-- **`galaxy-agentkit init <project>`** scaffolds a complete governed-agent project —
+- **`galaxy init <project>`** scaffolds a complete governed-agent project —
   `.env.example`, the floor-safe `governance:` request config, the data-classification
   catalogue, prompt, a working governed entry point, and tests.
 - **The SDK wheel now ships its package data.** `[tool.setuptools.package-data]` declares
@@ -95,6 +95,12 @@ versioning of the platform wheel (`galaxy-agentkit`).
   `docs/shared/agent-registration-plan.md`.
 
 ### Changed
+- **One command line.** The two scaffolders are consolidated into the `galaxy` console
+  script. `galaxy init <project>` replaces `galaxy-agentkit init <project>` and sits
+  alongside `new-agent`, `enroll`, `verify`, and `export-registry`; the generated project
+  is unchanged. The `galaxy-agentkit` console script and `galaxy_agentkit/scaffold.py` are
+  removed. The distribution is still named `galaxy-agentkit` and the import path is still
+  `galaxy_agentkit`; only the second entry point is gone.
 - **Guards fail closed on missing configuration instead of degrading.**
   `_build_injection_detector()` raises `GovernanceConfigError` when
   `prompt-injection.yaml` is absent, and the Azure MAF guard now defaults to the packaged

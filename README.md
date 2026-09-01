@@ -158,8 +158,7 @@ agent-gov-sec/
 │   ├── agent.py                    govern() → GovernedAgent: identity + authority + guards
 │   ├── client.py                   enforcement-service client (/llm · /data · /a2a)
 │   ├── config.py                   verifies the governance config bundle; fails if incomplete
-│   ├── settings.py                 environment contract (GALAXY_*), validated on load
-│   └── scaffold.py                 `galaxy-agentkit init` — generates a governed project
+│   └── settings.py                 environment contract (GALAXY_*), validated on load
 │
 ├── payload_agents/                 Demonstration payload — 3 governed personas on 3 frameworks
 │   ├── _lib/personas.py            The 3 personas' tool specs / FGAC tools (one definition, all frameworks)
@@ -239,7 +238,8 @@ either is denied at the chokepoint with `403 no_governance_policy`.
 
 | Command | Purpose |
 |---|---|
-| `galaxy new-agent <Type>` | scaffold config · prompt · test |
+| `galaxy new-agent <Type>` | scaffold config · prompt · test inside this repository |
+| `galaxy init <project>` | generate a standalone governed-agent project against the published wheel |
 | `galaxy enroll <Type>` | bind the agent type to a cloud principal (needs AWS SSO) |
 | `galaxy export-registry` | emit the policy registry and derived provisioning inputs |
 | `galaxy verify [<Type>]` | check identity + policy readiness (usable as a CI gate) |

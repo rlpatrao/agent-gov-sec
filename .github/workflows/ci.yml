@@ -97,7 +97,7 @@ jobs:
           _build_injection_detector()
           print('guard pipeline builds from packaged rules')
           "
-          /tmp/clientenv/bin/galaxy-agentkit init smoke-agent --root /tmp/elsewhere >/dev/null
+          /tmp/clientenv/bin/galaxy init smoke-agent --root /tmp/elsewhere >/dev/null
           test -f /tmp/elsewhere/smoke-agent/config/smoke-agent.yaml
           echo "scaffolder produces a complete project"
 

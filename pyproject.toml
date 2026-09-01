@@ -93,10 +93,10 @@ agent-engine = [
     "cloudpickle>=3.0",
 ]
 
-# `galaxy-agentkit init <project>` scaffolds a governed agent project for an agent
-# team; `galaxy` is the platform-side tooling (new-agent / enroll / verify).
+# A single console script. `galaxy init <project>` scaffolds a standalone
+# governed agent project for an agent team; `new-agent`, `enroll`, `verify`, and
+# `export-registry` are the platform-side tooling.
 [project.scripts]
-galaxy-agentkit = "galaxy_agentkit.scaffold:main"
 galaxy = "governance.tooling.scaffold:main"
 
 # The platform wheel ships only the governance platform — the agnostic core, the

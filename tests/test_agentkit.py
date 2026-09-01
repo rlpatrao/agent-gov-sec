@@ -169,9 +169,9 @@ def test_unreachable_authority_refuses_to_start():
         govern(settings=Settings.from_env(BASE_ENV))
 
 
-# ── scaffolder ───────────────────────────────────────────────────────────
+# ── `galaxy init` scaffolder ─────────────────────────────────────────────
 def test_scaffold_generates_a_complete_project(tmp_path):
-    from galaxy_agentkit.scaffold import init
+    from governance.tooling.scaffold import init
 
     assert init(["payroll-agent", "--root", str(tmp_path)]) == 0
     root = tmp_path / "payroll-agent"
@@ -196,7 +196,7 @@ def test_scaffold_generates_a_complete_project(tmp_path):
 
 
 def test_scaffold_refuses_to_overwrite(tmp_path):
-    from galaxy_agentkit.scaffold import init
+    from governance.tooling.scaffold import init
 
     assert init(["payroll-agent", "--root", str(tmp_path)]) == 0
     assert init(["payroll-agent", "--root", str(tmp_path)]) == 1
