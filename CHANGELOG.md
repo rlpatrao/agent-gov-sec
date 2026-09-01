@@ -39,6 +39,18 @@ versioning of the platform wheel (`galaxy-agentkit`).
   governance gate asserts the label, the environment variable, and the service's own
   report all agree with `deploy/VERSION`. Versioning policy — including what MAJOR means
   for a component that allows and denies — is in `docs/shared/PACKAGING.md`.
+- **Terraform for the enforcement service runtime.**
+  `cloud_adapters/aws/infra/enforcement_service.tf` runs the published image as a scaled
+  ECS Fargate service (0.5 vCPU / 1024 MB, `linux/amd64`, two tasks by default) behind an
+  internal application load balancer that health-checks `GET /health`, with CloudWatch
+  logs retained for 30 days, its own execution and task roles, and security groups that
+  admit the load balancer only from within the VPC and the tasks only from the load
+  balancer. Previously the image had a registry to be published to but nothing that ran
+  it. The file is opt-in — every resource is gated on `deploy_enforcement_service`
+  (default `false`) — and takes the image URI from `enforcement_image`, which is meant to
+  be digest-pinned to the value `scripts/publish_service_image.py` prints. Output
+  `enforcement_service_url` is the endpoint agents point at. The identity control plane
+  is left disabled (`GOV_CONTROL_TOKEN` unset), which is the production default.
 - **Corporate TLS support in the service build.** `deploy/Dockerfile.service` accepts a
   private TLS root as a BuildKit secret (`--secret id=pip_ca`), used only for the
   dependency-install layer and never written into the image, for networks that terminate
