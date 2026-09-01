@@ -48,7 +48,7 @@ binding (`CLOUD_PROVIDER=azure`).
 
 The following prerequisites apply:
 
-- Python 3.12, 3.13, or 3.14
+- Python 3.14
 - `pip` (or `uv`)
 - For offline runs (the default demo and the tests), no additional components are
   required; these runs do not use a cloud, a database, or an LLM.

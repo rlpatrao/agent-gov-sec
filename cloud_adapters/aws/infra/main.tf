@@ -200,6 +200,55 @@ resource "aws_ecr_repository" "proxy" {
   force_delete         = true
 }
 
+# ── ECR: the enforcement service image (mechanism 4) ─────────────────────────
+# The long-running counterpart to the proxy Lambda: the same chokepoint handlers
+# as a container the governing team deploys under its own identity.
+#
+# Tags are IMMUTABLE here, unlike the proxy repository above. This is the
+# authority that enforces the controls, so a released version must not be
+# repointable at different bytes — that is what makes "1.0.0 is enforcing" a
+# claim an auditor can check. Builds are pushed by
+# scripts/publish_service_image.py, which reads deploy/VERSION.
+resource "aws_ecr_repository" "enforcement" {
+  name                 = "${var.project_tag}-gov-enforcement"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = true
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+}
+
+# Untagged images accumulate from every rebuild of an existing tag; released and
+# per-commit tags are never touched by this rule.
+#
+# This rule is only safe because scripts/publish_service_image.py builds with
+# --provenance=false --sbom=false, so a push produces one manifest rather than an
+# index. If attestations are ever enabled, the index's children appear untagged and
+# this rule would delete manifests the released tag still references — remove the
+# rule before making that change.
+resource "aws_ecr_lifecycle_policy" "enforcement" {
+  repository = aws_ecr_repository.enforcement.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Expire untagged images after 14 days"
+      selection = {
+        tagStatus   = "untagged"
+        countType   = "sinceImagePushed"
+        countUnit   = "days"
+        countNumber = 14
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
 resource "aws_lambda_function" "proxy" {
   function_name = "${var.project_tag}-bedrock-proxy"
   role          = aws_iam_role.proxy.arn
@@ -317,6 +366,11 @@ output "bedrock_gateway_url" {
 output "gateway_key_secret" {
   description = "Secrets Manager secret holding the x-api-key (galaxy/bedrock-gateway-key)"
   value       = aws_secretsmanager_secret.gateway_key.name
+}
+
+output "enforcement_image_repo" {
+  description = "ECR repository for the enforcement service image; push with scripts/publish_service_image.py"
+  value       = aws_ecr_repository.enforcement.repository_url
 }
 
 output "bedrock_model_id" {

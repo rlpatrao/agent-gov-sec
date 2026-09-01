@@ -31,7 +31,7 @@ This document pairs with [architecture.md](architecture.md), which provides the 
 
 The following prerequisites apply:
 
-- Python 3.13 or 3.14
+- Python 3.14
 - `uv` (or `pip`)
 - For **offline** runs (the default demo and tests), no additional components are required; these runs do not use a cloud, a database, or an LLM.
 - For **live LLM / cloud** runs only, the following are required: the AWS CLI authenticated against the correct account (`AWS_PROFILE`), the `.[aws]` extra installed, and the AWS infrastructure provisioned (see [services-and-tech.md](services-and-tech.md)).
