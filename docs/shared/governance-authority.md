@@ -105,6 +105,36 @@ verifying the signature at load) is the remaining hardening step; the signing
 primitives exist (`governance/shared/enforcement/mcp_message_signer_guard.py`,
 `governance/ops/signing_report.py`) and can be applied to the exported registry.
 
+### The centralized policy store
+
+The registry document itself is centralized rather than copied per deployment.
+One versioned S3 object holds it; every enforcement tier reads that object.
+
+* **Who writes it.** The governing team, with `galaxy export-registry --publish`
+  (destination `--uri`, default `GOV_POLICY_REGISTRY_URI`). The command uploads
+  the same bytes it writes locally and prints the returned `VersionId` and the
+  sha256 digest, so a published registry can be tied to a reviewed artifact.
+* **Who reads it.** The enforcement authority (`governance/remote/server.py`) and
+  the chokepoint handlers, all through
+  `governance.shared.policy_registry.resolve_registry()`. Source precedence is
+  `GOV_POLICY_REGISTRY` (inline JSON) → `GOV_POLICY_REGISTRY_URI` (the store) →
+  `GOV_POLICY_REGISTRY_PATH` (a file baked into the image). A published change
+  therefore reaches every reader without redeploying any of them.
+* **Caching.** The resolved document is held for `GOV_POLICY_REGISTRY_TTL_SECONDS`
+  (default 300), which bounds how long a revoked capability can still be honoured.
+* **Failure semantics.** Past the TTL, a failed refresh does not empty the
+  registry: the last successfully loaded document continues to be served and a
+  warning records its age and the `VersionId` it was read from. If no document has
+  ever loaded, resolution raises and the reader holds an empty registry, under
+  which every identity resolves to no policy and is denied
+  (`403 no_governance_policy`).
+
+The bucket is declared in
+[`cloud_adapters/aws/infra/policy_store.tf`](../../cloud_adapters/aws/infra/policy_store.tf)
+(versioning on, public access blocked, AES256), gated behind
+`deploy_policy_store` so a deployment that still bakes the registry into its
+image is unaffected until it moves.
+
 ## Mechanism 4 — out-of-process enforcement at three chokepoints
 
 A control can only be enforced where its event is observable. Three classes of

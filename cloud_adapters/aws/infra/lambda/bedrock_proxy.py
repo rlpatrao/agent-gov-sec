@@ -15,21 +15,21 @@ Enforced (all from the resolved policy, never the request body):
   * Output guards — PII/credential redaction + content-safety over the response.
 
 Deployment: bundle `governance/{shared,remote}` (and the toolkit) into the image;
-supply the registry via `GOV_POLICY_REGISTRY` (JSON) or `GOV_POLICY_REGISTRY_PATH`.
+supply the registry via `GOV_POLICY_REGISTRY` (JSON), `GOV_POLICY_REGISTRY_URI`
+(the centralized store, `s3://bucket/key`), or `GOV_POLICY_REGISTRY_PATH`.
 """
 
 import json
 import os
 
 from governance.remote import enforce
-from governance.shared.policy_registry import load_registry
+from governance.shared.policy_registry import RegistryUnavailable, resolve_registry
 
 _MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-6")
 _REGION = os.environ.get("BEDROCK_REGION") or os.environ.get("AWS_REGION", "us-east-1")
 _ALLOWED = ("messages", "system", "toolConfig", "inferenceConfig", "additionalModelRequestFields")
 
 _client = None
-_registry_cache = None
 
 
 def _bedrock_client():
@@ -45,16 +45,13 @@ def _log(event, **fields):
 
 
 def _registry():
-    global _registry_cache
-    if _registry_cache is None:
-        raw = os.environ.get("GOV_POLICY_REGISTRY")
-        if not raw:
-            path = os.environ.get("GOV_POLICY_REGISTRY_PATH")
-            if path and os.path.exists(path):
-                with open(path, encoding="utf-8") as fh:
-                    raw = fh.read()
-        _registry_cache = load_registry(raw) if raw else {}
-    return _registry_cache
+    """Resolve the registry through the centralized-store contract (inline JSON >
+    GOV_POLICY_REGISTRY_URI > baked file, TTL-cached). An unresolvable registry
+    yields an empty document, which denies every request at policy_for."""
+    try:
+        return resolve_registry()
+    except RegistryUnavailable:
+        return {}
 
 
 def _resp(status, payload):

@@ -8,17 +8,20 @@ it is deliberately NOT under ``governance/shared`` so the consumer half stays
 free of any agent-codebase dependency and remains vendorable into a Lambda.
 
 `export_registry_json()` produces the artifact deployed to the out-of-process
-chokepoints; `resolve_policy()` is used in-process.
+chokepoints; `publish_registry()` writes that artifact to the centralized policy
+store (the versioned S3 object the enforcement tiers read); `resolve_policy()` is
+used in-process.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 from pathlib import Path
 
-from governance.shared.policy_registry import ControlPolicy, authorize_recipient
+from governance.shared.policy_registry import ControlPolicy, authorize_recipient, parse_s3_uri
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +141,43 @@ def export_registry(agent_types: tuple[str, ...] | None = None) -> dict:
 
 def export_registry_json(agent_types: tuple[str, ...] | None = None) -> str:
     return json.dumps(export_registry(agent_types), indent=2, sort_keys=True)
+
+
+def publish_registry(uri: str, payload: str | bytes, *, client=None) -> dict:
+    """Write the serialized registry to the centralized policy store.
+
+    ``uri`` is an ``s3://bucket/key`` target — the bucket is expected to have
+    versioning enabled, so each publication produces a new object version rather
+    than overwriting the previous document. The exact bytes given are uploaded,
+    so the digest reported here is the digest of the local artifact as well.
+
+    Returns ``{"uri", "bucket", "key", "version_id", "digest"}``. ``version_id``
+    is ``None`` when the bucket is not versioned, which the caller should treat
+    as a misconfiguration of the store.
+    """
+    body = payload.encode("utf-8") if isinstance(payload, str) else payload
+    digest = hashlib.sha256(body).hexdigest()
+    bucket, key = parse_s3_uri(uri)
+
+    if client is None:
+        import boto3
+        client = boto3.client("s3")
+
+    response = client.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=body,
+        ContentType="application/json",
+        ServerSideEncryption="AES256",
+        Metadata={"sha256": digest},
+    )
+    return {
+        "uri": uri,
+        "bucket": bucket,
+        "key": key,
+        "version_id": response.get("VersionId"),
+        "digest": "sha256:" + digest,
+    }
 
 
 def authorize_recipient_live(sender_type: str, recipient: str) -> tuple[bool, str]:
