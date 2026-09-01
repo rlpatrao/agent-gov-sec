@@ -61,3 +61,11 @@ cloud_adapters/aws/infra/lambda/agent-controls.json
 
 # AWS demo run artifacts (contain resolved ARNs)
 docs/aws/output/
+
+# Governance Authority identity bindings. This is authority *state* written by the
+# Registrar (`galaxy enroll`) and it contains resolved account ids and role ARNs. In
+# production it lives on the authority's persistent volume via GOV_IDENTITY_STORE;
+# the in-repo path is a local-development default. Ignored so real principals are not
+# committed by accident — CODEOWNERS still covers governance/configs/ if a seed file
+# is ever added deliberately.
+governance/configs/identity-bindings.yaml
