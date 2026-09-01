@@ -239,6 +239,34 @@ AES256 encryption, and a lifecycle rule that expires untagged images after 14 da
 Terraform is the declarative path; `--create-repo` exists for accounts where the
 governing team publishes without owning the Terraform state.
 
+### Running the image
+
+[`cloud_adapters/aws/infra/enforcement_service.tf`](../../cloud_adapters/aws/infra/enforcement_service.tf)
+is the runtime for a published image: an ECS Fargate service behind an internal
+application load balancer, with a task definition at 0.5 vCPU / 1024 MB, CloudWatch logs
+retained for 30 days, and security groups that admit the load balancer only from inside
+the VPC and the tasks only from the load balancer. The load balancer is internal because
+the authority is called from within the deployment and should not carry an
+internet-facing surface; TLS termination with an ACM certificate is the production
+upgrade, alongside a customer-owned VPC and, ideally, a separate governance account. The
+file is inert by default — every resource is gated on a switch — so it does not change an
+existing apply of the module until it is turned on.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `deploy_enforcement_service` | `false` | Opt in to the ECS cluster, service, load balancer, and IAM roles |
+| `enforcement_image` | `""` | The image URI to run, pinned by digest (the value the publish script prints) |
+
+`enforcement_desired_count` (default `2`) sets how many tasks run. The
+`enforcement_service_url` output is the base URL agents point at — the endpoint
+`galaxy_agentkit` resolves from `GALAXY_ENFORCEMENT_ENDPOINT`.
+
+```bash
+terraform apply \
+  -var="deploy_enforcement_service=true" \
+  -var="enforcement_image=<account>.dkr.ecr.<region>.amazonaws.com/galaxy-rp-gov-enforcement@sha256:7fb1da…"
+```
+
 ### Behind a TLS-terminating proxy
 
 Networks that intercept TLS present a private root the base image does not trust, which
