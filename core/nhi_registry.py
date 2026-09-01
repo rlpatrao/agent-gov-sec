@@ -14,11 +14,21 @@ Federation), obtained via ``core.provider_factory.get_provider()``.
 CLIENT_IDs are not secrets — they are identity references. Store them in env
 vars or config, not a secret store.
 
-Extensibility (open/closed): the registry resolves an agent type from the
-static map **or** an ``NHI_CLIENT_ID_<AGENT_TYPE>`` env var, so payload/demo
-agent types register by setting their env var — **without editing this core
-file**. Keep new-agent registration out of ``core/`` and in env/config (a
-payload package can set import-time defaults; see ``payload_agents``).
+Resolution order (strongest authority first):
+  1. The **Governance Authority** — when ``GOV_AUTHORITY_ENDPOINT`` is set, the
+     binding is fetched from the authority's identity store, a file the agent
+     runtime cannot write. This makes the NHI *resolved* rather than *claimed*.
+     When the endpoint is configured, the env bridge below is **not** consulted:
+     falling back would let an agent bypass the authority by setting its own env
+     var, which is the exact substitution the authority exists to prevent.
+  2. The cloud ``IdentityProvider`` (Azure → Entra, AWS → IAM/AgentCore Identity).
+  3. The agnostic ``NHI_CLIENT_ID_<AGENT_TYPE>`` env bridge, for local development
+     and deployments with no authority endpoint.
+
+Extensibility (open/closed): no agent type is hardcoded here. Payload/demo agent
+types register by being enrolled with the authority (``galaxy enroll``) or by
+setting their env var — **without editing this core file**. Keep new-agent
+registration out of ``core/`` and in the authority/env/config.
 
 Significance:
   - Every action in the trace ledger has an nhi_id attached
@@ -82,24 +92,40 @@ class NHIRegistry:
 
     @staticmethod
     def get(agent_type: str) -> AgentIdentity:
-        """Resolve an agent's NHI principal id. The id is sourced from the
-        selected cloud IdentityProvider (Azure → Entra, AWS → IAM, GCP → SA);
-        the provider's standard implementation reads the IaC-provisioned
-        ``NHI_CLIENT_ID_<AGENT_TYPE>`` env. If no provider can resolve it (e.g.
-        an unimplemented cloud, or none selected), fall back to that env var
-        directly. No agent type is hardcoded in core."""
+        """Resolve an agent's NHI principal id, strongest authority first: the
+        Governance Authority's identity store, then the selected cloud
+        IdentityProvider, then the ``NHI_CLIENT_ID_<AGENT_TYPE>`` env bridge. No
+        agent type is hardcoded in core.
+
+        Raises ``ValueError`` when nothing resolves — an agent with no identity
+        must not start."""
         client_id = NHIRegistry._resolve_client_id(agent_type)
         if not client_id:
+            authority = os.environ.get("GOV_AUTHORITY_ENDPOINT")
+            if authority:
+                raise ValueError(
+                    f"No NHI binding for agent type '{agent_type}' at the Governance "
+                    f"Authority ({authority}). Enroll it: `galaxy enroll {agent_type} "
+                    f"--principal <role-arn>`. The env bridge is deliberately not "
+                    f"consulted while an authority endpoint is configured."
+                )
             raise ValueError(
                 f"No NHI registered for agent type '{agent_type}'. "
                 f"Provision its cloud identity (Entra App Registration / IAM role "
-                f"/ GCP SA) and set NHI_CLIENT_ID_{agent_type.upper()} in the env."
+                f"/ GCP SA) and set NHI_CLIENT_ID_{agent_type.upper()} in the env, "
+                f"or enroll it with the Governance Authority (`galaxy enroll`)."
             )
         return AgentIdentity(agent_type=agent_type, client_id=client_id)
 
     @staticmethod
     def _resolve_client_id(agent_type: str) -> str:
-        # 1) cloud IdentityProvider — it knows how to source the id from its
+        # 1) The Governance Authority. Authoritative when configured: the binding
+        #    lives outside the agent's trust domain, so it cannot be self-asserted.
+        #    Consulting the env bridge after an authority miss would reopen exactly
+        #    that hole, so a configured authority is terminal.
+        if os.environ.get("GOV_AUTHORITY_ENDPOINT"):
+            return NHIRegistry._resolve_from_authority(agent_type)
+        # 2) cloud IdentityProvider — it knows how to source the id from its
         #    directory (Azure → Entra, AWS → IAM, GCP → SA).
         try:
             from core.provider_factory import get_provider
@@ -108,8 +134,46 @@ class NHIRegistry:
                 return cid
         except Exception:
             pass  # provider unavailable / not implemented → agnostic env fallback
-        # 2) agnostic fallback: the NHI_CLIENT_ID_<TYPE> env bridge.
+        # 3) agnostic fallback: the NHI_CLIENT_ID_<TYPE> env bridge.
         return os.environ.get(f"NHI_CLIENT_ID_{agent_type.upper()}", "")
+
+    @staticmethod
+    def _resolve_from_authority(agent_type: str) -> str:
+        """Fetch the binding from the authority's ``GET /identity`` route.
+
+        Returns ``""`` on any failure — a missing, revoked, or unreachable binding
+        denies rather than degrading to a weaker source. The read token
+        (``GOV_AUTHORITY_TOKEN``) is a read credential for the control plane; it
+        does not permit enrollment, which additionally requires a verified human
+        caller identity.
+        """
+        import json
+        import urllib.error
+        import urllib.parse
+        import urllib.request
+
+        endpoint = os.environ["GOV_AUTHORITY_ENDPOINT"].rstrip("/")
+        url = f"{endpoint}/identity?agent_type={urllib.parse.quote(agent_type)}"
+        req = urllib.request.Request(url, method="GET")
+        token = os.environ.get("GOV_AUTHORITY_TOKEN")
+        if token:
+            req.add_header("authorization", f"Bearer {token}")
+        timeout = float(os.environ.get("GOV_AUTHORITY_TIMEOUT", "5"))
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            logger.warning("nhi.authority_denied",
+                           extra={"agent_type": agent_type, "status": e.code})
+            return ""
+        except Exception as e:
+            logger.warning("nhi.authority_unreachable",
+                           extra={"agent_type": agent_type, "error": str(e)[:200]})
+            return ""
+        client_id = str(payload.get("principal_id") or "")
+        logger.info("nhi.resolved_from_authority", extra={
+            "agent_type": agent_type, "status": payload.get("status")})
+        return client_id
 
     @staticmethod
     def validate_all() -> None:

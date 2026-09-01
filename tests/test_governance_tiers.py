@@ -34,14 +34,31 @@ class TestImportBoundaries:
         assert bad == [], f"shared/ must not import payload/remote/inprocess: {bad}"
 
     def test_remote_imports_only_shared_within_governance(self):
+        """remote/ may depend on governance.shared (the enforcement library) and on
+        itself (enforce / registrar / identity_store are one tier), but on no other
+        governance tier. The tiers it must not reach are the build-time producer
+        (`governance.policy_export`, which imports the agent codebase), the
+        in-process floor, and the cloud-specific generators — pulling any of those
+        in would break the property that this tier vendors into a Lambda or a
+        Fargate daemon on its own."""
+        allowed = ("governance.shared", "governance.remote")
         bad = [(f.name, m) for f, m in _imports(_ROOT / "governance" / "remote")
-               if m.startswith("governance.") and not m.startswith("governance.shared")]
-        assert bad == [], f"remote/ may only import governance.shared: {bad}"
+               if m.startswith("governance.") and not m.startswith(allowed)]
+        assert bad == [], f"remote/ may only import governance.shared or governance.remote: {bad}"
 
     def test_remote_does_not_import_payload(self):
         bad = [(f.name, m) for f, m in _imports(_ROOT / "governance" / "remote")
                if m.startswith("payload_agents")]
         assert bad == [], f"remote/ must not import the agent codebase: {bad}"
+
+    def test_remote_does_not_import_the_build_time_producer(self):
+        """`governance.policy_export` imports payload_agents to resolve a floored
+        policy. The chokepoints must consume the *exported artifact* instead, so an
+        import of the producer is a regression even though it is not a direct
+        payload_agents import."""
+        bad = [(f.name, m) for f, m in _imports(_ROOT / "governance" / "remote")
+               if m.startswith(("governance.policy_export", "governance.inprocess"))]
+        assert bad == [], f"remote/ must consume the exported registry, not the producer: {bad}"
 
 
 class TestSingleCodePath:

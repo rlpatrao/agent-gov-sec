@@ -15,14 +15,78 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+from pathlib import Path
 
 from governance.shared.policy_registry import ControlPolicy, authorize_recipient
 
 logger = logging.getLogger(__name__)
 
-# Agent types the platform knows about. The filesystem (payload_agents/config/
-# *.yaml) is the source of truth; this list drives export_registry().
-KNOWN_AGENT_TYPES = ("FinOps", "Auditor", "Rogue")
+# Default location of the per-agent configs, relative to the repo root. Override
+# with GOV_AGENT_CONFIG_DIR when the agent codebase lives outside this tree (the
+# platform wheel does not ship payload_agents).
+_DEFAULT_CONFIG_DIR = Path(__file__).resolve().parent.parent / "payload_agents" / "config"
+
+
+def discover_agent_types(config_dir: Path | str | None = None) -> tuple[str, ...]:
+    """Return every agent type the filesystem declares, sorted.
+
+    The per-agent config directory is the single source of truth for *which
+    agents exist*: one ``<slug>.yaml`` per agent, each declaring ``agent.type``.
+    Deriving the list here removes the class of failure where a scaffolded agent
+    is silently absent from the exported registry, the Terraform ``agent_types``
+    variable, or AgentCore provisioning — each of which previously read a
+    hand-maintained tuple that nothing checked against the filesystem.
+
+    Resolution order:
+      1. ``config_dir`` argument, if given.
+      2. ``GOV_AGENT_CONFIG_DIR`` env — for deployments where the agent codebase
+         is a separate package.
+      3. ``GOV_AGENT_TYPES`` env (comma-separated) — the explicit escape hatch for
+         a chokepoint that has no access to the agent configs at all.
+      4. The in-tree ``payload_agents/config/``.
+
+    Returns an empty tuple when no source resolves. Callers that provision or
+    export must treat empty as "nothing to do", never as "allow everything" —
+    the registry's ``default: deny`` and ``policy_for`` returning ``None`` keep
+    an unknown agent denied regardless.
+    """
+    explicit = os.environ.get("GOV_AGENT_TYPES")
+    if config_dir is None and not os.environ.get("GOV_AGENT_CONFIG_DIR") and explicit:
+        return tuple(sorted({t.strip() for t in explicit.split(",") if t.strip()}))
+
+    path = Path(config_dir or os.environ.get("GOV_AGENT_CONFIG_DIR") or _DEFAULT_CONFIG_DIR)
+    if not path.is_dir():
+        logger.warning("policy_export.config_dir_missing", extra={"path": str(path)})
+        return ()
+
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover - PyYAML is a core dependency
+        logger.warning("policy_export.yaml_unavailable", extra={"path": str(path)})
+        return ()
+
+    found: set[str] = set()
+    for cfg in sorted(path.glob("*.yaml")):
+        try:
+            raw = yaml.safe_load(cfg.read_text(encoding="utf-8")) or {}
+            agent_type = ((raw.get("agent") or {}).get("type") or "").strip()
+        except Exception as e:
+            logger.warning("policy_export.config_unreadable",
+                           extra={"path": str(cfg), "error": str(e)[:200]})
+            continue
+        if agent_type:
+            found.add(agent_type)
+        else:
+            logger.warning("policy_export.config_missing_type", extra={"path": str(cfg)})
+    return tuple(sorted(found))
+
+
+# Agent types the platform knows about, derived from the filesystem at import
+# time. Retained as a module-level tuple because provisioning and export call
+# sites consume it as a constant; call `discover_agent_types()` directly to pick
+# up a config added during the life of the process.
+KNOWN_AGENT_TYPES = discover_agent_types()
 
 
 def resolve_policy(agent_type: str) -> ControlPolicy:
@@ -57,11 +121,14 @@ def resolve_policy(agent_type: str) -> ControlPolicy:
     )
 
 
-def export_registry(agent_types: tuple[str, ...] = KNOWN_AGENT_TYPES) -> dict:
+def export_registry(agent_types: tuple[str, ...] | None = None) -> dict:
     """Resolve every known agent and return a JSON-dumpable registry keyed by
-    agent type. This is the artifact deployed to each out-of-process chokepoint."""
+    agent type. This is the artifact deployed to each out-of-process chokepoint.
+
+    ``agent_types`` defaults to a fresh :func:`discover_agent_types` call rather
+    than the import-time tuple, so an agent added after import is exported."""
     registry: dict = {"version": "1.0", "default": "deny", "agents": {}}
-    for at in agent_types:
+    for at in agent_types if agent_types is not None else discover_agent_types():
         try:
             registry["agents"][at] = resolve_policy(at).to_dict()
         except Exception as e:
@@ -69,7 +136,7 @@ def export_registry(agent_types: tuple[str, ...] = KNOWN_AGENT_TYPES) -> dict:
     return registry
 
 
-def export_registry_json(agent_types: tuple[str, ...] = KNOWN_AGENT_TYPES) -> str:
+def export_registry_json(agent_types: tuple[str, ...] | None = None) -> str:
     return json.dumps(export_registry(agent_types), indent=2, sort_keys=True)
 
 

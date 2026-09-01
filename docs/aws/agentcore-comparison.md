@@ -50,7 +50,7 @@ The analysis supports the following conclusions:
 | Memory | Managed short- and long-term agent memory. |
 | Observability | OTel-based tracing/metrics/dashboards (CloudWatch). |
 | Evaluations | Automated agent/tool quality assessment over sessions/traces/spans. |
-| Registry | Governed catalog of agents/MCP servers/tools with publish-review-approve workflow. |
+| Registry (AWS Agent Registry) | Governed catalog of agents/MCP servers/tools with a publish-review-approve workflow. Entered public preview April 2026 and has since launched under its own `agent-registry` namespace; the preview `bedrock-agentcore` namespace is discontinued 17 September 2026. This repository calls no Registry API, so nothing needs migrating — but any future integration should target `agent-registry` from the outset. Records are discovery metadata (agent records carry an A2A agent card, MCP records the tool definitions); approval gates *discoverability*, not invocation, so it does not replace the policy registry's fail-closed deny. |
 | Code Interpreter / Browser | Sandboxed code execution; managed cloud browser. |
 | Payments / Optimization | x402 agent micropayments; A/B-tested config optimization. |
 
@@ -58,7 +58,7 @@ The analysis supports the following conclusions:
 
 | Concern | AgentCore | This framework | Assessment |
 |---|---|---|---|
-| Agent identity (NHI) | **Identity** (OAuth, token vault, IdP federation) | `core/nhi_registry.py` (agent-type → cloud principal) | AgentCore is more mature on AWS. Ours is portable + simpler. |
+| Agent identity (NHI) | **Identity** (OAuth, token vault, IdP federation) | `core/nhi_registry.py` (agent-type → cloud principal) + the authority-side Registrar | AgentCore is more mature on AWS. Ours is portable, and the Registrar holds the binding outside the agent's trust domain. |
 | Egress / single chokepoint | **Gateway** (managed, MCP, OAuth) | `bedrock_proxy` + API Gateway IaC | AgentCore supersedes our hand-built plumbing on AWS. |
 | Out-of-process enforcement point | **Gateway interceptors** (request/response Lambdas) | `governance/remote/*` proxies | Direct analog. Our enforcement should become the interceptor *payload*. |
 | Authorization (who calls what tool, conditions) | **Policy** (Cedar, NL authoring, automated reasoning, fail-closed, outside agent code) | `policy_registry` + capability guard + A2A authz | Strong overlap; AgentCore is arguably ahead (Cedar + reasoning). Adopt it for authz. |

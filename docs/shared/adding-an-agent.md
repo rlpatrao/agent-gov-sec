@@ -87,9 +87,27 @@ the developer should know up front:
    below the floor — it will not take effect.
 2. **NHI is required.** The agent will not build without a registered identity.
    Each agent type maps to its own cloud principal (Entra App Registration / IAM
-   role / GCP Service Account) via `NHI_CLIENT_ID_<TYPE>`
-   ([`core/nhi_registry.py`](../../core/nhi_registry.py)). This is provisioned by
-   the platform/governance side, not hardcoded.
+   role / GCP Service Account), resolved by
+   [`core/nhi_registry.py`](../../core/nhi_registry.py). The principal is
+   provisioned by the platform/governance side, never hardcoded and never created
+   by the agent.
+
+   Two resolution paths, and which one applies is a deployment property:
+
+   - **Deployed environments** — the binding is held by the Governance Authority
+     and fetched from it (`GOV_AUTHORITY_ENDPOINT`). Enroll with
+     `galaxy enroll <Type>` under an AWS SSO login. While an authority endpoint is
+     configured the `NHI_CLIENT_ID_<TYPE>` env var is ignored, so an agent cannot
+     self-assert an identity.
+   - **Local development** — with no authority configured, `NHI_CLIENT_ID_<TYPE>`
+     is read from the environment.
+
+3. **Enrollment is not authorization.** Being enrolled binds *who the agent is*; it
+   grants nothing. Capabilities come from the `governance:` block reviewed below,
+   because the floor does not clamp `allowed_tools` or `allowed_recipients`. Until
+   that block is approved and the registry re-exported, the chokepoints deny the
+   agent with `403 no_governance_policy`. Run `galaxy verify <Type>` to see which of
+   the two keys are turned.
 
 ---
 
@@ -110,6 +128,12 @@ left blank blocks the review.
 - Agent type (PascalCase):
 - NHI principal (Entra App Reg / IAM role / GCP SA), or "to be provisioned":
 - Least-privilege justification — what cloud permissions the NHI needs and why:
+- Enrollment status (`galaxy verify <Type>` output — identity bound? policy approved?):
+
+### 1a. Capability delta (the fields the floor does not clamp)
+- `allowed_tools` added vs the currently-deployed registry:
+- `allowed_recipients` (A2A reach) added vs the currently-deployed registry:
+- Justification for each addition:
 
 ### 2. Purpose and trust level
 - One-paragraph description of what the agent does:

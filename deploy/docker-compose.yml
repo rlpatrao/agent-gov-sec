@@ -25,6 +25,23 @@ services:
       GOV_POLICY_REGISTRY_PATH: /app/cloud_adapters/aws/infra/lambda/agent-controls.json
       POSTGRES_DSN: postgresql://galaxy:galaxy@ledger:5432/ledger
       GALAXY_LOG_LEVEL: INFO
+      # Identity control plane — LOCAL DEVELOPMENT ONLY. Do not use this file as a
+      # deployment template.
+      #
+      # GOV_CONTROL_TRUST_HEADER=1 makes the enrolling identity a request header with
+      # no verification, so anyone who can reach this port can enroll as any
+      # principal. It is set here only so `galaxy enroll --endpoint` works without an
+      # IAM-authorizing gateway. In production: front the control plane with API
+      # Gateway/ALB using AWS_IAM authorization, leave GOV_CONTROL_TRUST_HEADER unset,
+      # and use separate read/write tokens (see I1/I2 in
+      # docs/shared/agent-registration-plan.md).
+      GOV_CONTROL_TOKEN: local-dev-token
+      GOV_CONTROL_TRUST_HEADER: "1"
+      GOV_IDENTITY_STORE: /app/state/identity-bindings.yaml
+    volumes:
+      # The identity store must outlive the container: bindings are authority state,
+      # not build output.
+      - gov-state:/app/state
     depends_on:
       ledger:
         condition: service_healthy
@@ -45,3 +62,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+volumes:
+  gov-state:

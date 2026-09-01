@@ -11,6 +11,10 @@ trust gaps:
    `enable_prompt_injection_guard: false` or empties `blocked_patterns`.
 2. **Runtime gap** — the guards run in the same process as the agent, so a
    compromised or buggy agent runtime could bypass them entirely.
+3. **Identity gap** — every control is keyed on the agent's NHI, but that identity
+   was read from `NHI_CLIENT_ID_<TYPE>` in the agent's *own* environment. An agent
+   that supplies its own identity chooses which policy it is judged against and
+   which principal its actions are attributed to.
 
 This document describes the mechanisms implemented to close those gaps. The
 dividing principle: **execution can stay in-process, but authority must leave the
@@ -23,6 +27,7 @@ can actually observe its event.
 | 2 | Non-overridable runtime floor | developer gap (defense in depth) | per-agent config can tighten, never weaken |
 | 3 | NHI-keyed policy registry | both gaps | one authoritative posture, resolved not request-supplied |
 | 4 | Out-of-process enforcement at three chokepoints | runtime gap | controls hold even if the agent runtime is hostile |
+| 5 | Authority-side identity Registrar | identity gap | the NHI is resolved from outside the agent, not self-asserted |
 
 ## Mechanism 1 — ownership separation (`.github/CODEOWNERS`)
 
@@ -183,6 +188,80 @@ chokepoints take effect when deployed (registry supplied via `GOV_POLICY_REGISTR
 agent direct store and peer access). Deploying that IAM topology is an
 operational step, not represented in this repository's code.
 
+## Mechanism 5 — the identity Registrar
+
+Mechanisms 3 and 4 make the *policy* authoritative, but both are keyed on an
+identity the agent previously asserted about itself. `NHIRegistry` resolved
+`NHI_CLIENT_ID_<AGENT_TYPE>` from the agent's own process environment, so an agent
+could present any identity and be judged against that identity's policy. Mechanism
+5 moves the binding out of the agent's trust domain.
+
+[`governance/remote/registrar.py`](../../governance/remote/registrar.py) records
+`agent_type → cloud principal` bindings in
+[`governance/remote/identity_store.py`](../../governance/remote/identity_store.py) —
+a governing-team-owned file (CODEOWNERS) served by the authority's control plane.
+When `GOV_AUTHORITY_ENDPOINT` is configured, `core/nhi_registry.py` resolves the
+binding from `GET /identity` and **does not** consult the env bridge: falling back
+would restore precisely the substitution this mechanism removes.
+
+### The two-key model
+
+Enrollment deliberately grants nothing. An agent may transact only when both keys
+are turned, and they are turned by different parties:
+
+| Key | Artifact | Turned by | Automated? |
+|---|---|---|---|
+| Identity enrolled | a binding in the identity store | a human AWS SSO session, via `galaxy enroll` | yes |
+| Policy approved | a `ControlPolicy` in the deployed registry | the governing team, in PR review | no — reviewed |
+
+The split exists because the floor does **not** clamp `allowed_tools`,
+`denied_tools`, or `allowed_recipients`. Those are capability grants, so they must
+stay a reviewed artifact; if enrollment could write them, an agent's author could
+grant their own agent any tool. Enrolling an agent with no approved policy yields
+status `pending_policy` and the chokepoints continue to return
+`403 no_governance_policy`.
+
+### Why the authority never creates identities
+
+The Registrar verifies principals with read-only calls
+(`sts:GetCallerIdentity`, `iam:GetRole` — see
+[`cloud_adapters/aws/principal_verify.py`](../../cloud_adapters/aws/principal_verify.py))
+and has no code path that creates or mutates one. Granting the authority
+`iam:CreateRole` or `iam:PutRolePolicy` would let the service that enforces policy
+mint a privileged principal for itself, dissolving the separation that makes
+mechanism 4 authoritative. Roles are created by
+[`cloud_adapters/aws/infra/main.tf`](../../cloud_adapters/aws/infra/main.tf) — one
+per discovered agent type — or by the developer's own SSO session.
+
+### Who is allowed to enroll
+
+The caller must be a human principal: an IAM user or an AWS SSO
+(`AWSReservedSSO_*`) session, with CI role names permitted explicitly via
+`GOV_ENROLL_ALLOWED_ROLES`. The decisive check is that a caller whose principal is
+already bound to an agent type is refused outright, so an agent cannot enroll
+itself or a peer. Control-plane requests also require `GOV_CONTROL_TOKEN`, which is
+unset by default — an enforcement service deployed with data-plane configuration
+alone has no control plane at all.
+
+The enrolling identity cannot be taken from the request body. In production the
+control plane sits behind an IAM-authorizing front door (API Gateway or ALB with
+`AWS_IAM`) which validates the caller's SigV4 signature and populates the caller
+ARN header. Absent that front door the header is unverified input, and the server
+refuses to honour it unless `GOV_CONTROL_TRUST_HEADER=1` is set for local
+development, logging a warning on every request when it is. The governing team and
+CI should prefer `galaxy enroll` in direct mode, where the actor is established by
+AWS rather than asserted over HTTP.
+
+### One source of truth for which agents exist
+
+`policy_export.KNOWN_AGENT_TYPES` was a hand-maintained tuple consumed by the
+registry export, the Terraform `agent_types` variable, and AgentCore provisioning
+(workload identities, runtimes, Cedar policies). Nothing checked it against
+`payload_agents/config/`, so a scaffolded agent could be silently absent from all
+of them. `discover_agent_types()` now derives the list from the configs, and
+`galaxy export-registry --check` fails CI when the committed registry artifact
+drifts from them.
+
 ## AgentCore integration
 
 On AWS, the chokepoints map onto Amazon Bedrock AgentCore rather than bespoke
@@ -198,10 +277,35 @@ in `cloud_adapters/aws/agentcore/README.md`. Off AWS, the identical
 
 ## Remaining hardening
 
-The registry document (mechanism 3) is not yet signed. The highest-value next
-step is to sign the exported registry with the governing team's key and verify
-the signature when each chokepoint loads it, so a tampered registry is rejected.
-The signing primitives exist (`governance/shared/enforcement/mcp_message_signer_guard.py`,
-`governance/ops/signing_report.py`); applying them to `export_registry_json`
-output and the chokepoint load path is the remaining work to make the authority
+**Signing.** Neither the registry document (mechanism 3) nor the identity store
+(mechanism 5) is signed. The highest-value next step is to sign both with the
+governing team's key and verify the signature when each chokepoint loads them, so a
+tampered artifact is rejected. The signing primitives exist
+(`governance/shared/enforcement/mcp_message_signer_guard.py`,
+`governance/ops/signing_report.py`); applying them to `export_registry_json` output,
+the identity store, and the load paths is the remaining work to make the authority
 cryptographically, not just procedurally, owned by the governing team.
+
+**Registry distribution.** The registry is baked into the chokepoint container
+image (`GOV_POLICY_REGISTRY_PATH=/var/task/agent-controls.json`, set in
+`cloud_adapters/aws/infra/main.tf`) and cached in a module global for the life of the
+execution environment. Approving a new agent therefore requires an image rebuild and
+redeploy. Moving to a fetched artifact (an S3 object or SSM parameter, TTL-cached,
+with the digest logged per decision) is what would make policy approval take effect
+without a deployment. It is sequenced after signing because a fetched artifact
+without a verified signature is weaker than a baked one.
+
+**Front door for the control plane.** `GOV_CONTROL_TRUST_HEADER` exists so local
+development works without a gateway. Production deployments must place an
+IAM-authorizing front door in front of `POST /enroll` and leave that variable unset;
+the Terraform for that front door is not yet in this repository.
+
+**Control-plane token separation.** `GET /identity` and `POST /enroll` are currently
+gated by the same `GOV_CONTROL_TOKEN`, so an agent given a read token holds the
+secret that also gates enrollment. Combined with `GOV_CONTROL_TRUST_HEADER=1` this
+permits a forged enrolling identity. Mechanism 5 should not be considered
+production-ready until this is split — tracked as I1/I2 in
+[`agent-registration-plan.md`](agent-registration-plan.md).
+
+The full set of known gaps in mechanism 5, with severities and a recommended
+sequence, is in [`agent-registration-plan.md`](agent-registration-plan.md).

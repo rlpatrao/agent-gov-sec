@@ -75,16 +75,39 @@ def _region() -> str:
     return os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-2"
 
 
+# AWS-wide metadata endpoints (RFC 3927 link-local) — identical in every account
+# and region, embedded by every AWS SDK. They are constants, not project config;
+# they are overridable ONLY through the standard AWS SDK env vars below (for local
+# testing, IPv6, or botocore parity), and default to the universal addresses.
+_ECS_CREDS_HOST = "http://169.254.170.2"     # ECS / container credential provider
+_IMDS_IPV4 = "http://169.254.169.254"        # EC2 Instance Metadata Service (IPv4)
+_IMDS_IPV6 = "http://[fd00:ec2::254]"        # EC2 Instance Metadata Service (IPv6)
+
+
+def _imds_base() -> str:
+    """IMDS base URL. Honors the standard AWS overrides
+    ``AWS_EC2_METADATA_SERVICE_ENDPOINT`` / ``AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE``;
+    defaults to the universal IPv4 endpoint."""
+    endpoint = os.environ.get("AWS_EC2_METADATA_SERVICE_ENDPOINT")
+    if endpoint:
+        return endpoint.rstrip("/")
+    mode = os.environ.get("AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE", "IPv4").strip().lower()
+    return _IMDS_IPV6 if mode == "ipv6" else _IMDS_IPV4
+
+
 def _get_credentials():
     """Resolve the Runtime's execution-role credentials with the stdlib only
     (the managed code runtime does not ship botocore). Covers the standard env
-    vars and the ECS/container credential provider AgentCore injects."""
+    vars and the ECS/container credential provider AgentCore injects. The
+    container base host and the IMDS endpoint follow the standard AWS SDK env-var
+    overrides (see ``_imds_base``); the container path is fully overridable via
+    ``AWS_CONTAINER_CREDENTIALS_FULL_URI``."""
     ak = os.environ.get("AWS_ACCESS_KEY_ID")
     sk = os.environ.get("AWS_SECRET_ACCESS_KEY")
     if ak and sk:
         return ak, sk, os.environ.get("AWS_SESSION_TOKEN")
     rel = os.environ.get("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")
-    url = ("http://169.254.170.2" + rel) if rel else os.environ.get("AWS_CONTAINER_CREDENTIALS_FULL_URI")
+    url = (_ECS_CREDS_HOST + rel) if rel else os.environ.get("AWS_CONTAINER_CREDENTIALS_FULL_URI")
     if url:
         req = urllib.request.Request(url)
         auth = os.environ.get("AWS_CONTAINER_AUTHORIZATION_TOKEN")
@@ -105,7 +128,7 @@ def _get_credentials():
 
 
 def _imds_credentials():
-    base = "http://169.254.169.254/latest"
+    base = f"{_imds_base()}/latest"
     try:
         tok = urllib.request.urlopen(urllib.request.Request(
             f"{base}/api/token", method="PUT",
