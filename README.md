@@ -44,6 +44,7 @@ Cloud-neutral platform reference in [`docs/shared/`](docs/shared/):
 | [`guardrails-inventory.md`](docs/shared/guardrails-inventory.md) | Governance modules wired vs. available, with the OWASP mapping |
 | [`extended-guardrails.md`](docs/shared/extended-guardrails.md) | Full guardrail catalogue: the flag-gated controls, their hooks and `agent_os`/`agent_sre` primitives |
 | [`standards-crosswalk.md`](docs/shared/standards-crosswalk.md) | Control → OWASP / NIST AI RMF / ISO/IEC 42001 / EU AI Act / MITRE ATLAS crosswalk |
+| [`dashboard.md`](docs/shared/dashboard.md) | The Governance Dashboard at `GET /dashboard` — agent runs, guardrail decisions, the crosswalk, and how the live buffer differs from the ledger |
 | [`adding-an-agent.md`](docs/shared/adding-an-agent.md) | Developer guide for adding a governed agent |
 | [`agentkit.md`](docs/shared/agentkit.md) | `galaxy_agentkit` — the client-side package: install, scaffold, wire the wrapper into an agent, environment contract |
 

@@ -7,6 +7,28 @@ versioning of the platform wheel (`galaxy-agentkit`).
 ## [Unreleased]
 
 ### Added
+- **The Governance Dashboard** — `GET /dashboard` on the enforcement service. A
+  self-contained HTML page (inline CSS, no JavaScript, no external requests, 15-second
+  meta refresh) with four sections: the service header (version, revision, uptime, the
+  loaded policy registry), recent agent runs, guardrail decisions aggregated per control
+  code and per chokepoint route, and the full control-to-standards crosswalk. It is the
+  read path for the centralised compliance tracker; the hash-chained trace ledger
+  (`core/trace_ledger.py`) remains the underlying tamper-evident record, and the page says
+  so. There was previously no way to see what the service had decided other than reading
+  its logs.
+- **`governance/remote/decision_log.py`** — the bounded, thread-safe, in-memory decision
+  buffer the dashboard reads. Capacity is set by `GOV_DASHBOARD_DECISION_BUFFER` (default
+  1000); aggregate counters are held separately from the ring, so per-control and
+  per-route totals cover the whole process lifetime even after the run list has wrapped.
+  This is observability, not audit: it is not durable, not hash-chained, and resets on
+  restart. It retains request metadata only — timestamp, route, agent type, NHI id,
+  outcome, control code, HTTP status — and no prompt, model response, tool argument, data
+  row, or request or response body of any kind.
+- **`scripts/gen_crosswalk.py`** compiles `docs/shared/standards-crosswalk.md` into
+  `governance/remote/_crosswalk.py` (44 controls). The service image copies `governance/`,
+  `core/` and `cloud_adapters/` but not `docs/`, so the dashboard imports the compiled
+  module rather than parsing markdown at runtime. `--check` is the staleness gate, mirroring
+  `scripts/gen_third_party_notices.py`.
 - **`galaxy_agentkit` — the client-side package.** What an agent team installs and
   imports. `govern()` returns one handle carrying the agent's identity, a client for the
   enforcement service (`/llm`, `/data`, `/a2a`, `/health`), and the in-process
