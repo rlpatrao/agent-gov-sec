@@ -3,7 +3,7 @@ cloud_adapters.azure.maf.middleware — the MAF middleware-stack assembly.
 
 This is the framework-axis glue of the Azure bundle: it composes MSGK's
 ``agent_os`` governance primitives into a Microsoft Agent Framework middleware
-list. The agnostic governance pieces it draws on stay in ``governance/``:
+list. The agnostic governance pieces it draws on stay in ``galaxy_gov/``:
 the policy YAML set, the prompt-injection config, and the OTel audit backend.
 The Azure-specific pieces are the MAF guard wrappers (this package) and the
 Postgres hash-chain ledger (``cloud_adapters.azure.audit``).

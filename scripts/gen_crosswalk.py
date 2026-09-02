@@ -2,10 +2,10 @@
 """Generate ``galaxy_gov/remote/_crosswalk.py`` from the standards crosswalk document.
 
 The Governance Dashboard renders the control-to-standards crosswalk, but the
-enforcement service container copies only ``governance/``, ``core/`` and
+enforcement service container copies only ``galaxy_gov/``, ``core/`` and
 ``cloud_adapters/`` (see ``deploy/Dockerfile.service``) — ``docs/`` is not present
 at runtime. The crosswalk is therefore compiled ahead of time into a Python module
-under ``governance/``, which ships with the image, and the dashboard imports that
+under ``galaxy_gov/``, which ships with the image, and the dashboard imports that
 module rather than parsing markdown at request time.
 
 Source: ``docs/shared/standards-crosswalk.md``. Two tables are parsed:

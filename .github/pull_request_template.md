@@ -14,7 +14,7 @@
 
 If this PR adds or changes an agent, complete the **governance review request** from
 [`docs/shared/adding-an-agent.md`](docs/shared/adding-an-agent.md) §3 and paste it below.
-Changes under `governance/`, `payload_agents/config/`, `cloud_adapters/*/egress.yaml`, or the
+Changes under `galaxy_gov/`, `payload_agents/config/`, `cloud_adapters/*/egress.yaml`, or the
 enforcement service require review from **@org/agent-governance** (see `.github/CODEOWNERS`).
 
 <!-- Paste the governance-review request here for agent changes. -->
