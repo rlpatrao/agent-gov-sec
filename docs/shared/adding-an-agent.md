@@ -27,9 +27,9 @@ An agent is selected on two independent axes:
 - **Cloud** (`CLOUD_PROVIDER`) — where identity, egress, and the LLM resolve.
   Bindings live under `cloud_adapters/<cloud>/`.
 
-The governance stack (`governance/`, `core/`, `a2a/`) is neutral to both. A new
+The governance stack (`galaxy_gov/`, `core/`, `core/a2a/`) is neutral to both. A new
 agent is wired into each framework package it should run under; it does not
-touch `governance/` or `core/`.
+touch `galaxy_gov/` or `core/`.
 
 ---
 

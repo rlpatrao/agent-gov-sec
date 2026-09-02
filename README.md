@@ -8,9 +8,9 @@ AWS is the cloud with a live persona deployment. It runs two ways — **Bedrock*
 
 ## What this platform does
 
-**Governance platform** (`core/`, `galaxy_gov/`, `a2a/`): per-agent Non-Human Identity (AWS IAM), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → X-Ray tracing, a hash-chained DynamoDB audit ledger, and API Gateway as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
+**Governance platform** (`core/`, `galaxy_gov/`): per-agent Non-Human Identity (AWS IAM), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → X-Ray tracing, a hash-chained DynamoDB audit ledger, and API Gateway as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
 
-**Demonstration payload** (`payload_agents/`): three governed agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). Each persona is defined once, framework-neutrally, in `payload_agents/_lib/personas.py` and built on any of three frameworks (`--framework {langgraph,raw,pydantic}`, default LangGraph). They demonstrate that the governance stack is framework-agnostic: the same `galaxy_gov/` + `core/` + `a2a/` primitives and WS7 extensions wrap each framework — LangGraph's `create_agent` via a LangChain `AgentMiddleware` shim (`payload_agents/langgraph/`), Pydantic AI via a model wrapper (`payload_agents/pydantic/`), and a provider-native tool loop that does not import a framework (`payload_agents/raw/`).
+**Demonstration payload** (`payload_agents/`): three governed agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). Each persona is defined once, framework-neutrally, in `payload_agents/_lib/personas.py` and built on any of three frameworks (`--framework {langgraph,raw,pydantic}`, default LangGraph). They demonstrate that the governance stack is framework-agnostic: the same `galaxy_gov/` + `core/` primitives (including `core/a2a/`) and WS7 extensions wrap each framework — LangGraph's `create_agent` via a LangChain `AgentMiddleware` shim (`payload_agents/langgraph/`), Pydantic AI via a model wrapper (`payload_agents/pydantic/`), and a provider-native tool loop that does not import a framework (`payload_agents/raw/`).
 
 **Governance demos** — run fully offline (deterministic fake model) or against live Bedrock when credentials resolve:
 - `scripts/demo_governance.py` — the minimal, framework-free guard/redaction/ledger walkthrough (no creds).
@@ -191,7 +191,6 @@ agent-gov-sec/
 │   ├── gcp/                        GCP binding (code present)
 │   └── local/                      Cloud-neutral, in-memory binding
 │
-├── a2a/                            Agent-to-Agent protocol (envelope + audited dispatcher)
 │
 ├── scripts/
 │   ├── demo_governance.py          Minimal offline governance demo

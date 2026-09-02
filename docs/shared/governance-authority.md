@@ -1,7 +1,7 @@
 # Governance authority: who controls the controls
 
 The guard pipeline, the per-agent governance toggles, and the egress allow-lists
-all execute in the agent's own runtime (`governance/`, `payload_agents/config/`).
+all execute in the agent's own runtime (`galaxy_gov/`, `payload_agents/config/`).
 Schema validation and safe defaults make that configuration *correct*; they do
 not make it *authoritative*. On their own, an in-process control stack has two
 trust gaps:
@@ -34,7 +34,7 @@ can actually observe its event.
 [`.github/CODEOWNERS`](../../.github/CODEOWNERS) places every control surface under
 the governing team while leaving application code with developers:
 
-- `governance/` and `galaxy_gov/inprocess/floor.py` — the pipeline and the floor.
+- `galaxy_gov/` and `galaxy_gov/inprocess/floor.py` — the pipeline and the floor.
 - `payload_agents/config/` — the per-agent `governance:` blocks.
 - `cloud_adapters/*/egress.yaml` — the egress allow-lists.
 - `cloud_adapters/aws/infra/` — the out-of-process proxy and its IaC.
@@ -80,7 +80,7 @@ The floor is tuned so the shipped finops/auditor/rogue configs already satisfy i
 with zero clamping; the baseline demo matrix stays at 37/37. It is enforced by
 `tests/test_floor.py`.
 
-The floor lives under `governance/` (CODEOWNERS-owned) precisely so that it is
+The floor lives under `galaxy_gov/` (CODEOWNERS-owned) precisely so that it is
 not editable in the same approval domain as the per-agent YAML it constrains.
 Because it runs in-process it is tamper-*evident*, not tamper-*resistant* — that
 is what mechanism 4 is for.

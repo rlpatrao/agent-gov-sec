@@ -84,8 +84,8 @@ The audit ledger entries and hashes also print in the **[H]** section regardless
 Each persona's domain logic, namely its FGAC tools, is defined once in a framework-neutral form in
 `payload_agents/_lib/personas.py`. The LangGraph builds are wired by
 `payload_agents/langgraph/_runner.build_langgraph_agent()` and wrapped by
-`payload_agents/langgraph/_guard.GalaxyGuardMiddleware`, which threads the same `governance/`,
-`core/`, and `a2a/` primitives and WS7 extensions used for the other framework adapters into a LangChain
+`payload_agents/langgraph/_guard.GalaxyGuardMiddleware`, which threads the same `galaxy_gov/`,
+`core/`, and `core/a2a/` primitives and WS7 extensions used for the other framework adapters into a LangChain
 `AgentMiddleware`. The same personas run on the Pydantic AI and raw frameworks via
 `payload_agents/pydantic/` and `payload_agents/raw/`.
 

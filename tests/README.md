@@ -11,7 +11,7 @@ pytest tests/          # tier 1 always runs; tiers 2+ skip if deps absent
 
 ## Tier 1 — Agnostic (always runs, no cloud/MAF)
 
-The core invariant of the refactor is that `core/`, `governance/`, and `a2a/`
+The core invariant of the refactor is that `core/`, `galaxy_gov/`, and `core/a2a/`
 import no `azure.*` and no `agent_framework`. These tests exercise that surface
 directly and run in any environment:
 

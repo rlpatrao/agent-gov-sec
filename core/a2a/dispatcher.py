@@ -30,7 +30,7 @@ from typing import Awaitable, Callable
 
 from agent_os.audit_logger import AuditEntry, GovernanceAuditLogger
 
-from a2a.envelope import A2AError, A2ARequest, A2AResponse, A2AStatus
+from core.a2a.envelope import A2AError, A2ARequest, A2AResponse, A2AStatus
 from galaxy_gov.policy_export import authorize_recipient_live
 
 logger = logging.getLogger(__name__)

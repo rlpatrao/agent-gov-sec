@@ -143,6 +143,12 @@ versioning of the platform wheel (`galaxy-agentkit`).
   `docs/shared/agent-registration-plan.md`.
 
 ### Changed
+- **`a2a/` folded into `core/a2a/`.** The agent-to-agent protocol (envelope + audited
+  dispatcher) is seam code used by both sides, so it now lives inside the agnostic core
+  rather than as a top-level package. Imports move from `a2a.…` to `core.a2a.…`; the
+  standalone packaging glob is dropped. A side effect worth noting: the enforcement
+  containers COPY `core/` but never copied `a2a/`, so the protocol modules now actually
+  ship in the images.
 - **Package renamed: `governance/` → `galaxy_gov/`.** The authority-side package now
   matches the architecture's naming (the `Galaxy_gov` containers). Import paths,
   packaging globs, container COPY paths, CODEOWNERS rules, and documentation move with

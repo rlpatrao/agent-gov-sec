@@ -68,7 +68,7 @@ in-memory ledger) backs fully offline runs.
 ## 2. Architecture principles
 
 1. **The agnostic core imports no AWS SDK and no agent framework.** `core/`,
-   `governance/`, and `a2a/` depend only on `core.interfaces` and the MSGK
+   `galaxy_gov/`, and `core/a2a/` depend only on `core.interfaces` and the MSGK
    packages — never `import boto3` or `import langchain`. The AWS adapter is
    reached only through `core.provider_factory.get_provider()`. This import
    invariant is enforceable in CI.
@@ -216,7 +216,7 @@ framework-neutral. Source:
 |---|---|---|
 | **Payload** | `payload_agents/` — the three personas, defined once in [`_lib/personas.py`](../../payload_agents/_lib/personas.py) (prompt + ToolSpecs + NHI) | — |
 | **Framework axis** | `payload_agents/<framework>/` — `langgraph` (create_agent + `GalaxyGuardMiddleware`), `pydantic` (model-wrapper governance), `raw` (provider-native tool loop, no framework import) | `--framework` / `GALAXY_FRAMEWORK` ([`core/framework_factory.py`](../../core/framework_factory.py)) |
-| **Agnostic core** | `core/` (interfaces, factory, NHI registry, tracer, ledger), `governance/` (`pipeline.py` GuardPipeline, policies, floor, extensions), `a2a/` (envelopes + dispatcher) | imports no AWS SDK, no framework |
+| **Agnostic core** | `core/` (interfaces, factory, NHI registry, tracer, ledger), `galaxy_gov/` (`pipeline.py` GuardPipeline, policies, floor, extensions), `core/a2a/` (envelopes + dispatcher) | imports no AWS SDK, no framework |
 | **AWS adapter** | [`cloud_adapters/aws/`](../../cloud_adapters/aws/) — IAM identity · Secrets Manager · API Gateway → Bedrock gateway · X-Ray tracing · DynamoDB ledger · `infra/` Terraform | `CLOUD_PROVIDER=aws` ([`core/provider_factory.py`](../../core/provider_factory.py)); `local` backs offline runs |
 | **AWS services** | IAM/STS · Secrets Manager · API Gateway + Lambda · Amazon Bedrock · DynamoDB · S3 · X-Ray | resolved lazily by the AWS adapter |
 
@@ -282,7 +282,7 @@ The three mechanisms (numbered as in the authority doc):
 
 | # | Mechanism | Closes | Where |
 |---|---|---|---|
-| 1 | **Ownership split** — `.github/CODEOWNERS` puts `governance/`, the per-agent `governance:` blocks, `egress.yaml`, and `infra/` under the governing team | developer gap (merge-time) | a developer may *propose* a weakening change but cannot *merge* it |
+| 1 | **Ownership split** — `.github/CODEOWNERS` puts `galaxy_gov/`, the per-agent `governance:` blocks, `egress.yaml`, and `infra/` under the governing team | developer gap (merge-time) | a developer may *propose* a weakening change but cannot *merge* it |
 | 2 | **Non-overridable floor** — [`galaxy_gov/inprocess/floor.py`](../../galaxy_gov/inprocess/floor.py) clamps each validated config in the stricter direction; required guards are forced on, an attempt to disable one is logged as a `FloorViolation` | developer gap (defense-in-depth) | in-process, tamper-**evident** |
 | 4 | **Out-of-process enforcement** — the chokepoints run the *same* `EnforcementSession` ([`galaxy_gov/remote/enforce.py`](../../galaxy_gov/remote/enforce.py)) in a separate IAM identity, resolving controls from the NHI-keyed registry; on AWS, three chokepoints ([`bedrock_proxy.py`](../../cloud_adapters/aws/infra/lambda/bedrock_proxy.py) · [`data_proxy.py`](../../cloud_adapters/aws/infra/lambda/data_proxy.py) · [`a2a_broker.py`](../../cloud_adapters/aws/infra/lambda/a2a_broker.py)), or AgentCore Gateway interceptors + Cedar Policy | runtime gap | out-of-process, tamper-**resistant** |
 

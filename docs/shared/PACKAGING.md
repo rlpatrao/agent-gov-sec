@@ -13,7 +13,7 @@ The platform ships as two artifacts with two different owners and lifecycles.
 | Artifact | Owner | What it is | How it is consumed |
 |---|---|---|---|
 | **Galaxy agentkit** (`galaxy-agentkit` wheel) | platform team | The client-side package `galaxy_agentkit` (governed-agent wrapper, enforcement client) and the `galaxy` command line, whose `init` subcommand scaffolds a project, over the agnostic core, the guard/enforcement library, the A2A protocol, and the cloud adapters. Excludes `payload_agents`, tests, and docs. | The agent team installs it (`pip install "galaxy-agentkit[aws,langgraph]"`), imports it, and builds agents on top. See [`agentkit.md`](agentkit.md). |
-| **Galaxy Enforcement Service** (container) | governance team | The out-of-process chokepoints (LLM / data / A2A). Ships only `governance/` + `core/` + the handlers. | Deployed in a governance-owned environment; agents *call* it and cannot modify it. |
+| **Galaxy Enforcement Service** (container) | governance team | The out-of-process chokepoints (LLM / data / A2A). Ships only `galaxy_gov/` + `core/` + the handlers. | Deployed in a governance-owned environment; agents *call* it and cannot modify it. |
 
 The SDK is what a developer builds *with*; the enforcement service is what governs them at
 runtime. They are versioned and released independently.

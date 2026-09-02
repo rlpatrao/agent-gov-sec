@@ -14,7 +14,7 @@ sender's resolved ``allowed_recipients`` is denied. Dependency-free (registry +
 stdlib), so it deploys as an Azure Function with no agent-codebase dependency.
 
 ``authorize_dispatch`` is the pure decision function; the in-process dispatcher
-(``a2a.dispatcher``) calls it directly when ``GOV_A2A_BROKER_ENDPOINT`` is set,
+(``core.a2a.dispatcher``) calls it directly when ``GOV_A2A_BROKER_ENDPOINT`` is set,
 and ``enforce_a2a`` exposes it over HTTP via ``function_app.py``.
 """
 

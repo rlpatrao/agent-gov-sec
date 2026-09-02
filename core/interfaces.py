@@ -3,7 +3,7 @@ core.interfaces — the cloud- and framework-agnostic seam.
 
 Every cloud-specific binding (Azure today; AWS/GCP planned) is expressed as
 one of the Protocols below and lives under ``cloud_adapters/<cloud>/``. The agnostic
-core (``core/``, ``galaxy_gov/``, ``a2a/``) depends only on these Protocols,
+core (``core/``, ``galaxy_gov/``, ``core/a2a/``) depends only on these Protocols,
 never on a cloud SDK or an agent framework.
 
 Nothing here imports ``azure.*`` or ``agent_framework`` — that is the

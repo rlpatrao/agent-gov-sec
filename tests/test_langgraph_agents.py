@@ -169,8 +169,8 @@ async def test_aws_pushdown_scoped_sql_and_denied(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_a2a_allow_and_deny(tmp_path: Path):
-    from a2a.dispatcher import a2a_call
-    from a2a.envelope import A2ARequest, A2AResponse
+    from core.a2a.dispatcher import a2a_call
+    from core.a2a.envelope import A2ARequest, A2AResponse
 
     fin = await build_finops_agent("t", scripted_model(AIMessage(content="x")), drift_baseline_path=tmp_path / "f.json")
     aud = await build_auditor_agent("t", scripted_model(AIMessage(content="audited")), drift_baseline_path=tmp_path / "a.json")

@@ -5,7 +5,7 @@
 
 **Last updated:** 2026-06-22
 
-> **Repo scope.** This repository constitutes the governance platform (`core/`, `governance/`, `a2a/`, `infra/`), built on the `agent_os` / `agent_sre` / `agentmesh` packages and the framework adapters. The agents it governs comprise a minimal demonstration payload (`payload_agents/`), wired through the full guard stack to demonstrate that the platform governs a real agent end-to-end.
+> **Repo scope.** This repository constitutes the governance platform (`core/`, `galaxy_gov/`, `core/a2a/`, `infra/`), built on the `agent_os` / `agent_sre` / `agentmesh` packages and the framework adapters. The agents it governs comprise a minimal demonstration payload (`payload_agents/`), wired through the full guard stack to demonstrate that the platform governs a real agent end-to-end.
 >
 > AWS is the live, primary cloud, and it runs two enforcement methods. Method 1 (the proxy path) routes LLM egress through API Gateway → Lambda → Bedrock and traces it via OpenTelemetry → ADOT → X-Ray. Method 2 (the AgentCore path) routes per-persona Bedrock AgentCore Runtimes through the MCP Gateway `galaxy-governance-gw`, with authorization provided by the Cedar policy engine `galaxy_governance` and content controls implemented in interceptor Lambdas; the AgentCore Runtimes emit OTel spans that surface in CloudWatch GenAI Observability for Bedrock AgentCore. Both methods share Secrets Manager for secrets, IAM/STS for identity, and the same hash-chained DynamoDB audit ledger `galaxy-trace-ledger`. This document pairs with [`architecture.md`](architecture.md) (AWS system view) and [`user-guide.md`](user-guide.md) (how-to). Azure and GCP are separate doc stacks (`../azure/`, `../gcp/`), currently placeholders.
 

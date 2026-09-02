@@ -12,13 +12,13 @@ span for the recipient, invokes the recipient's handler, and logs an
 spans by hand.
 """
 
-from a2a.envelope import (
+from core.a2a.envelope import (
     A2AError,
     A2ARequest,
     A2AResponse,
     A2AStatus,
 )
-from a2a.dispatcher import a2a_call
+from core.a2a.dispatcher import a2a_call
 
 __all__ = [
     "A2AError",

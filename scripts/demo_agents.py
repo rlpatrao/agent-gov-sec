@@ -14,7 +14,7 @@ matrix then runs on the live model and outcomes are *observed*, not asserted.
 **aws**, **local**, and ``--fake`` use a deterministic ``FakeToolCallingModel``
 and the 37-check assertion matrix. Either way the hash-chained ledger runs in
 stdout/in-memory mode, OTel no-ops without an exporter, and the governance is
-real — the same ``governance/`` primitives + WS7 extensions wrapping LangGraph
+real — the same ``galaxy_gov/`` primitives + WS7 extensions wrapping LangGraph
 via ``GalaxyGuardMiddleware``.
 
 Run:
@@ -53,8 +53,8 @@ except ImportError:
 
 from langchain_core.messages import AIMessage
 
-from a2a.dispatcher import a2a_call
-from a2a.envelope import A2ARequest, A2AResponse
+from core.a2a.dispatcher import a2a_call
+from core.a2a.envelope import A2ARequest, A2AResponse
 from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
 from galaxy_gov.shared.enforcement.pipeline import GovernanceViolation
 from payload_agents._runtime.contract import RunResult

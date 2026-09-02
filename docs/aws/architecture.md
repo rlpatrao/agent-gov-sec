@@ -478,7 +478,7 @@ output · verdict). The observability walkthrough resides in
 
 | Term                                 | Meaning                                                                                                                                                                       |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A2A**                              | Agent-to-agent. Typed request/response envelopes with a recipient allow-list and audited dispatch (`a2a/`).                                                                   |
+| **A2A**                              | Agent-to-agent. Typed request/response envelopes with a recipient allow-list and audited dispatch (`core/a2a/`).                                                                   |
 | **ABAC**                             | Attribute-based access control. Clearance + attribute rules that drive FGAC decisions.                                                                                        |
 | **ADOT**                             | AWS Distro for OpenTelemetry. The collector that forwards OTel spans to X-Ray / CloudWatch.                                                                                   |
 | **AgentCore**                        | Amazon Bedrock AgentCore. Hosts the per-persona runtimes, MCP gateway, Cedar policy engine, and interceptors (Method 2).                                                      |

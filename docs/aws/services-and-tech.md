@@ -5,7 +5,7 @@
 
 For the system design and sequence diagrams, see [architecture.md](architecture.md).
 
-> **Repo scope.** This repository implements the **Galaxy Agentic Governance Platform**, a runtime governance and security layer (`core/`, `governance/`, `a2a/`) built on the `agent_os` / `agent_sre` / `agentmesh` packages and the `agent-framework` runtime. It additionally provides a **minimal demonstration payload** (`payload_agents/`) comprising three personas (**FinOps**, **Auditor**, **Rogue**). The full multi-agent migration product (approximately 18 agents, the migration/discovery/scanner pipelines, the `Dockerfile`, and the `legacy/` sample) has been moved to a **local-only, gitignored `archive/`** and is **not part of this repository**. Where this document describes that product, it is labeled **(archived)** for context.
+> **Repo scope.** This repository implements the **Galaxy Agentic Governance Platform**, a runtime governance and security layer (`core/`, `galaxy_gov/`, `core/a2a/`) built on the `agent_os` / `agent_sre` / `agentmesh` packages and the `agent-framework` runtime. It additionally provides a **minimal demonstration payload** (`payload_agents/`) comprising three personas (**FinOps**, **Auditor**, **Rogue**). The full multi-agent migration product (approximately 18 agents, the migration/discovery/scanner pipelines, the `Dockerfile`, and the `legacy/` sample) has been moved to a **local-only, gitignored `archive/`** and is **not part of this repository**. Where this document describes that product, it is labeled **(archived)** for context.
 
 ---
 

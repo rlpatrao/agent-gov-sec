@@ -504,8 +504,8 @@ The callee runs through the neutral `AgentBundle.invoke()` contract rather than 
 @pytest.mark.asyncio
 async def test_a2a_finops_to_auditor():
     from langchain_core.messages import AIMessage
-    from a2a.dispatcher import a2a_call
-    from a2a.envelope import A2ARequest, A2AResponse
+    from core.a2a.dispatcher import a2a_call
+    from core.a2a.envelope import A2ARequest, A2AResponse
     from payload_agents.langgraph import make_model, build_finops_agent, build_auditor_agent
 
     fin = await build_finops_agent("run-a2a", make_model(AIMessage(content="dispatch")))

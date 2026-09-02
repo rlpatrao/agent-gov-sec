@@ -9,7 +9,7 @@ The **`agent_os` + `agent_sre`** packages ship ~40 governance modules. This plat
 > [`extended-guardrails.md`](extended-guardrails.md); the status cells below are
 > updated to match.
 
-> **Scope.** This repo is the **governance platform** (`core/`, `governance/`, `a2a/`, `infra/`). The agents are a **minimal demonstration payload** — a single MAF `Analyzer` agent in [`payload_agents/`](../../payload_agents/). The full multi-agent AWS→Azure migration product (18 agents, migration/discovery/scanner pipelines, per-stack Coder prompts, ACA deployment) has been moved to a **local-only, gitignored `archive/`** and is **not part of this repo**. Where this doc illustrates a guard "per pipeline stage", that is reframed to **per governed agent invocation / per A2A hop** — there is one agent and the A2A `Analyzer` leaf today; multi-agent topology is archived context only.
+> **Scope.** This repo is the **governance platform** (`core/`, `galaxy_gov/`, `core/a2a/`, `infra/`). The agents are a **minimal demonstration payload** — a single MAF `Analyzer` agent in [`payload_agents/`](../../payload_agents/). The full multi-agent AWS→Azure migration product (18 agents, migration/discovery/scanner pipelines, per-stack Coder prompts, ACA deployment) has been moved to a **local-only, gitignored `archive/`** and is **not part of this repo**. Where this doc illustrates a guard "per pipeline stage", that is reframed to **per governed agent invocation / per A2A hop** — there is one agent and the A2A `Analyzer` leaf today; multi-agent topology is archived context only.
 >
 > **Coupling.** Azure + MAF coupling is **current**. The cloud- and framework-agnostic adapter restructure (Azure/MAF → `cloud_adapters/azure/`, plus AWS/GCP adapters) is **roadmap**.
 
@@ -191,7 +191,7 @@ Separate package, ~30 sub-modules. Different concerns than runtime governance �
 |---|---|---|
 | Hash-chained Postgres audit | [`cloud_adapters/azure/audit.py`](../../cloud_adapters/azure/audit.py) | `agent_os` ships an `audit_logger.AuditBackend` protocol but no concrete SHA-256 hash-chain backend. ~200 LOC fills the compliance-archive gap. (Reconcile against `agent_os`'s Merkle audit trail in WS4.) |
 | OTel-event-on-current-span audit backend | [`governance/adapters/otel_audit_backend.py`](../../governance/adapters/otel_audit_backend.py) | No bundled OTel span-event sink. ~70 LOC. |
-| A2A envelope + dispatcher | [`a2a/`](../../a2a/) | `agent_os` has `agent_os.integrations.a2a_adapter` but for a different protocol shape. This envelope is purpose-built for Galaxy provenance/correlation and trace-linking. |
+| A2A envelope + dispatcher | [`core/a2a/`](../../a2a/) | `agent_os` has `agent_os.integrations.a2a_adapter` but for a different protocol shape. This envelope is purpose-built for Galaxy provenance/correlation and trace-linking. |
 | Pydantic+YAML per-agent config | [`payload_agents/config.py`](../../payload_agents/config.py) | `agent_os` has policy YAML loaders but not per-agent runtime config (`extra="forbid"`). |
 | APIM policy XML + KV-backed named values | Azure-side, not Python | These live in Azure Resource Manager, not in code. |
 | Output content safety | ✅ Wired (flag `GALAXY_GAP_CONTENT_QUALITY`) | [`galaxy_gov/shared/enforcement/content_quality.py`](../../galaxy_gov/shared/enforcement/content_quality.py) gates the model response in `after_model` over `agent_os.content_governance` quality dimensions. The scorer is heuristic (the production substitution is an LLM judge), so it is demonstrated per agent rather than blanket-wired. Control F2. |
@@ -230,7 +230,7 @@ async def test_my_guard_blocks_X():
         await guard.process(_Ctx(messages=[_Msg(text="...trigger...")]), _called)
 ```
 
-> Under the cloud-/framework-agnostic refactor (WS1), new MAF-coupled guards live under `cloud_adapters/azure/maf/guards/`; framework-neutral guard logic stays in `governance/`. The MAF-free guards `escalation.py` and `egress.py` already qualify as agnostic.
+> Under the cloud-/framework-agnostic refactor (WS1), new MAF-coupled guards live under `cloud_adapters/azure/maf/guards/`; framework-neutral guard logic stays in `galaxy_gov/`. The MAF-free guards `escalation.py` and `egress.py` already qualify as agnostic.
 
 ---
 
@@ -252,7 +252,7 @@ Two tracks: (1) make the platform cloud-/framework-agnostic; (2) close the four 
 
 ### Track 1 — Cloud- & framework-agnostic restructure
 
-- **WS1 — Isolate Azure + MAF behind `cloud_adapters/azure/`.** Core (`core/`, `governance/`, `a2a/`) becomes cloud-/framework-neutral; the 3 MAF guard wrappers (prompt-injection, credential, context-budget), the middleware assembly, and the Azure Monitor exporter relocate to `cloud_adapters/azure/{maf/,...}`. MAF-free guards (`escalation.py`, `egress.py`) and `policies/*.yaml` stay agnostic.
+- **WS1 — Isolate Azure + MAF behind `cloud_adapters/azure/`.** Core (`core/`, `galaxy_gov/`, `core/a2a/`) becomes cloud-/framework-neutral; the 3 MAF guard wrappers (prompt-injection, credential, context-budget), the middleware assembly, and the Azure Monitor exporter relocate to `cloud_adapters/azure/{maf/,...}`. MAF-free guards (`escalation.py`, `egress.py`) and `policies/*.yaml` stay agnostic.
 - **WS3 — `agent_os` / `agent_sre` / `agentmesh` re-baseline.** Sync to the latest `agent-os-kernel` / `agent-sre` / `agentmesh-platform` releases (the packages keep their split names; there is no umbrella package). Verify the load-bearing `agent-sre==3.2.2` pin (used by `maf_adapter` and `RogueAgentDetector`) before bumping.
 - **WS4 — Document the delta over `agent_os` / `agent_sre` / `agentmesh`.** Almost everything in this inventory's "wired" column is **bindings + composition**, not governance logic. Cross-references this file to avoid double-counting.
 - **WS5 / WS6 — AWS & GCP adapters.** Fill `cloud_adapters/aws/` and `cloud_adapters/gcp/` against the WS1 interfaces (identity, secrets, tracing, audit, egress, LLM gateway). Each cloud's egress allow-list + managed gateway (API Gateway→Bedrock, Apigee→Vertex) mirror the Azure APIM chokepoint.

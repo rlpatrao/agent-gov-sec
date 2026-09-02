@@ -478,7 +478,7 @@ The observability walkthrough resides in
 
 | Term                                 | Meaning                                                                                                                                                     |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A2A**                              | Agent-to-agent. Typed request/response envelopes with a recipient allow-list and audited dispatch (`a2a/`).                                                 |
+| **A2A**                              | Agent-to-agent. Typed request/response envelopes with a recipient allow-list and audited dispatch (`core/a2a/`).                                                 |
 | **ABAC**                             | Attribute-based access control. Clearance + attribute rules that drive FGAC decisions.                                                                      |
 | **AOAI**                             | Azure OpenAI. The managed model endpoint reached through the APIM edge / LLM proxy (deployment pinned server-side).                                         |
 | **APIM**                             | Azure API Management. The single managed LLM-egress edge (Method 1); validates the subscription key and injects the AOAI key.                               |

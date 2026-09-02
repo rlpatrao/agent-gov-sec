@@ -13,7 +13,7 @@ sender's resolved ``allowed_recipients`` is denied. Dependency-free (registry +
 stdlib), so it bundles into a Lambda with no agent-codebase dependency.
 
 ``authorize_dispatch`` is the pure decision function; the in-process dispatcher
-(``a2a.dispatcher``) calls it directly when ``GOV_A2A_BROKER_ENDPOINT`` is set,
+(``core.a2a.dispatcher``) calls it directly when ``GOV_A2A_BROKER_ENDPOINT`` is set,
 and the Lambda ``handler`` exposes it over HTTP.
 """
 

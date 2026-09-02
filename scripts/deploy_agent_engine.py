@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 # Source packages shipped to the managed container (the whole platform).
-_EXTRA_PACKAGES = ["core", "galaxy_gov", "a2a", "cloud_adapters", "payload_agents"]
+_EXTRA_PACKAGES = ["core", "galaxy_gov", "cloud_adapters", "payload_agents"]
 
 # Runtime requirements for the container (base + gcp + langgraph axis).
 _REQUIREMENTS = [
