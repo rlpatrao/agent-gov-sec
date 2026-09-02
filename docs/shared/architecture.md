@@ -65,6 +65,23 @@ in-memory ledger) backs fully offline runs.
 
 ---
 
+### 1.1 Deployment-architecture mapping
+
+The repository's top-level layout maps onto the deployment architecture — an
+in-process side embedded in each agent application, and an out-of-process side
+the governing team owns and runs:
+
+| Architecture element | Where it runs | Repository location |
+|---|---|---|
+| Agent kit embedded in each application | in-process, agent's trust domain | `galaxy_agentkit/` |
+| Project generator (boilerplate) | developer workstation | `galaxy init` (`galaxy_gov/tooling/`) |
+| Enforcement containers (scaled, from ECR) | governance-owned environment | `galaxy_gov/remote/` + `deploy/` + `cloud_adapters/aws/infra/enforcement_service.tf` |
+| Centralized policy store | governance-owned S3 (versioned) | `galaxy_gov/shared/policy_registry.py` + `cloud_adapters/aws/infra/policy_store.tf` |
+| Centralized compliance tracker | hash-chained ledger; read via the dashboard | `core/trace_ledger.py` + `galaxy_gov/remote/dashboard.py` |
+| Governance dashboard | served by the enforcement service (`/dashboard`) | `galaxy_gov/remote/dashboard.py` |
+| Shared seam (both sides import) | wheel and image | `core/` (incl. `core/a2a/`), `cloud_adapters/` |
+| Applications (App1, App2, …) | separate repositories via `galaxy init` | demonstrated by `payload_agents/` |
+
 ## 2. Architecture principles
 
 1. **The agnostic core imports no AWS SDK and no agent framework.** `core/`,

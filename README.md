@@ -152,56 +152,49 @@ the extra isn't installed).
 
 ## Repository layout
 
+The tree is organized by the deployment architecture: what runs inside an agent
+application (in-process), what runs in the governance-owned environment
+(out-of-process), the shared seam both sides import, and the demonstration payload.
+
 ```
 agent-gov-sec/
 │
-├── galaxy_agentkit/                CLIENT-SIDE PACKAGE — what an agent team installs
-│   ├── agent.py                    govern() → GovernedAgent: identity + authority + guards
-│   ├── client.py                   enforcement-service client (/llm · /data · /a2a)
-│   ├── config.py                   verifies the governance config bundle; fails if incomplete
+│  IN-PROCESS — ships to agent teams (the wheel)
+├── galaxy_agentkit/                What an application embeds: govern() → GovernedAgent
+│   ├── agent.py                    identity + authority client + in-process guards, one handle
+│   ├── client.py                   enforcement-service client (/llm · /data · /a2a · /health)
+│   ├── config.py                   verifies the governance config bundle; refuses to start without it
 │   └── settings.py                 environment contract (GALAXY_*), validated on load
+│       (the project generator is `galaxy init`, in galaxy_gov/tooling/)
 │
-├── payload_agents/                 Demonstration payload — 3 governed personas on 3 frameworks
-│   ├── _lib/personas.py            The 3 personas' tool specs / FGAC tools (one definition, all frameworks)
-│   ├── _runtime/                   Framework-neutral runtime — contract, models, bedrock_gateway
-│   ├── langgraph/                  FRAMEWORK AXIS — LangChain create_agent + GalaxyGuardMiddleware
-│   ├── pydantic/                   FRAMEWORK AXIS — Pydantic AI Agent (GovernedModel wrapper)
-│   └── raw/                        FRAMEWORK AXIS — provider-native tool loop (no framework import)
-│
-├── core/                           Agnostic seam — Protocol interfaces + factories (no cloud SDK)
-│   ├── interfaces.py               Six Protocols (SecretProvider, IdentityProvider, … CloudProvider)
-│   ├── provider_factory.py         CLOUD AXIS dispatch — selects cloud_adapters/<cloud>/ (CLOUD_PROVIDER)
-│   ├── nhi_registry.py             Non-Human Identity registry (agent-type → cloud principal)
-│   ├── run_tracer.py               OTel configure_tracing + pipeline_span
-│   └── trace_ledger.py             Hash-chained audit ledger schema
-│
-├── galaxy_gov/                     Security & compliance layer (framework- and cloud-neutral)
-│   ├── shared/enforcement/         GuardPipeline + the guard library (FGAC, drift, reasoning, MCP, code/runtime, content/cost)
-│   ├── inprocess/floor.py          Non-negotiable governance floor (always-on controls)
-│   ├── remote/enforce.py           Out-of-process enforcement at the chokepoint
-│   ├── guards/                     Guard implementations (wrap `agent_os` primitives)
-│   ├── agentcore/                  AgentCore integration — Cedar export, request/response interceptors, identity
+│  OUT-OF-PROCESS — the governance authority (the container)
+├── galaxy_gov/                     Enterprise governance: guards, policies, authority, dashboard
+│   ├── shared/enforcement/         GuardPipeline + guard library (FGAC, drift, reasoning, MCP, code, content/cost)
+│   ├── inprocess/floor.py          Non-overridable governance floor (config tightens, never weakens)
+│   ├── remote/                     The authority service: server, enforce, registrar, dashboard, decision log
+│   ├── policies/ · configs/        Declarative rules + guard configs (ship inside the wheel and image)
+│   ├── agentcore/                  AgentCore integration — Cedar export, interceptors, identity
 │   ├── ops/                        Operational controls (agent_sre)
-│   ├── policies/                   YAML declarative rules (galaxy-*.yaml)
-│   └── configs/                    Guard configs (prompt-injection.yaml, egress.yaml)
+│   └── tooling/                    `galaxy` CLI — init · new-agent · enroll · verify · export-registry
+├── deploy/                         The Galaxy_gov container: Dockerfile.service, VERSION, compose
 │
+│  SHARED SEAM — imported by both sides
+├── core/                           Agnostic core — Protocols, factories, NHI registry, tracing, ledger schema
+│   └── a2a/                        Agent-to-Agent protocol (envelope + audited dispatcher)
 ├── cloud_adapters/                 Cloud bindings behind the core Protocols
-│   ├── aws/                        AWS binding — identity, secrets, gateway, tracing, audit, agentcore/, infra/
-│   ├── azure/                      Azure binding (code present)
-│   ├── gcp/                        GCP binding (code present)
-│   └── local/                      Cloud-neutral, in-memory binding
+│   ├── aws/                        AWS binding + infra/ (Terraform: chokepoints, ECR, Fargate service, policy store)
+│   ├── azure/ · gcp/ · local/      Azure + GCP bindings; cloud-neutral in-memory binding
 │
+│  DEMONSTRATION — stands in for real applications (which live in their own repos, via `galaxy init`)
+├── payload_agents/                 3 governed personas × 3 frameworks (LangGraph, Pydantic AI, raw)
 │
-├── scripts/
-│   ├── demo_governance.py          Minimal offline governance demo
-│   ├── demo_agents.py              Full feature × agent matrix over the 3 agents (any --framework)
-│   └── deploy_agentcore.py         Provision the AgentCore runtimes, gateway, policy engine, interceptors
-│
+│  REPO PLUMBING
+├── scripts/                        demo_agents.py (conformance matrix) · deploy + publish + generator scripts
 ├── tests/                          Test suite (runs without cloud credentials)
 ├── docs/                           Per-cloud doc stacks (aws/azure/gcp) + shared/ + diagrams/
 └── .env.example                    Environment variable template
 
-(archive/ — local-only, gitignored: the full migration payload, pipeline scripts, legacy samples, and historical docs.)
+(archive/ — local-only, gitignored: the pre-reorg migration payload and historical docs.)
 ```
 
 ---
