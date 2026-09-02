@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from governance.policy_export import export_registry_json
+from galaxy_gov.policy_export import export_registry_json
 
 _LAMBDA_DIR = Path(__file__).resolve().parent.parent / "cloud_adapters" / "aws" / "infra" / "lambda"
 

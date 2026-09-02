@@ -25,7 +25,7 @@ from typing import Literal, Optional
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from governance.inprocess.floor import apply_floor
+from galaxy_gov.inprocess.floor import apply_floor
 
 logger = logging.getLogger(__name__)
 

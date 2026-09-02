@@ -35,7 +35,7 @@ dependencies = [
     # Standards-based policy engine (Cedar) for the WS7 gap modules — built in so
     # GALAXY_POLICY_ENGINE=cedar works out of the box. Evaluated via cedarpy
     # directly (MSGK 3.7.0's CedarBackend targets the cedarpy 3.x API and fails
-    # open; see governance/extensions/policy_engine.py).
+    # open; see galaxy_gov/extensions/policy_engine.py).
     "cedarpy>=4,<5",
 ]
 
@@ -97,14 +97,14 @@ agent-engine = [
 # governed agent project for an agent team; `new-agent`, `enroll`, `verify`, and
 # `export-registry` are the platform-side tooling.
 [project.scripts]
-galaxy = "governance.tooling.scaffold:main"
+galaxy = "galaxy_gov.tooling.scaffold:main"
 
 # The platform wheel ships only the governance platform — the agnostic core, the
 # guard/enforcement library, the A2A protocol, and the cloud adapters. It does
 # NOT ship payload_agents (that is example/demo code, or the consuming team's
 # own repo), tests, docs, or the local-only archive.
 [tool.setuptools.packages.find]
-include = ["galaxy_agentkit*", "core*", "governance*", "a2a*", "cloud_adapters*"]
+include = ["galaxy_agentkit*", "core*", "galaxy_gov*", "a2a*", "cloud_adapters*"]
 exclude = ["payload_agents*", "tests*", "archive*", "docs*", "scripts*", "deploy*"]
 
 # Package data is declared explicitly, not by a blanket glob. The guards read
@@ -117,8 +117,8 @@ exclude = ["payload_agents*", "tests*", "archive*", "docs*", "scripts*", "deploy
 # is an importable package containing Terraform and its state — cannot be swept
 # into the distribution.
 [tool.setuptools.package-data]
-governance = ["configs/*.yaml", "policies/*.yaml"]
-"governance.shared.enforcement" = ["configs/*.yaml", "configs/*.cedar"]
+galaxy_gov = ["configs/*.yaml", "policies/*.yaml"]
+"galaxy_gov.shared.enforcement" = ["configs/*.yaml", "configs/*.cedar"]
 "cloud_adapters.aws" = ["egress.yaml"]
 "cloud_adapters.azure" = ["egress.yaml"]
 "cloud_adapters.gcp" = ["egress.yaml"]

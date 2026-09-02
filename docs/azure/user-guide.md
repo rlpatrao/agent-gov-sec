@@ -137,7 +137,7 @@ layered guard stack, with full identity attribution and a tamper-evident audit
 trail, regardless of which framework orchestrates the agent. On Azure there are
 two composition paths onto the same guard logic:
 
-- The framework-neutral [`GuardPipeline`](../../governance/shared/enforcement/pipeline.py),
+- The framework-neutral [`GuardPipeline`](../../galaxy_gov/shared/enforcement/pipeline.py),
   used by the LangGraph, raw, and Pydantic AI adapters. Each framework maps its
   own hooks onto the pipeline's `before_model` / `after_model` / `before_tool` /
   `after_tool` methods.
@@ -271,8 +271,8 @@ control the persona wires and, if you add a deny rule, a policy probe. See the
 patterns in [§7](#7-testing).
 
 > **Governance-owned files.** The policy registry
-> (`governance/policies/`), the guard configuration, the floor
-> (`governance/inprocess/floor.py`), the egress allow-list
+> (`galaxy_gov/policies/`), the guard configuration, the floor
+> (`galaxy_gov/inprocess/floor.py`), the egress allow-list
 > (`cloud_adapters/azure/egress.yaml`), and the data-classification catalogue are
 > owned by the enterprise governance team and are CODEOWNERS-gated. An agent
 > developer requests capabilities and data scopes through the persona YAML; the
@@ -403,7 +403,7 @@ psql "$POSTGRES_DSN" -f cloud_adapters/azure/infra/ledger_schema.sql
 ## 5. Policies — the YAML rule engine
 
 Runtime governance is declarative. The policy guard evaluates every model call
-against `governance/policies/*.yaml`, sorted by priority in descending order, on a
+against `galaxy_gov/policies/*.yaml`, sorted by priority in descending order, on a
 first-match-wins basis. All files in the directory are auto-loaded at agent build
 time; no manifest is needed. Both the in-process stack and the out-of-process
 Function chokepoints consume the same policy set, so the two cannot drift.
@@ -473,7 +473,7 @@ evaluates faster and is easier to read.
     action: deny
 ```
 
-Add the rule to any file under `governance/policies/` and restart the agent
+Add the rule to any file under `galaxy_gov/policies/` and restart the agent
 process. No code change is needed.
 
 ### Testing a policy
@@ -485,7 +485,7 @@ Write a probe test; it provides a regression check:
 async def test_credit_card_blocked():
     from langchain_core.messages import AIMessage
     from payload_agents.langgraph import make_model, build_finops_agent
-    from governance.shared.enforcement.decision import GovernanceViolation
+    from galaxy_gov.shared.enforcement.decision import GovernanceViolation
 
     bundle = await build_finops_agent("probe-cc", model=make_model(AIMessage(content="ok")))
     try:
@@ -727,7 +727,7 @@ for the live example (a scoped reader that dispatches A2A to the Auditor), and
 
 ### 8.3 Policy YAML schema
 
-The schema applies to files under `governance/policies/*.yaml`. All files in the
+The schema applies to files under `galaxy_gov/policies/*.yaml`. All files in the
 directory are auto-loaded at agent build time; no manifest is needed.
 
 ```yaml
@@ -875,7 +875,7 @@ Confirm that the `field` name in your YAML matches what the middleware populates
 ### "I want to bypass governance for a debug session"
 
 No flag exists for this purpose, and none will be added. Governance is the
-contract, and the floor (`governance/inprocess/floor.py`) clamps config stricter,
+contract, and the floor (`galaxy_gov/inprocess/floor.py`) clamps config stricter,
 never looser, so an agent cannot disable a control by editing its own YAML. To
 confirm that a deny rule fires, use the [§5 policy probe pattern](#testing-a-policy).
 To trace what happens after a deny, write a unit test against the guard logic

@@ -238,7 +238,7 @@ The `GuardPipeline` (4 hooks plus the guard library), the MAF middleware stack, 
 **Out-of-process (governing-team boundary) — authoritative**
 The Function `llm_proxy`, the data proxy (FGAC), and the A2A broker — each under a separate Managed Identity, behind the APIM edge.
 
-The same `EnforcementSession` (`governance/remote/enforce.py`) runs in both places, so
+The same `EnforcementSession` (`galaxy_gov/remote/enforce.py`) runs in both places, so
 the in-process and boundary decisions cannot drift.
 
 ---

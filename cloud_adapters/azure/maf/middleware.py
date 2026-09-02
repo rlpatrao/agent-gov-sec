@@ -18,13 +18,13 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
-import governance
+import galaxy_gov
 from agent_os.audit_logger import AuditEntry, GovernanceAuditLogger, LoggingBackend
 from agent_os.context_budget import ContextScheduler
 from agent_os.integrations.maf_adapter import create_governance_middleware
 from agent_os.prompt_injection import ThreatLevel
 
-from governance.adapters.otel_audit_backend import OtelAuditBackend
+from galaxy_gov.adapters.otel_audit_backend import OtelAuditBackend
 from cloud_adapters.azure.audit import PostgresHashChainBackend
 from cloud_adapters.azure.maf.guards.context_budget import ContextBudgetGuardMiddleware
 from cloud_adapters.azure.maf.guards.credential_redactor import CredentialRedactorGuardMiddleware
@@ -33,7 +33,7 @@ from cloud_adapters.azure.maf.guards.prompt_injection import PromptInjectionGuar
 logger = logging.getLogger(__name__)
 
 # Policy + config sets are agnostic governance assets and stay in governance/.
-_GOVERNANCE_DIR = Path(governance.__file__).parent
+_GOVERNANCE_DIR = Path(galaxy_gov.__file__).parent
 _POLICY_DIR = _GOVERNANCE_DIR / "policies"
 _CONFIG_DIR = _GOVERNANCE_DIR / "configs"
 _PROMPT_INJECTION_CONFIG = _CONFIG_DIR / "prompt-injection.yaml"

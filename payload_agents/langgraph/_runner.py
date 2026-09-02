@@ -35,8 +35,8 @@ from payload_agents.langgraph._guard import build_langgraph_governance
 from agent_os.audit_logger import GovernanceAuditLogger
 from core.interfaces import SecretProvider
 from core.nhi_registry import NHIRegistry
-from governance.shared.enforcement.data_classification import DataClassificationCatalog
-from governance.shared.enforcement.data_fgac import DataAccessMediator
+from galaxy_gov.shared.enforcement.data_classification import DataClassificationCatalog
+from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
 from payload_agents.config import AgentConfigModel, load_agent_config_cached
 
 logger = logging.getLogger(__name__)

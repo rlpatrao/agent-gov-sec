@@ -191,7 +191,7 @@ resource "aws_iam_role_policy" "proxy" {
 }
 
 # The chokepoint Lambda is now a container image: the handler imports the shared
-# enforcement library (governance/shared + governance/remote) and the
+# enforcement library (galaxy_gov/shared + galaxy_gov/remote) and the
 # agent_os/agent_sre/agentmesh toolkit, which exceed a single-file zip. Build and
 # push the image (see lambda/Dockerfile) and pass its URI as var.proxy_image_uri.
 resource "aws_ecr_repository" "proxy" {

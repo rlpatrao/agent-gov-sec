@@ -4,7 +4,7 @@ cloud_adapters/azure/infra/functions/llm_proxy.py — APIM → Azure OpenAI prox
 The LLM-egress chokepoint for the Azure "Method 1" deployment — the counterpart
 of ``cloud_adapters/aws/infra/lambda/bedrock_proxy.py``. A thin Azure-transport
 adapter: it translates the chat-completions request/response to/from
-``governance.remote.enforce``, which resolves the caller's policy from the
+``galaxy_gov.remote.enforce``, which resolves the caller's policy from the
 NHI-keyed registry (fail-closed) and re-verifies it with the *same* enforcement
 library the in-process pipeline uses (trust-but-verify). No control logic lives
 here.
@@ -30,8 +30,8 @@ import json
 import os
 import urllib.request
 
-from governance.remote import enforce
-from governance.shared.policy_registry import load_registry
+from galaxy_gov.remote import enforce
+from galaxy_gov.shared.policy_registry import load_registry
 
 _DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
 _API_VERSION = os.environ.get("AZURE_OPENAI_API_VERSION", "2025-03-01-preview")

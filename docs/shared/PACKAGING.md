@@ -69,7 +69,7 @@ curl localhost:8080/health
 ```
 
 It exposes three routes — `POST /llm`, `POST /data`, `POST /a2a` — over the same handlers
-the serverless deployments use ([`governance/remote/server.py`](../../governance/remote/server.py),
+the serverless deployments use ([`galaxy_gov/remote/server.py`](../../galaxy_gov/remote/server.py),
 [`deploy/Dockerfile.service`](../../deploy/Dockerfile.service)).
 
 For production, deploy the container in a **separate environment under a separate identity**

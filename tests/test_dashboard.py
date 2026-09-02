@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-from governance.remote._crosswalk import CROSSWALK, by_code
-from governance.remote.dashboard import render_dashboard
-from governance.remote.decision_log import (
+from galaxy_gov.remote._crosswalk import CROSSWALK, by_code
+from galaxy_gov.remote.dashboard import render_dashboard
+from galaxy_gov.remote.decision_log import (
     ALLOW,
     DENY,
     ERROR,
@@ -282,8 +282,8 @@ def live_service(monkeypatch):
     monkeypatch.setenv("GOV_POLICY_REGISTRY", json.dumps(registry))
     monkeypatch.delenv("GOV_CONTROL_TOKEN", raising=False)
 
-    from governance.remote import server as srv
-    from governance.remote.decision_log import DECISIONS
+    from galaxy_gov.remote import server as srv
+    from galaxy_gov.remote.decision_log import DECISIONS
 
     DECISIONS.reset()
     srv._handler_cache.clear()

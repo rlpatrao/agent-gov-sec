@@ -20,7 +20,7 @@ and the Lambda ``handler`` exposes it over HTTP.
 import json
 import os
 
-from governance.shared.policy_registry import authorize_recipient, load_registry
+from galaxy_gov.shared.policy_registry import authorize_recipient, load_registry
 
 _registry_cache = None
 

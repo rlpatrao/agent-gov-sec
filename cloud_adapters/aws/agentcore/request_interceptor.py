@@ -16,7 +16,7 @@ AgentCore interceptor contract (gateway-interceptors-examples):
 
 import json
 
-from governance.shared.enforcement.session import build_enforcement
+from galaxy_gov.shared.enforcement.session import build_enforcement
 
 # Identity-independent content posture (Cedar owns per-agent tool authz). Injection
 # blocks at medium+, credentials are denied outright, budget is irrelevant for a

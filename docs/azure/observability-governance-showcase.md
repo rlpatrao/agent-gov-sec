@@ -372,7 +372,7 @@ Incoming message (user prompt / tool result)
 ④ AuditTrailMiddleware                  ← append-only audit entry, three backends (agent_os)
          │
          ▼
-⑤ GovernancePolicyMiddleware            ← YAML declarative rules (governance/policies/*.yaml)
+⑤ GovernancePolicyMiddleware            ← YAML declarative rules (galaxy_gov/policies/*.yaml)
          │
          ▼
 ⑥ CapabilityGuardMiddleware             ← tool allow-list from YAML (FinOps has none — read-only)
@@ -393,7 +393,7 @@ The offline demo ([`scripts/demo_agents.py --fake`](../../scripts/demo_agents.py
 ### 4.2 Guard 1 — Prompt Injection (OWASP ASI-01)
 
 **File:** [`cloud_adapters/azure/maf/guards/prompt_injection.py`](../../cloud_adapters/azure/maf/guards/prompt_injection.py)
-**Config file:** [`governance/configs/prompt-injection.yaml`](../../governance/configs/prompt-injection.yaml)
+**Config file:** [`galaxy_gov/configs/prompt-injection.yaml`](../../galaxy_gov/configs/prompt-injection.yaml)
 
 The guard wraps `agent_os.prompt_injection.PromptInjectionDetector` and detects the following attack vector families using literal and heuristic matching, with no LLM call:
 
@@ -437,9 +437,9 @@ This guard wraps `agent_os.context_budget.ContextScheduler` and prevents runaway
 
 ### 4.5 Guard 5 — Declarative YAML Policy Rules
 
-**Files:** [`governance/policies/galaxy-core.yaml`](../../governance/policies/galaxy-core.yaml), `galaxy-tools.yaml`, `galaxy-pii.yaml`, `galaxy-ast.yaml`
+**Files:** [`galaxy_gov/policies/galaxy-core.yaml`](../../galaxy_gov/policies/galaxy-core.yaml), `galaxy-tools.yaml`, `galaxy-pii.yaml`, `galaxy-ast.yaml`
 
-These are `agent_os` `GovernancePolicyMiddleware` rules evaluated on every turn, priority-sorted with first-match-wins semantics. All files under `governance/policies/` are auto-loaded at agent build time from `_POLICY_DIR`, requiring no manifest and no code:
+These are `agent_os` `GovernancePolicyMiddleware` rules evaluated on every turn, priority-sorted with first-match-wins semantics. All files under `galaxy_gov/policies/` are auto-loaded at agent build time from `_POLICY_DIR`, requiring no manifest and no code:
 
 ```yaml
 # galaxy-core.yaml — defense-in-depth net if the injection guard is misconfigured
@@ -467,7 +467,7 @@ rules:
     action: deny
 ```
 
-Adding a new enterprise policy requires only a new YAML file in `governance/policies/` and an agent restart, with no Python changes and no redeployment of agent code. This in-process policy decision is the authorization authority on Azure; there is no managed Cedar engine as on AWS. On Method 1 the same decision is re-checked at the APIM edge.
+Adding a new enterprise policy requires only a new YAML file in `galaxy_gov/policies/` and an agent restart, with no Python changes and no redeployment of agent code. This in-process policy decision is the authorization authority on Azure; there is no managed Cedar engine as on AWS. On Method 1 the same decision is re-checked at the APIM edge.
 
 ---
 
@@ -530,7 +530,7 @@ Both options exercise the same control set; they differ only in how the model an
 
 ## 5. Observability of Reasoning Content (CoT/CoVe) — Wired (behind flag)
 
-The platform traces per-step and per-hop spans and `reasoning_tokens` counts; WS7 (Gap 4+) added logging of the reasoning content itself. `ReasoningTraceLogger` ([`governance/shared/enforcement/reasoning_trace.py`](../../governance/shared/enforcement/reasoning_trace.py), flag `GALAXY_GAP_REASONING_TRACE`, off by default) performs the following functions:
+The platform traces per-step and per-hop spans and `reasoning_tokens` counts; WS7 (Gap 4+) added logging of the reasoning content itself. `ReasoningTraceLogger` ([`galaxy_gov/shared/enforcement/reasoning_trace.py`](../../galaxy_gov/shared/enforcement/reasoning_trace.py), flag `GALAXY_GAP_REASONING_TRACE`, off by default) performs the following functions:
 
 - **Capture:** records the agent's CoT (reasoning / tool-selection rationale) and CoVe (self-generated verification Q&A).
 - **Redact before persist (mandatory):** routes every CoT/CoVe string through the `agent_os` `CredentialRedactor` (credentials and PII) before it reaches any sink, so raw reasoning never lands. The logger refuses to run without a redactor.

@@ -27,7 +27,7 @@ import os
 import re
 from typing import Optional
 
-from governance.remote.registrar import CallerIdentity, EnrollmentDenied, VerifiedPrincipal
+from galaxy_gov.remote.registrar import CallerIdentity, EnrollmentDenied, VerifiedPrincipal
 
 logger = logging.getLogger(__name__)
 

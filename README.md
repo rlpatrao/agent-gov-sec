@@ -1,6 +1,6 @@
 # Galaxy Agentic Governance Platform
 
-A runtime governance and security platform for multi-agent systems, built on the `agent_os`, `agent_sre`, and `agentmesh` packages (the Microsoft Agent Governance Toolkit). Agents are governed through a framework-neutral [`GuardPipeline`](governance/shared/enforcement/pipeline.py) reached by a per-framework adapter; three adapters are implemented and run the demo matrix (`--framework {langgraph,raw,pydantic}`). The platform provides per-agent identity, a layered guard stack, agent-to-agent governance, OTel tracing, and a hash-chained audit ledger. The governance is independent of the agent framework and of the cloud (`CLOUD_PROVIDER`).
+A runtime governance and security platform for multi-agent systems, built on the `agent_os`, `agent_sre`, and `agentmesh` packages (the Microsoft Agent Governance Toolkit). Agents are governed through a framework-neutral [`GuardPipeline`](galaxy_gov/shared/enforcement/pipeline.py) reached by a per-framework adapter; three adapters are implemented and run the demo matrix (`--framework {langgraph,raw,pydantic}`). The platform provides per-agent identity, a layered guard stack, agent-to-agent governance, OTel tracing, and a hash-chained audit ledger. The governance is independent of the agent framework and of the cloud (`CLOUD_PROVIDER`).
 
 AWS is the cloud with a live persona deployment. It runs two ways — **Bedrock** (through an API Gateway chokepoint) and **AgentCore** — and both run the full guard matrix. Azure is the default cloud binding and is fully documented in [`docs/azure/`](docs/azure/): governance runs in-process (the default provider for the test suite), and the APIM proxy and Container Apps topologies are reference IaC. The GCP binding exists in code under `cloud_adapters/`; its documentation stack is a placeholder for now.
 
@@ -8,9 +8,9 @@ AWS is the cloud with a live persona deployment. It runs two ways — **Bedrock*
 
 ## What this platform does
 
-**Governance platform** (`core/`, `governance/`, `a2a/`): per-agent Non-Human Identity (AWS IAM), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → X-Ray tracing, a hash-chained DynamoDB audit ledger, and API Gateway as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
+**Governance platform** (`core/`, `galaxy_gov/`, `a2a/`): per-agent Non-Human Identity (AWS IAM), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → X-Ray tracing, a hash-chained DynamoDB audit ledger, and API Gateway as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
 
-**Demonstration payload** (`payload_agents/`): three governed agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). Each persona is defined once, framework-neutrally, in `payload_agents/_lib/personas.py` and built on any of three frameworks (`--framework {langgraph,raw,pydantic}`, default LangGraph). They demonstrate that the governance stack is framework-agnostic: the same `governance/` + `core/` + `a2a/` primitives and WS7 extensions wrap each framework — LangGraph's `create_agent` via a LangChain `AgentMiddleware` shim (`payload_agents/langgraph/`), Pydantic AI via a model wrapper (`payload_agents/pydantic/`), and a provider-native tool loop that does not import a framework (`payload_agents/raw/`).
+**Demonstration payload** (`payload_agents/`): three governed agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). Each persona is defined once, framework-neutrally, in `payload_agents/_lib/personas.py` and built on any of three frameworks (`--framework {langgraph,raw,pydantic}`, default LangGraph). They demonstrate that the governance stack is framework-agnostic: the same `galaxy_gov/` + `core/` + `a2a/` primitives and WS7 extensions wrap each framework — LangGraph's `create_agent` via a LangChain `AgentMiddleware` shim (`payload_agents/langgraph/`), Pydantic AI via a model wrapper (`payload_agents/pydantic/`), and a provider-native tool loop that does not import a framework (`payload_agents/raw/`).
 
 **Governance demos** — run fully offline (deterministic fake model) or against live Bedrock when credentials resolve:
 - `scripts/demo_governance.py` — the minimal, framework-free guard/redaction/ledger walkthrough (no creds).
@@ -175,7 +175,7 @@ agent-gov-sec/
 │   ├── run_tracer.py               OTel configure_tracing + pipeline_span
 │   └── trace_ledger.py             Hash-chained audit ledger schema
 │
-├── governance/                     Security & compliance layer (framework- and cloud-neutral)
+├── galaxy_gov/                     Security & compliance layer (framework- and cloud-neutral)
 │   ├── shared/enforcement/         GuardPipeline + the guard library (FGAC, drift, reasoning, MCP, code/runtime, content/cost)
 │   ├── inprocess/floor.py          Non-negotiable governance floor (always-on controls)
 │   ├── remote/enforce.py           Out-of-process enforcement at the chokepoint

@@ -56,15 +56,15 @@ REQUIRED_CONFIGS: tuple[ConfigFile, ...] = (
 def governance_root() -> Path:
     """Directory of the installed ``governance`` package."""
     try:
-        import governance
+        import galaxy_gov
     except ModuleNotFoundError as exc:  # pragma: no cover - install is broken
         raise ConfigurationError(
             "the `governance` package is not importable; the agentkit install is "
             "incomplete. Reinstall with `pip install galaxy-agentkit`."
         ) from exc
-    if not governance.__file__:
+    if not galaxy_gov.__file__:
         raise ConfigurationError("the `governance` package has no filesystem location")
-    return Path(governance.__file__).parent
+    return Path(galaxy_gov.__file__).parent
 
 
 def missing_configs() -> list[ConfigFile]:

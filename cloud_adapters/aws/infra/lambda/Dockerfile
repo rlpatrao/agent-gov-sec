@@ -1,10 +1,10 @@
 # Container image for the governance chokepoint Lambdas (LLM proxy / data proxy /
 # A2A broker). The single-file zip is no longer sufficient: the handlers import
-# the shared enforcement library (governance/shared + governance/remote) and the
+# the shared enforcement library (galaxy_gov/shared + galaxy_gov/remote) and the
 # agent_os/agent_sre/agentmesh toolkit, so the deployment is a container image.
 #
 # The image bakes the resolved policy registry at /var/task/agent-controls.json
-# (produced by `python -m governance.policy_export`); the function points
+# (produced by `python -m galaxy_gov.policy_export`); the function points
 # GOV_POLICY_REGISTRY_PATH at it. Pick the handler per function via the CMD
 # override in Terraform (image_config.command).
 #
@@ -18,9 +18,9 @@ COPY cloud_adapters/aws/infra/lambda/requirements-proxy.txt ./
 RUN pip install --no-cache-dir -r requirements-proxy.txt
 
 # The enforcement library (shared + remote + adapters) and the handlers. Note we
-# copy governance/shared, governance/remote, governance/adapters and core/ — NOT
+# copy galaxy_gov/shared, galaxy_gov/remote, galaxy_gov/adapters and core/ — NOT
 # payload_agents (the chokepoints never import the agent codebase).
-COPY governance/ ${LAMBDA_TASK_ROOT}/governance/
+COPY galaxy_gov/ ${LAMBDA_TASK_ROOT}/galaxy_gov/
 COPY core/ ${LAMBDA_TASK_ROOT}/core/
 COPY cloud_adapters/aws/infra/lambda/bedrock_proxy.py ${LAMBDA_TASK_ROOT}/
 COPY cloud_adapters/aws/infra/lambda/data_proxy.py ${LAMBDA_TASK_ROOT}/

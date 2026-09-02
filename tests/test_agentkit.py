@@ -88,7 +88,7 @@ def test_pipeline_refuses_to_build_without_injection_rules(monkeypatch, tmp_path
     a packaging mistake would downgrade the control while still reporting
     success. Pin the loud failure.
     """
-    from governance.shared.enforcement import pipeline
+    from galaxy_gov.shared.enforcement import pipeline
 
     monkeypatch.setattr(
         pipeline, "_PROMPT_INJECTION_CONFIG", tmp_path / "absent.yaml"
@@ -171,7 +171,7 @@ def test_unreachable_authority_refuses_to_start():
 
 # ── `galaxy init` scaffolder ─────────────────────────────────────────────
 def test_scaffold_generates_a_complete_project(tmp_path):
-    from governance.tooling.scaffold import init
+    from galaxy_gov.tooling.scaffold import init
 
     assert init(["payroll-agent", "--root", str(tmp_path)]) == 0
     root = tmp_path / "payroll-agent"
@@ -196,7 +196,7 @@ def test_scaffold_generates_a_complete_project(tmp_path):
 
 
 def test_scaffold_refuses_to_overwrite(tmp_path):
-    from governance.tooling.scaffold import init
+    from galaxy_gov.tooling.scaffold import init
 
     assert init(["payroll-agent", "--root", str(tmp_path)]) == 0
     assert init(["payroll-agent", "--root", str(tmp_path)]) == 1

@@ -71,17 +71,17 @@ The manual steps below document what the script does, for reference.
 
 ```bash
 # Coarse-authz Cedar policies (source of truth = the policy registry):
-python -m governance.agentcore.cedar_export > agentcore.cedar
+python -m galaxy_gov.agentcore.cedar_export > agentcore.cedar
 
 # The resolved policy registry the interceptors read:
-python -m governance.policy_export > cloud_adapters/aws/infra/lambda/agent-controls.json
+python -m galaxy_gov.policy_export > cloud_adapters/aws/infra/lambda/agent-controls.json
 ```
 
 ## Components
 
 | AgentCore primitive | What we attach | Code |
 |---|---|---|
-| Policy engine (Cedar) | generated `agentcore.cedar` | `governance/agentcore/cedar_export.py` |
+| Policy engine (Cedar) | generated `agentcore.cedar` | `galaxy_gov/agentcore/cedar_export.py` |
 | Gateway request interceptor (Lambda) | input guards + tool-plan content checks | `request_interceptor.py` |
 | Gateway response interceptor (Lambda) | output redaction + tool-list filtering | `response_interceptor.py` |
 | Identity | NHI → AgentCore Identity | `identity.py` |
@@ -110,7 +110,7 @@ python -m governance.policy_export > cloud_adapters/aws/infra/lambda/agent-contr
    consumed by `AgentCoreIdentityProvider`.
 
 6. **State** for stateful controls (drift/circuit/cost/rate): provision a DynamoDB
-   table and point `governance.shared.state.DynamoDbState` at it.
+   table and point `galaxy_gov.shared.state.DynamoDbState` at it.
 
 ## Division of labor (avoid double-enforcement)
 

@@ -113,7 +113,7 @@ class TestDeployParams:
         """The Runtime execution role name must match the Cedar principal so the
         gateway authorizes the right agent."""
         dac = _load(_ROOT / "scripts" / "deploy_agentcore.py", "_dac2")
-        from governance.agentcore.cedar_export import principal_arn
+        from galaxy_gov.agentcore.cedar_export import principal_arn
 
         role_arn = dac._agent_role_arn("111122223333", "Rogue")
         cedar_principal = principal_arn("111122223333", "Rogue")

@@ -29,35 +29,35 @@ def _imports(pkg_dir: Path):
 
 class TestImportBoundaries:
     def test_shared_does_not_import_payload_or_remote(self):
-        bad = [(f.name, m) for f, m in _imports(_ROOT / "governance" / "shared")
-               if m.startswith(("payload_agents", "governance.remote", "governance.inprocess"))]
+        bad = [(f.name, m) for f, m in _imports(_ROOT / "galaxy_gov" / "shared")
+               if m.startswith(("payload_agents", "galaxy_gov.remote", "galaxy_gov.inprocess"))]
         assert bad == [], f"shared/ must not import payload/remote/inprocess: {bad}"
 
     def test_remote_imports_only_shared_within_governance(self):
-        """remote/ may depend on governance.shared (the enforcement library) and on
+        """remote/ may depend on galaxy_gov.shared (the enforcement library) and on
         itself (enforce / registrar / identity_store are one tier), but on no other
         governance tier. The tiers it must not reach are the build-time producer
-        (`governance.policy_export`, which imports the agent codebase), the
+        (`galaxy_gov.policy_export`, which imports the agent codebase), the
         in-process floor, and the cloud-specific generators — pulling any of those
         in would break the property that this tier vendors into a Lambda or a
         Fargate daemon on its own."""
-        allowed = ("governance.shared", "governance.remote")
-        bad = [(f.name, m) for f, m in _imports(_ROOT / "governance" / "remote")
+        allowed = ("galaxy_gov.shared", "galaxy_gov.remote")
+        bad = [(f.name, m) for f, m in _imports(_ROOT / "galaxy_gov" / "remote")
                if m.startswith("governance.") and not m.startswith(allowed)]
-        assert bad == [], f"remote/ may only import governance.shared or governance.remote: {bad}"
+        assert bad == [], f"remote/ may only import galaxy_gov.shared or galaxy_gov.remote: {bad}"
 
     def test_remote_does_not_import_payload(self):
-        bad = [(f.name, m) for f, m in _imports(_ROOT / "governance" / "remote")
+        bad = [(f.name, m) for f, m in _imports(_ROOT / "galaxy_gov" / "remote")
                if m.startswith("payload_agents")]
         assert bad == [], f"remote/ must not import the agent codebase: {bad}"
 
     def test_remote_does_not_import_the_build_time_producer(self):
-        """`governance.policy_export` imports payload_agents to resolve a floored
+        """`galaxy_gov.policy_export` imports payload_agents to resolve a floored
         policy. The chokepoints must consume the *exported artifact* instead, so an
         import of the producer is a regression even though it is not a direct
         payload_agents import."""
-        bad = [(f.name, m) for f, m in _imports(_ROOT / "governance" / "remote")
-               if m.startswith(("governance.policy_export", "governance.inprocess"))]
+        bad = [(f.name, m) for f, m in _imports(_ROOT / "galaxy_gov" / "remote")
+               if m.startswith(("galaxy_gov.policy_export", "galaxy_gov.inprocess"))]
         assert bad == [], f"remote/ must consume the exported registry, not the producer: {bad}"
 
 
@@ -65,8 +65,8 @@ class TestSingleCodePath:
     """build_enforcement is the one enforcement path; verify each control fires."""
 
     def _session(self):
-        from governance.shared.enforcement.session import build_enforcement
-        from governance.policy_export import resolve_policy
+        from galaxy_gov.shared.enforcement.session import build_enforcement
+        from galaxy_gov.policy_export import resolve_policy
         return build_enforcement(resolve_policy("finops").to_dict(), agent_id="FinOps", agent_type="FinOps")
 
     def test_injection_blocks(self):
@@ -91,7 +91,7 @@ class TestSingleCodePath:
 
 class TestStateBackend:
     def test_in_memory_incr_and_get(self):
-        from governance.shared.state import InMemoryState
+        from galaxy_gov.shared.state import InMemoryState
         s = InMemoryState()
         assert s.incr("cost", "FinOps", 1.5) == 1.5
         assert s.incr("cost", "FinOps", 0.5) == 2.0

@@ -41,9 +41,9 @@ _BLOCK_AT_OR_ABOVE: dict[str, int] = {
 
 def _packaged_config() -> Path:
     """The prompt-injection rules shipped with the governance package."""
-    import governance
+    import galaxy_gov
 
-    return Path(governance.__file__).parent / "configs" / "prompt-injection.yaml"
+    return Path(galaxy_gov.__file__).parent / "configs" / "prompt-injection.yaml"
 
 
 class PromptInjectionGuardMiddleware(AgentMiddleware):

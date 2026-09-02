@@ -68,7 +68,7 @@ def check_install() -> bool:
     root = governance_root()
     missing = missing_configs()
     print(f"galaxy_agentkit {__version__}")
-    print(f"governance package: {root}")
+    print(f"galaxy_gov package: {root}")
     for cfg in REQUIRED_CONFIGS:
         present = (root / cfg.relative_path).is_file()
         print(f"  [{'ok' if present else 'MISSING'}] {cfg.relative_path}")

@@ -60,10 +60,10 @@ The analysis supports the following conclusions:
 |---|---|---|---|
 | Agent identity (NHI) | **Identity** (OAuth, token vault, IdP federation) | `core/nhi_registry.py` (agent-type → cloud principal) + the authority-side Registrar | AgentCore is more mature on AWS. Ours is portable, and the Registrar holds the binding outside the agent's trust domain. |
 | Egress / single chokepoint | **Gateway** (managed, MCP, OAuth) | `bedrock_proxy` + API Gateway IaC | AgentCore supersedes our hand-built plumbing on AWS. |
-| Out-of-process enforcement point | **Gateway interceptors** (request/response Lambdas) | `governance/remote/*` proxies | Direct analog. Our enforcement should become the interceptor *payload*. |
+| Out-of-process enforcement point | **Gateway interceptors** (request/response Lambdas) | `galaxy_gov/remote/*` proxies | Direct analog. Our enforcement should become the interceptor *payload*. |
 | Authorization (who calls what tool, conditions) | **Policy** (Cedar, NL authoring, automated reasoning, fail-closed, outside agent code) | `policy_registry` + capability guard + A2A authz | Strong overlap; AgentCore is arguably ahead (Cedar + reasoning). Adopt it for authz. |
 | Observability | **Observability** (OTel/CloudWatch) | OTel spans + audit | Overlap; emit to AgentCore Observability. |
-| Eval / red-team | **Evaluations** | `governance/ops` (evals, replay, adversarial) | Overlap; complementary. |
+| Eval / red-team | **Evaluations** | `galaxy_gov/ops` (evals, replay, adversarial) | Overlap; complementary. |
 | Tool/agent governance catalog | **Registry** (publish-review-approve) | `policy_registry` + CODEOWNERS workflow | Overlap on AWS. |
 | Agent hosting | **Runtime / Harness** | `payload_agents/*` on any framework | Complementary — our agents can run on Runtime. |
 | Memory / Browser / Code Interp / Payments | native services | not provided | Complementary; no conflict. |
@@ -119,9 +119,9 @@ reimplement:
             ┌──────────────── AgentCore ────────────────┐
 agent  ──►  Gateway ──► [Policy: Cedar authz]  ──► tool/LLM
 (Runtime)      │            (coarse: who/what/when)
-               ├── request interceptor (Lambda)  ◄── governance/remote + shared
+               ├── request interceptor (Lambda)  ◄── galaxy_gov/remote + shared
                │     prompt-injection, credential/PII, budget, blocked-pattern
-               └── response interceptor (Lambda) ◄── governance/remote + shared
+               └── response interceptor (Lambda) ◄── galaxy_gov/remote + shared
                      output PII/redaction, tool-plan/blocked-pattern, FGAC backstop
             └────────────────────────────────────────────┘
    Identity  ◄─ map NHI → AgentCore Identity (OAuth/IdP)
@@ -134,8 +134,8 @@ The integration assigns responsibilities as follows:
 - Coarse authorization is delegated to AgentCore Policy (Cedar). Capability
   allow/deny rules and A2A recipient rules map cleanly to Cedar, and the managed
   engine should own them.
-- Rich controls are deployed as Gateway interceptors. The `governance/shared` and
-  `governance/remote` modules are packaged as the request and response
+- Rich controls are deployed as Gateway interceptors. The `galaxy_gov/shared` and
+  `galaxy_gov/remote` modules are packaged as the request and response
   interceptor Lambdas. This is the same code from the reorganization, deployed
   into AgentCore's interception points instead of the framework's own API Gateway.
 - Data FGAC is implemented as a tool fronted by the Gateway, with the masking
@@ -182,14 +182,14 @@ following table records each piece, its code location, and how it is verified:
 
 | Piece | Code | Verified |
 |---|---|---|
-| Cedar generation from the registry | `governance/agentcore/cedar_export.py` | `tests/test_agentcore.py` |
+| Cedar generation from the registry | `galaxy_gov/agentcore/cedar_export.py` | `tests/test_agentcore.py` |
 | Gateway request interceptor (input + tool-plan) | `cloud_adapters/aws/agentcore/request_interceptor.py` | `tests/test_agentcore.py` |
 | Gateway response interceptor (redaction + tool-list filter) | `cloud_adapters/aws/agentcore/response_interceptor.py` | `tests/test_agentcore.py` |
 | NHI → AgentCore Identity | `cloud_adapters/aws/agentcore/identity.py` | imports cleanly without the SDK |
 | Deploy steps | `cloud_adapters/aws/agentcore/README.md` | documented, not CI-run |
 
 The interceptors and the AWS chokepoints share one enforcement library
-(`governance/remote` over `governance/shared/enforcement`), so AWS-native and
+(`galaxy_gov/remote` over `galaxy_gov/shared/enforcement`), so AWS-native and
 off-AWS deployments run identical controls.
 
 Live deployment (verified). The Policy, Identity, and Gateway layer has been
@@ -276,7 +276,7 @@ GenAI Observability → Bedrock AgentCore.
   equivalent is the Gateway interceptor Lambdas, packaged as container images
   (`lambda/Dockerfile`).
 - State: stateful controls covering drift, circuit, cost, and rate externalize to
-  DynamoDB via `governance/shared/state.py` (`DynamoDbState`), mirroring the audit
+  DynamoDB via `galaxy_gov/shared/state.py` (`DynamoDbState`), mirroring the audit
   ledger's DynamoDB backend.
 
 ## Sources

@@ -1,4 +1,4 @@
-# Egress allow-list — loaded by governance.guards.egress.load_egress_policy()
+# Egress allow-list — loaded by galaxy_gov.guards.egress.load_egress_policy()
 # and passed into agent_os.egress_policy.EgressPolicy.
 #
 # The demo personas (FinOps, Auditor, Rogue) reach the model only through APIM /

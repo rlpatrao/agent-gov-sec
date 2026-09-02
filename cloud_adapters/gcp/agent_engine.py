@@ -119,7 +119,7 @@ class GalaxyAgentEngineApp:
 
     # ── internals ─────────────────────────────────────────────────────────────
     async def _run(self, *, prompt: str, agent: str, run_id: str) -> dict:
-        from governance.shared.enforcement.pipeline import GovernanceViolation
+        from galaxy_gov.shared.enforcement.pipeline import GovernanceViolation
 
         bundle = await self._builders[agent](run_id, self._model)
         verdict: dict = {"blocked": False}

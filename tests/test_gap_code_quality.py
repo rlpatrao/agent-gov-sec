@@ -9,10 +9,10 @@ is executed — so there is no sleep/wall-clock risk.
 
 from __future__ import annotations
 
-from governance.shared.enforcement.decision import GuardDecision
-from governance.shared.enforcement.diff_policy_guard import DiffPolicyGuard
-from governance.shared.enforcement.secure_codegen_guard import SecureCodegenGuard
-from governance.shared.enforcement.secure_exec import SecureExecGuard
+from galaxy_gov.shared.enforcement.decision import GuardDecision
+from galaxy_gov.shared.enforcement.diff_policy_guard import DiffPolicyGuard
+from galaxy_gov.shared.enforcement.secure_codegen_guard import SecureCodegenGuard
+from galaxy_gov.shared.enforcement.secure_exec import SecureExecGuard
 
 
 # --------------------------------------------------------------------------- #

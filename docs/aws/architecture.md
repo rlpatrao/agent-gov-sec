@@ -312,7 +312,7 @@ and a non-overridable runtime floor, as described in
 
 | Actor                          | Owns                                                                                                            | Cannot                                                                                              |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Agent developer**            | The agent's tools, prompts, and framework wiring under`payload_agents/`. Requests capabilities and data scopes. | Weaken a control. The floor (`governance/inprocess/floor.py`) clamps config stricter, never looser. |
+| **Agent developer**            | The agent's tools, prompts, and framework wiring under`payload_agents/`. Requests capabilities and data scopes. | Weaken a control. The floor (`galaxy_gov/inprocess/floor.py`) clamps config stricter, never looser. |
 | **Enterprise governance team** | The policy registry, the guard configuration, the floor, the out-of-process chokepoints.                        | — Owns the controls end to end (CODEOWNERS-gated).                                                 |
 
 The agent *personas* used in the demo (FinOps, Auditor, Rogue) represent a separate
@@ -322,10 +322,10 @@ concept; they are governed workloads, covered in §10.
 
 The developer trust domain comprises the following components:
 
-- **`GuardPipeline`** (`governance/shared/enforcement/pipeline.py`) — provides the four
+- **`GuardPipeline`** (`galaxy_gov/shared/enforcement/pipeline.py`) — provides the four
   hooks (`before_model`, `after_model`, `before_tool`, `after_tool`) and the guard
   library.
-- **The floor** (`governance/inprocess/floor.py`) — implements always-on controls that
+- **The floor** (`galaxy_gov/inprocess/floor.py`) — implements always-on controls that
   cannot be disabled by agent config.
 - **Core seam** (`core/interfaces.py`, `provider_factory.py`, `nhi_registry.py`,
   `run_tracer.py`, `trace_ledger.py`) — comprises the Protocols, provider selection, NHI
@@ -348,7 +348,7 @@ The governing-team boundary comprises the following components:
 - **AgentCore gateway + interceptors + Cedar engine** — provides the Method 2 boundary,
   with content controls in the interceptor Lambdas and authorization in the Cedar policy
   engine.
-- **`EnforcementSession`** (`governance/remote/enforce.py`) — the single enforcement code
+- **`EnforcementSession`** (`galaxy_gov/remote/enforce.py`) — the single enforcement code
   path. The same object runs in-process and at the boundary, so the two cannot drift.
 
 ---
@@ -356,7 +356,7 @@ The governing-team boundary comprises the following components:
 ## 7. Deployment / run options
 
 The platform runs on AWS in two ways. Both methods consume the same policy registry
-(`governance/policy_export.py`) and run the full matrix.
+(`galaxy_gov/policy_export.py`) and run the full matrix.
 
 
 |                  | **Method 1 — Bedrock proxy**                                                             | **Method 2 — AgentCore**                                                       |
@@ -483,15 +483,15 @@ output · verdict). The observability walkthrough resides in
 | **ADOT**                             | AWS Distro for OpenTelemetry. The collector that forwards OTel spans to X-Ray / CloudWatch.                                                                                   |
 | **AgentCore**                        | Amazon Bedrock AgentCore. Hosts the per-persona runtimes, MCP gateway, Cedar policy engine, and interceptors (Method 2).                                                      |
 | **Cedar**                            | The policy language the AgentCore policy engine enforces (also the basis of AWS Verified Permissions). Expresses coarse authorization — one permit/forbid per agent × tool. |
-| **EnforcementSession**               | The single enforcement code path (`governance/remote/enforce.py`) run both in-process and at the chokepoint.                                                                  |
+| **EnforcementSession**               | The single enforcement code path (`galaxy_gov/remote/enforce.py`) run both in-process and at the chokepoint.                                                                  |
 | **FGAC**                             | Field-grained access control. Column masking, row filtering, Lake Formation pushdown, and deny at the data boundary.                                                          |
-| **GuardPipeline**                    | The framework-neutral guard orchestration (`governance/shared/enforcement/pipeline.py`); four hooks around model and tool calls.                                              |
-| **Floor**                            | The non-overridable governance baseline (`governance/inprocess/floor.py`); clamps config stricter, never looser.                                                              |
+| **GuardPipeline**                    | The framework-neutral guard orchestration (`galaxy_gov/shared/enforcement/pipeline.py`); four hooks around model and tool calls.                                              |
+| **Floor**                            | The non-overridable governance baseline (`galaxy_gov/inprocess/floor.py`); clamps config stricter, never looser.                                                              |
 | **Hash-chained ledger**              | Tamper-evident SHA-256 audit chain; each entry hashes the previous. Persisted to DynamoDB`galaxy-trace-ledger`.                                                               |
 | **Interceptor**                      | An AgentCore gateway Lambda that runs content controls on the request (`galaxy-gov-request`) or response (`galaxy-gov-response`).                                             |
 | **MCP**                              | Model Context Protocol. The tool transport AgentCore's gateway speaks; Galaxy adds gateway/session/signing/screen/response controls.                                          |
 | **NHI**                              | Non-Human Identity. A per-agent identity bound to an AWS IAM role (`galaxy-rp-<type>`), resolved from the NHI registry.                                                       |
-| **Policy registry**                  | The exported per-agent`ControlPolicy` (`governance/policy_export.py`); the single source of truth both methods consume.                                                       |
+| **Policy registry**                  | The exported per-agent`ControlPolicy` (`galaxy_gov/policy_export.py`); the single source of truth both methods consume.                                                       |
 | **agent_os / agent_sre / agentmesh** | The Microsoft Agent Governance Toolkit — the upstream guard logic Galaxy composes.                                                                                           |
 
 ---

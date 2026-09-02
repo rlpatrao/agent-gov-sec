@@ -1,7 +1,7 @@
 """
 cloud_adapters.aws.data_fgac — AWS cloud-native enforcement for Gap 1 (data-layer FGAC).
 
-The agnostic mediator (``governance.shared.enforcement.data_fgac.DataAccessMediator``)
+The agnostic mediator (``galaxy_gov.shared.enforcement.data_fgac.DataAccessMediator``)
 decides allow/mask/deny; its default ``InProcessEnforcer`` masks/filters rows
 *after* they're fetched. That's correct but reads the sensitive bytes first.
 This adapter pushes the decision **down to the store** so masked/denied data
@@ -32,7 +32,7 @@ import os
 import re
 from typing import Optional
 
-from governance.shared.enforcement.data_fgac import (
+from galaxy_gov.shared.enforcement.data_fgac import (
     DataAccessDecision,
     InProcessEnforcer,
     _MASK,

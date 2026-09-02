@@ -34,7 +34,7 @@ can actually observe its event.
 [`.github/CODEOWNERS`](../../.github/CODEOWNERS) places every control surface under
 the governing team while leaving application code with developers:
 
-- `governance/` and `governance/inprocess/floor.py` — the pipeline and the floor.
+- `governance/` and `galaxy_gov/inprocess/floor.py` — the pipeline and the floor.
 - `payload_agents/config/` — the per-agent `governance:` blocks.
 - `cloud_adapters/*/egress.yaml` — the egress allow-lists.
 - `cloud_adapters/aws/infra/` — the out-of-process proxy and its IaC.
@@ -49,9 +49,9 @@ Operational requirement: the team handles in `CODEOWNERS` are placeholders
 real GitHub teams, and branch protection must be enabled, for the file to have
 force.
 
-## Mechanism 2 — the non-overridable floor (`governance/inprocess/floor.py`)
+## Mechanism 2 — the non-overridable floor (`galaxy_gov/inprocess/floor.py`)
 
-[`governance/inprocess/floor.py`](../../governance/inprocess/floor.py) defines a `GovernanceFloor`: the
+[`galaxy_gov/inprocess/floor.py`](../../galaxy_gov/inprocess/floor.py) defines a `GovernanceFloor`: the
 minimum governance posture. After a per-agent config is schema-validated,
 [`payload_agents/config.py`](../../payload_agents/config.py) passes it through
 `apply_floor()`, which clamps every field in the restrictive direction:
@@ -87,7 +87,7 @@ is what mechanism 4 is for.
 
 ## Mechanism 3 — the NHI-keyed policy registry
 
-[`governance/shared/policy_registry.py`](../../governance/shared/policy_registry.py) is the single
+[`galaxy_gov/shared/policy_registry.py`](../../galaxy_gov/shared/policy_registry.py) is the single
 authority every enforcement tier resolves from, so an agent's posture is never
 taken from the request at enforcement time. `resolve_policy(agent_type)` builds a
 `ControlPolicy` from the per-agent config **after the floor has run**, so the
@@ -102,8 +102,8 @@ The registry is the realisation of what was previously deferred as "signed
 external policy" — the posture now lives in one governing-team-owned document
 rather than being trusted per-request from the agent. Signing that document (and
 verifying the signature at load) is the remaining hardening step; the signing
-primitives exist (`governance/shared/enforcement/mcp_message_signer_guard.py`,
-`governance/ops/signing_report.py`) and can be applied to the exported registry.
+primitives exist (`galaxy_gov/shared/enforcement/mcp_message_signer_guard.py`,
+`galaxy_gov/ops/signing_report.py`) and can be applied to the exported registry.
 
 ### The centralized policy store
 
@@ -114,9 +114,9 @@ One versioned S3 object holds it; every enforcement tier reads that object.
   (destination `--uri`, default `GOV_POLICY_REGISTRY_URI`). The command uploads
   the same bytes it writes locally and prints the returned `VersionId` and the
   sha256 digest, so a published registry can be tied to a reviewed artifact.
-* **Who reads it.** The enforcement authority (`governance/remote/server.py`) and
+* **Who reads it.** The enforcement authority (`galaxy_gov/remote/server.py`) and
   the chokepoint handlers, all through
-  `governance.shared.policy_registry.resolve_registry()`. Source precedence is
+  `galaxy_gov.shared.policy_registry.resolve_registry()`. Source precedence is
   `GOV_POLICY_REGISTRY` (inline JSON) → `GOV_POLICY_REGISTRY_URI` (the store) →
   `GOV_POLICY_REGISTRY_PATH` (a file baked into the image). A published change
   therefore reaches every reader without redeploying any of them.
@@ -143,25 +143,25 @@ enforcement requires three chokepoints, each resolving the caller's posture from
 the registry (mechanism 3) and failing closed.
 
 The chokepoints re-run the **same** enforcement library the in-process pipeline
-uses — not a weaker re-implementation. `governance/shared/enforcement/session.py`
+uses — not a weaker re-implementation. `galaxy_gov/shared/enforcement/session.py`
 exposes `build_enforcement(policy) → EnforcementSession`, a synchronous wrapper
 over the real `agent_os`/`agent_sre` `GuardPipeline`; the transport-neutral
-`governance/remote/enforce.py` drives it. This is trust-but-verify on one code
+`galaxy_gov/remote/enforce.py` drives it. This is trust-but-verify on one code
 path: the agent runs the controls in-process (*trust*), the chokepoint
 independently re-runs the same controls (*verify*). Covered by
 `tests/test_chokepoints.py`, `tests/test_governance_tiers.py`, and
 `tests/test_agentcore.py`.
 
 The governance package is physically split into the tiers this implies:
-`governance/shared` (the enforcement library + the dependency-free
-`policy_registry` consumer), `governance/inprocess` (the floor), and
-`governance/remote` (the chokepoint entrypoints). `governance/policy_export.py` is
+`galaxy_gov/shared` (the enforcement library + the dependency-free
+`policy_registry` consumer), `galaxy_gov/inprocess` (the floor), and
+`galaxy_gov/remote` (the chokepoint entrypoints). `galaxy_gov/policy_export.py` is
 the build-time producer (it imports the agent config; the consumer half does not),
 and an import-boundary test keeps `shared`/`remote` free of any agent-codebase
 dependency so they vendor cleanly into a Lambda or a Fargate daemon.
 
 The chokepoints are also packaged as a standalone, independently-deployable
-**enforcement service**. [`governance/remote/server.py`](../../governance/remote/server.py)
+**enforcement service**. [`galaxy_gov/remote/server.py`](../../galaxy_gov/remote/server.py)
 routes `POST /llm`, `POST /data`, and `POST /a2a` over the same enforcement library;
 it is containerized via [`deploy/Dockerfile.service`](../../deploy/Dockerfile.service)
 and brought up locally with [`deploy/docker-compose.yml`](../../deploy/docker-compose.yml)
@@ -226,9 +226,9 @@ identity the agent previously asserted about itself. `NHIRegistry` resolved
 could present any identity and be judged against that identity's policy. Mechanism
 5 moves the binding out of the agent's trust domain.
 
-[`governance/remote/registrar.py`](../../governance/remote/registrar.py) records
+[`galaxy_gov/remote/registrar.py`](../../galaxy_gov/remote/registrar.py) records
 `agent_type → cloud principal` bindings in
-[`governance/remote/identity_store.py`](../../governance/remote/identity_store.py) —
+[`galaxy_gov/remote/identity_store.py`](../../galaxy_gov/remote/identity_store.py) —
 a governing-team-owned file (CODEOWNERS) served by the authority's control plane.
 When `GOV_AUTHORITY_ENDPOINT` is configured, `core/nhi_registry.py` resolves the
 binding from `GET /identity` and **does not** consult the env bridge: falling back
@@ -296,10 +296,10 @@ drifts from them.
 
 On AWS, the chokepoints map onto Amazon Bedrock AgentCore rather than bespoke
 plumbing (see `docs/agentcore-comparison.md`). Coarse authorization is generated
-as Cedar from the registry (`governance/agentcore/cedar_export.py`) and enforced
+as Cedar from the registry (`galaxy_gov/agentcore/cedar_export.py`) and enforced
 by AgentCore Policy; the content controls run as AgentCore Gateway **interceptors**
 (`cloud_adapters/aws/agentcore/{request,response}_interceptor.py`) — thin adapters
-that call the same `governance/remote/enforce` library. NHI maps to AgentCore
+that call the same `galaxy_gov/remote/enforce` library. NHI maps to AgentCore
 Identity (`cloud_adapters/aws/agentcore/identity.py`). The adapters and Cedar
 generation are verified offline (`tests/test_agentcore.py`); the deploy steps are
 in `cloud_adapters/aws/agentcore/README.md`. Off AWS, the identical
@@ -311,8 +311,8 @@ in `cloud_adapters/aws/agentcore/README.md`. Off AWS, the identical
 (mechanism 5) is signed. The highest-value next step is to sign both with the
 governing team's key and verify the signature when each chokepoint loads them, so a
 tampered artifact is rejected. The signing primitives exist
-(`governance/shared/enforcement/mcp_message_signer_guard.py`,
-`governance/ops/signing_report.py`); applying them to `export_registry_json` output,
+(`galaxy_gov/shared/enforcement/mcp_message_signer_guard.py`,
+`galaxy_gov/ops/signing_report.py`); applying them to `export_registry_json` output,
 the identity store, and the load paths is the remaining work to make the authority
 cryptographically, not just procedurally, owned by the governing team.
 

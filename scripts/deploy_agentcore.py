@@ -40,8 +40,8 @@ import zipfile
 
 import boto3
 
-from governance.agentcore.cedar_export import iter_agentcore_policies
-from governance.policy_export import KNOWN_AGENT_TYPES
+from galaxy_gov.agentcore.cedar_export import iter_agentcore_policies
+from galaxy_gov.policy_export import KNOWN_AGENT_TYPES
 
 ENGINE_NAME = "galaxy_governance"
 GW_NAME = "galaxy-governance-gw"
@@ -60,7 +60,7 @@ INTERCEPTOR_ZIP = "/.build/interceptor.zip"  # relative to repo root, see below
 
 # Per-persona AgentCore Runtimes (so finops/auditor/rogue are first-class, observable
 # runtimes in the console, each calling the gateway under its own identity).
-# AGENT_ROLE_PREFIX MUST match governance.agentcore.cedar_export.principal_arn so the
+# AGENT_ROLE_PREFIX MUST match galaxy_gov.agentcore.cedar_export.principal_arn so the
 # assumed-role principal the gateway sees matches the deployed Cedar policies.
 AGENT_ROLE_PREFIX = "galaxy-rp-"
 RUNTIME_CODE_KEY = "runtime/agent.zip"

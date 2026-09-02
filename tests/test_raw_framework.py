@@ -18,9 +18,9 @@ import pytest
 
 from payload_agents._runtime.contract import ScriptStep, ToolCall
 from payload_agents.raw import ScriptedChatClient, build_agent
-from governance.shared.enforcement.data_classification import DataClassificationCatalog
-from governance.shared.enforcement.data_fgac import DataAccessMediator
-from governance.shared.enforcement.pipeline import GovernanceViolation
+from galaxy_gov.shared.enforcement.data_classification import DataClassificationCatalog
+from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
+from galaxy_gov.shared.enforcement.pipeline import GovernanceViolation
 from payload_agents._lib import personas
 
 

@@ -93,7 +93,7 @@ jobs:
           # -W error::UserWarning: falling back to the toolkit's sample rules
           # emits a UserWarning, so this fails if the packaged rules are absent.
           /tmp/clientenv/bin/python -W error::UserWarning -c "
-          from governance.shared.enforcement.pipeline import _build_injection_detector
+          from galaxy_gov.shared.enforcement.pipeline import _build_injection_detector
           _build_injection_detector()
           print('guard pipeline builds from packaged rules')
           "
@@ -133,7 +133,7 @@ jobs:
           # The running service must report the same version it was stamped with.
           reported = subprocess.run(
               ["docker", "run", "--rm", "--entrypoint", "python", ref, "-c",
-               "from governance.remote.server import service_version; print(service_version())"],
+               "from galaxy_gov.remote.server import service_version; print(service_version())"],
               capture_output=True, text=True, check=True).stdout.strip()
           if reported != declared:
               print(f"service reports {reported!r}, expected {declared!r}"); sys.exit(1)

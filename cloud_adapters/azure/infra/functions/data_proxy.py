@@ -28,7 +28,7 @@ from __future__ import annotations
 import json
 import os
 
-from governance.shared.policy_registry import load_registry, policy_for
+from galaxy_gov.shared.policy_registry import load_registry, policy_for
 
 _catalog = None
 _mediator = None
@@ -43,8 +43,8 @@ def _mediator_engine():
     """Build (once) the FGAC mediator that owns the classification catalog."""
     global _catalog, _mediator
     if _mediator is None:
-        from governance.shared.enforcement.data_classification import DataClassificationCatalog
-        from governance.shared.enforcement.data_fgac import DataAccessMediator
+        from galaxy_gov.shared.enforcement.data_classification import DataClassificationCatalog
+        from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
         path = os.environ.get("GOV_DATA_CLASSIFICATION_PATH") or _default_catalog_path()
         _catalog = DataClassificationCatalog.load(path)
         _mediator = DataAccessMediator(catalog=_catalog)
@@ -54,7 +54,7 @@ def _mediator_engine():
 def _default_catalog_path():
     from pathlib import Path
     return (Path(__file__).resolve().parents[4]
-            / "governance" / "shared" / "enforcement" / "configs" / "data-classification.example.yaml")
+            / "galaxy_gov" / "shared" / "enforcement" / "configs" / "data-classification.example.yaml")
 
 
 def _registry():

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate ``governance/remote/_crosswalk.py`` from the standards crosswalk document.
+"""Generate ``galaxy_gov/remote/_crosswalk.py`` from the standards crosswalk document.
 
 The Governance Dashboard renders the control-to-standards crosswalk, but the
 enforcement service container copies only ``governance/``, ``core/`` and
@@ -35,7 +35,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "docs" / "shared" / "standards-crosswalk.md"
-OUTPUT = ROOT / "governance" / "remote" / "_crosswalk.py"
+OUTPUT = ROOT / "galaxy_gov" / "remote" / "_crosswalk.py"
 
 # Markdown header cell -> record field. Both source tables are covered; the
 # flag-gated table's "Guard" column carries the control name.

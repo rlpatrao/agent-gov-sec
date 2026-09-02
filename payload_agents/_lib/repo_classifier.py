@@ -2,7 +2,7 @@
 Deterministic repository classifier.
 
 Inspects a source directory and returns a `codebase_type` string that
-matches the keys in governance/mappings/aws-azure-reference.yaml.
+matches the keys in galaxy_gov/mappings/aws-azure-reference.yaml.
 
 Classification is signal-based (file presence + content grep), not LLM-based,
 so it is fast, free, and fully reproducible. Each codebase_type accumulates a

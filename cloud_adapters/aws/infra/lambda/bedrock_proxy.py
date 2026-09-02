@@ -2,7 +2,7 @@
 cloud_adapters/aws/infra/lambda/bedrock_proxy.py — API Gateway → Bedrock proxy.
 
 The LLM-egress chokepoint. A thin AWS-transport adapter: it translates the
-Converse request/response to/from `governance.remote.enforce`, which resolves the
+Converse request/response to/from `galaxy_gov.remote.enforce`, which resolves the
 caller's policy from the NHI-keyed registry (fail-closed) and re-verifies it with
 the *same* enforcement library the in-process pipeline uses (trust-but-verify).
 No control logic lives here.
@@ -22,8 +22,8 @@ supply the registry via `GOV_POLICY_REGISTRY` (JSON), `GOV_POLICY_REGISTRY_URI`
 import json
 import os
 
-from governance.remote import enforce
-from governance.shared.policy_registry import RegistryUnavailable, resolve_registry
+from galaxy_gov.remote import enforce
+from galaxy_gov.shared.policy_registry import RegistryUnavailable, resolve_registry
 
 _MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-6")
 _REGION = os.environ.get("BEDROCK_REGION") or os.environ.get("AWS_REGION", "us-east-1")

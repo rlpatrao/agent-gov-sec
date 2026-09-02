@@ -97,7 +97,7 @@ post-floor artifact is simply believed.
 
 | Consumer | How it gets `agent-controls.json` today | Defined? |
 |---|---|---|
-| AgentCore interceptor zips | `scripts/build_interceptor_zip.sh:27` runs `python -m governance.policy_export > $PKG/agent-controls.json` at build time | yes |
+| AgentCore interceptor zips | `scripts/build_interceptor_zip.sh:27` runs `python -m galaxy_gov.policy_export > $PKG/agent-controls.json` at build time | yes |
 | Bedrock proxy Lambda image | `cloud_adapters/aws/infra/lambda/Dockerfile:33` **copies** a file it assumes already exists on the builder's disk | no |
 | Enforcement service image | inherits the same file via `COPY cloud_adapters/` in `deploy/Dockerfile.service` | no |
 | CI (`.github/workflows/ci.yml`) | neither generates nor verifies it | no |
@@ -138,13 +138,13 @@ byte-identical after replacing the hardcoded agent list.
 
 | # | Item | Location |
 |---|---|---|
-| 1 | `discover_agent_types()` derives agent types from the config directory; all six consumers now follow it | [`governance/policy_export.py`](../../governance/policy_export.py) |
-| 2 | Authority-side identity store: atomic writes, idempotent put, rotate refused by default, revoke retains the audit record, unparseable store fails closed on read and refuses to clobber on write | [`governance/remote/identity_store.py`](../../governance/remote/identity_store.py) |
-| 3 | Registrar: shape validation, enroller authorization, read-only principal verification, derived readiness status | [`governance/remote/registrar.py`](../../governance/remote/registrar.py) |
+| 1 | `discover_agent_types()` derives agent types from the config directory; all six consumers now follow it | [`galaxy_gov/policy_export.py`](../../galaxy_gov/policy_export.py) |
+| 2 | Authority-side identity store: atomic writes, idempotent put, rotate refused by default, revoke retains the audit record, unparseable store fails closed on read and refuses to clobber on write | [`galaxy_gov/remote/identity_store.py`](../../galaxy_gov/remote/identity_store.py) |
+| 3 | Registrar: shape validation, enroller authorization, read-only principal verification, derived readiness status | [`galaxy_gov/remote/registrar.py`](../../galaxy_gov/remote/registrar.py) |
 | 4 | AWS principal verifier using `sts:GetCallerIdentity` + `iam:GetRole` only | [`cloud_adapters/aws/principal_verify.py`](../../cloud_adapters/aws/principal_verify.py) |
-| 5 | Control plane on the authority (`POST /enroll`, `GET /identity`, `GET /registry/digest`), disabled unless `GOV_CONTROL_TOKEN` is set | [`governance/remote/server.py`](../../governance/remote/server.py) |
+| 5 | Control plane on the authority (`POST /enroll`, `GET /identity`, `GET /registry/digest`), disabled unless `GOV_CONTROL_TOKEN` is set | [`galaxy_gov/remote/server.py`](../../galaxy_gov/remote/server.py) |
 | 6 | Authority-first NHI resolution; env bridge not consulted when an authority is configured | [`core/nhi_registry.py`](../../core/nhi_registry.py) |
-| 7 | `galaxy enroll` / `export-registry` / `verify` | [`governance/tooling/scaffold.py`](../../governance/tooling/scaffold.py) |
+| 7 | `galaxy enroll` / `export-registry` / `verify` | [`galaxy_gov/tooling/scaffold.py`](../../galaxy_gov/tooling/scaffold.py) |
 | 8 | 32 tests including a live-server end-to-end and the anti-bypass property | [`tests/test_registrar.py`](../../tests/test_registrar.py) |
 | 9 | CODEOWNERS entries for the Registrar, the store, and principal verification | [`../../.github/CODEOWNERS`](../../.github/CODEOWNERS) |
 
@@ -300,7 +300,7 @@ Scope for the first increment:
    root cannot be swapped in a developer PR.
 
 Primitive: `agent_sre.signing.ArtifactSigner` (Ed25519 over a file, exercised by
-`governance/ops/signing_report.py` and demonstrated as check N6) provides
+`galaxy_gov/ops/signing_report.py` and demonstrated as check N6) provides
 `sign_artifact` / `verify_artifact`. One change is required before production use —
 the demo path generates an ephemeral keypair per run, whereas the registry signature
 needs a **stable, non-exportable** key. Bind the private key to KMS with a key policy

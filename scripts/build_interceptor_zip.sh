@@ -21,10 +21,10 @@ uv pip install --python-platform x86_64-manylinux2014 --python-version 3.12 --no
 
 # Governance enforcement library (NO payload_agents — content controls are
 # identity-independent) + the interceptor handlers + the baked policy registry.
-cp -r "$ROOT/governance" "$ROOT/core" "$PKG"/
+cp -r "$ROOT/galaxy_gov" "$ROOT/core" "$PKG"/
 cp "$ROOT/cloud_adapters/aws/agentcore/request_interceptor.py" \
    "$ROOT/cloud_adapters/aws/agentcore/response_interceptor.py" "$PKG"/
-python -m governance.policy_export > "$PKG/agent-controls.json"
+python -m galaxy_gov.policy_export > "$PKG/agent-controls.json"
 
 find "$PKG" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
 find "$PKG" -name '*.pyc' -delete 2>/dev/null || true

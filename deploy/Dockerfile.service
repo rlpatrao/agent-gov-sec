@@ -40,7 +40,7 @@ RUN --mount=type=secret,id=pip_ca \
 # The enforcement library, the agnostic core, and the chokepoint handlers.
 # NOTE: payload_agents is deliberately NOT copied — the chokepoints never import
 # the agent codebase (the Lambda image applies the same rule).
-COPY governance/ ./governance/
+COPY galaxy_gov/ ./galaxy_gov/
 COPY core/ ./core/
 COPY cloud_adapters/ ./cloud_adapters/
 
@@ -62,4 +62,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=2).status==200 else 1)"
 
-CMD ["python", "-m", "governance.remote.server"]
+CMD ["python", "-m", "galaxy_gov.remote.server"]

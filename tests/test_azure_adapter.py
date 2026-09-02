@@ -22,7 +22,7 @@ import pytest
 from core.provider_factory import get_provider
 
 _AZURE_EGRESS = Path(__file__).parent.parent / "cloud_adapters" / "azure" / "egress.yaml"
-_CATALOG = Path(__file__).parent.parent / "governance" / "shared" / "enforcement" / "configs" / "data-classification.example.yaml"
+_CATALOG = Path(__file__).parent.parent / "galaxy_gov" / "shared" / "enforcement" / "configs" / "data-classification.example.yaml"
 
 
 # ── Factory + protocol conformance ────────────────────────────────────────────
@@ -97,7 +97,7 @@ def test_azure_resolve_client_id_env_then_none(monkeypatch):
 # ── Egress allow-list ─────────────────────────────────────────────────────────
 
 def test_azure_egress_loads_from_path():
-    from governance.shared.enforcement.guards.egress import load_egress_policy
+    from galaxy_gov.shared.enforcement.guards.egress import load_egress_policy
     policy = load_egress_policy(yaml_path=_AZURE_EGRESS)
     assert policy.check_url("https://example-apim.azure-api.net/openai/").allowed is True
     assert policy.check_url("https://example-openai.openai.azure.com/").allowed is True
@@ -106,7 +106,7 @@ def test_azure_egress_loads_from_path():
 
 def test_azure_egress_resolves_via_factory(monkeypatch):
     monkeypatch.setenv("CLOUD_PROVIDER", "azure")
-    from governance.shared.enforcement.guards.egress import load_egress_policy
+    from galaxy_gov.shared.enforcement.guards.egress import load_egress_policy
     policy = load_egress_policy()
     assert policy.check_url("https://example-apim.azure-api.net/").allowed is True
     assert policy.check_url("https://evil.example.com/").allowed is False
@@ -140,8 +140,8 @@ def test_azure_audit_stdout_mode_without_dsn(monkeypatch):
 # ── Gap 1 cloud-native FGAC pushdown (Azure SQL / Synapse) ────────────────────
 
 def _finops_decision():
-    from governance.shared.enforcement.data_classification import DataClassificationCatalog
-    from governance.shared.enforcement.data_fgac import DataAccessMediator
+    from galaxy_gov.shared.enforcement.data_classification import DataClassificationCatalog
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
     med = DataAccessMediator(catalog=DataClassificationCatalog.load(_CATALOG))
     return med.authorize(
         agent_type="FinOps", dataset="finops", table="billing",
@@ -163,7 +163,7 @@ def test_azure_fgac_scoped_query_projects_masks_and_filters():
 
 
 def test_azure_fgac_rejects_injection_in_identifiers():
-    from governance.shared.enforcement.data_fgac import DataAccessDecision
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessDecision
     from cloud_adapters.azure.data_fgac import AzureSqlFgacEnforcer
     enf = AzureSqlFgacEnforcer()
     bad_col = DataAccessDecision(agent_type="FinOps", dataset="finops", table="billing",
@@ -177,7 +177,7 @@ def test_azure_fgac_rejects_injection_in_identifiers():
 
 
 def test_azure_fgac_scoped_query_denied_raises():
-    from governance.shared.enforcement.data_fgac import DataAccessDecision
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessDecision
     from cloud_adapters.azure.data_fgac import AzureSqlFgacEnforcer
     denied = DataAccessDecision(agent_type="FinOps", dataset="hr", table="employees", denied=True, reason="out of scope")
     with pytest.raises(PermissionError, match="denied"):
@@ -212,7 +212,7 @@ def test_azure_fgac_register_rls_apply_requires_pyodbc(monkeypatch):
 
 
 def test_azure_fgac_satisfies_enforcer_protocol():
-    from governance.shared.enforcement.data_fgac import DataAccessEnforcer
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessEnforcer
     from cloud_adapters.azure.data_fgac import AzureSqlFgacEnforcer
     assert isinstance(AzureSqlFgacEnforcer(), DataAccessEnforcer)
 

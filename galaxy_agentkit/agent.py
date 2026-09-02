@@ -110,7 +110,7 @@ class GovernedAgent:
             )
         if self._pipeline is None:
             from agent_os.audit_logger import GovernanceAuditLogger
-            from governance.shared.enforcement.pipeline import GuardPipeline
+            from galaxy_gov.shared.enforcement.pipeline import GuardPipeline
 
             self._pipeline = GuardPipeline(
                 agent_id=f"{self.settings.agent_type.lower()}-{self.run_id}",

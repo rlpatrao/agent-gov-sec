@@ -16,14 +16,14 @@ import json
 
 import pytest
 
-from governance.policy_export import discover_agent_types
-from governance.remote.identity_store import (
+from galaxy_gov.policy_export import discover_agent_types
+from galaxy_gov.remote.identity_store import (
     STATUS_REVOKED,
     IdentityBinding,
     IdentityStore,
     IdentityStoreError,
 )
-from governance.remote.registrar import (
+from galaxy_gov.remote.registrar import (
     STATUS_PENDING_POLICY,
     STATUS_READY,
     CallerIdentity,
@@ -145,7 +145,7 @@ def test_enrollment_alone_does_not_authorize(store):
     assert "403" in result.message and "no_governance_policy" in result.message
     assert store.get("Payroll") is not None, "identity is bound"
 
-    from governance.remote import enforce
+    from galaxy_gov.remote import enforce
     session = enforce.session_for("Payroll", _registry_with("FinOps"), nhi_id=AGENT_ROLE)
     assert session is None, "an enrolled agent with no policy still resolves to no session"
 
@@ -227,13 +227,13 @@ def test_resolve_identity_is_fail_closed(store):
 # ── Control-plane gating on the server ───────────────────────────────────────
 
 def test_control_plane_is_closed_without_a_token(monkeypatch):
-    from governance.remote import server
+    from galaxy_gov.remote import server
     monkeypatch.delenv("GOV_CONTROL_TOKEN", raising=False)
     assert server._control_authorized({"authorization": "Bearer anything"}) is False
 
 
 def test_control_plane_requires_the_exact_token(monkeypatch):
-    from governance.remote import server
+    from galaxy_gov.remote import server
     monkeypatch.setenv("GOV_CONTROL_TOKEN", "s3cret")
     assert server._control_authorized({"authorization": "Bearer s3cret"}) is True
     assert server._control_authorized({"authorization": "Bearer wrong"}) is False
@@ -241,7 +241,7 @@ def test_control_plane_requires_the_exact_token(monkeypatch):
 
 
 def test_unverified_caller_header_is_not_trusted_by_default(monkeypatch):
-    from governance.remote import server
+    from galaxy_gov.remote import server
     monkeypatch.delenv("GOV_CONTROL_TRUST_HEADER", raising=False)
     with pytest.raises(EnrollmentDenied, match="not trusted"):
         server._caller_identity_from_headers({"x-amzn-iam-caller-arn": SSO_CALLER.arn})
@@ -253,7 +253,7 @@ def test_unverified_caller_header_is_not_trusted_by_default(monkeypatch):
 
 
 def test_registry_digest_exposes_coverage_not_policy(monkeypatch):
-    from governance.remote import server
+    from galaxy_gov.remote import server
     monkeypatch.setenv("GOV_POLICY_REGISTRY", json.dumps(_registry_with("FinOps", "Auditor")))
     digest = server._registry_digest()
     assert digest["agent_types"] == ["Auditor", "FinOps"]
@@ -277,7 +277,7 @@ def live_authority(tmp_path, monkeypatch):
     monkeypatch.setenv("GOV_CONTROL_TOKEN", "test-token")
     monkeypatch.setenv("GOV_POLICY_REGISTRY", json.dumps(_registry_with("FinOps")))
 
-    from governance.remote import server as srv
+    from galaxy_gov.remote import server as srv
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), srv._Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{httpd.server_address[1]}"

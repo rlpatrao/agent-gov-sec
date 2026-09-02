@@ -2,7 +2,7 @@
 payload_agents._lib.demo_data — in-memory sample rows for the LangGraph demo.
 
 Column names match the classification catalog
-(``governance/shared/enforcement/configs/data-classification.example.yaml``) so the FGAC
+(``galaxy_gov/shared/enforcement/configs/data-classification.example.yaml``) so the FGAC
 mediator's mask/row-filter decisions land on real columns. No secrets here — the
 ``customer_email`` / ``ssn`` / ``tax_id`` values are obviously synthetic.
 """

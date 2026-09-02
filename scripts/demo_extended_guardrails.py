@@ -50,8 +50,8 @@ os.environ.setdefault("CLOUD_PROVIDER", "local")
 
 from payload_agents._runtime.contract import RunResult, ScriptStep, ToolCall, ToolSpec
 from payload_agents.raw import RawAgentBundle, ScriptedChatClient
-from governance.shared.enforcement.decision import GuardDecision
-from governance.shared.enforcement.pipeline import GovernanceViolation, build_guard_pipeline
+from galaxy_gov.shared.enforcement.decision import GuardDecision
+from galaxy_gov.shared.enforcement.pipeline import GovernanceViolation, build_guard_pipeline
 from report_html import EXTENDED_META   # control descriptions (what each guard does)
 
 
@@ -271,11 +271,11 @@ async def section_wired() -> None:
 
 async def section_registered() -> None:
     print(_c(_CYAN + _BOLD, "\n── REGISTERED — context-specific before_tool guards (per-agent) ──"))
-    from governance.shared.enforcement.transparency_guard import TransparencyGuard
-    from governance.shared.enforcement.reversibility_guard import ReversibilityGuard
-    from governance.shared.enforcement.constraint_graph_guard import ConstraintGraphGuard
-    from governance.shared.enforcement.mcp_gateway_guard import McpGatewayGuard
-    from governance.shared.enforcement.mcp_rate_limit_guard import McpRateLimitGuard
+    from galaxy_gov.shared.enforcement.transparency_guard import TransparencyGuard
+    from galaxy_gov.shared.enforcement.reversibility_guard import ReversibilityGuard
+    from galaxy_gov.shared.enforcement.constraint_graph_guard import ConstraintGraphGuard
+    from galaxy_gov.shared.enforcement.mcp_gateway_guard import McpGatewayGuard
+    from galaxy_gov.shared.enforcement.mcp_rate_limit_guard import McpRateLimitGuard
 
     # transparency: blocks until the session confirms disclosure
     pipe, ledger, audit, med = await build_guard_pipeline(
@@ -332,11 +332,11 @@ async def section_registered() -> None:
 
 async def section_direct() -> None:
     print(_c(_CYAN + _BOLD, "\n── DIRECT — connect/transport/async guards + content quality ──"))
-    from governance.shared.enforcement.mcp_session_guard import McpSessionGuard
-    from governance.shared.enforcement.mcp_message_signer_guard import McpMessageSignerGuard
-    from governance.shared.enforcement.mcp_tool_screen import McpToolScreen
-    from governance.shared.enforcement.escalation_guard import HumanEscalationGuard
-    from governance.shared.enforcement.content_quality import ContentQualityGuard
+    from galaxy_gov.shared.enforcement.mcp_session_guard import McpSessionGuard
+    from galaxy_gov.shared.enforcement.mcp_message_signer_guard import McpMessageSignerGuard
+    from galaxy_gov.shared.enforcement.mcp_tool_screen import McpToolScreen
+    from galaxy_gov.shared.enforcement.escalation_guard import HumanEscalationGuard
+    from galaxy_gov.shared.enforcement.content_quality import ContentQualityGuard
 
     # MCP session auth
     sg = McpSessionGuard()
@@ -393,14 +393,14 @@ async def section_direct() -> None:
 
 def section_ops() -> None:
     print(_c(_CYAN + _BOLD, "\n── OPS — fleet-level operational capabilities (agent_sre) ──"))
-    from governance.ops.slo_report import run_slo_demo
-    from governance.ops.accuracy_report import run_accuracy_demo
-    from governance.ops.evals_report import run_evals_demo
-    from governance.ops.replay_report import run_replay_demo
-    from governance.ops.sbom_report import run_sbom_demo
-    from governance.ops.signing_report import run_signing_demo
-    from governance.ops.certification_report import run_certification_demo
-    from governance.ops.adversarial_harness import run_adversarial
+    from galaxy_gov.ops.slo_report import run_slo_demo
+    from galaxy_gov.ops.accuracy_report import run_accuracy_demo
+    from galaxy_gov.ops.evals_report import run_evals_demo
+    from galaxy_gov.ops.replay_report import run_replay_demo
+    from galaxy_gov.ops.sbom_report import run_sbom_demo
+    from galaxy_gov.ops.signing_report import run_signing_demo
+    from galaxy_gov.ops.certification_report import run_certification_demo
+    from galaxy_gov.ops.adversarial_harness import run_adversarial
     from agent_sre.certification import CertificationTier
 
     # Each operational row states the concrete input fed to the capability and the

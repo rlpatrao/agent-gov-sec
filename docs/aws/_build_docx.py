@@ -255,8 +255,8 @@ para("The agent personas used in the demo (FinOps, Auditor, Rogue) are a separat
      "they are governed workloads, covered in Section 10.")
 h2("6.2 In-process components (developer trust domain)")
 bullets([
-    "GuardPipeline (governance/shared/enforcement/pipeline.py) — the four hooks (before_model, after_model, before_tool, after_tool) and the guard library.",
-    "The floor (governance/inprocess/floor.py) — always-on controls that cannot be disabled by agent config.",
+    "GuardPipeline (galaxy_gov/shared/enforcement/pipeline.py) — the four hooks (before_model, after_model, before_tool, after_tool) and the guard library.",
+    "The floor (galaxy_gov/inprocess/floor.py) — always-on controls that cannot be disabled by agent config.",
     "Core seam (core/interfaces.py, provider_factory.py, nhi_registry.py, run_tracer.py, trace_ledger.py) — the Protocols, provider selection, NHI binding, tracing, and the hash-chain schema.",
     "A2A (a2a/envelope.py, a2a/dispatcher.py) — typed envelopes and audited dispatch with a recipient allow-list.",
 ])
@@ -267,7 +267,7 @@ bullets([
     "Bedrock proxy (bedrock_proxy.py) — re-runs the EnforcementSession at the API Gateway boundary under a separate IAM identity.",
     "Data proxy (data_proxy.py) — enforces FGAC under its own role; agents never hold direct store access.",
     "AgentCore gateway + interceptors + Cedar engine — the Method 2 boundary; content controls in the interceptor Lambdas, authorization in the Cedar policy engine.",
-    "EnforcementSession (governance/remote/enforce.py) — the single enforcement code path; the same object runs in-process and at the boundary, so the two cannot drift.",
+    "EnforcementSession (galaxy_gov/remote/enforce.py) — the single enforcement code path; the same object runs in-process and at the boundary, so the two cannot drift.",
 ])
 
 # ---------------- 7. Run options ----------------

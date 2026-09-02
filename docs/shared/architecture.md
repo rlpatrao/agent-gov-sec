@@ -40,7 +40,7 @@ runtime on AWS. Its scope and boundaries:
   ([`cloud_adapters/aws/`](../../cloud_adapters/aws/)) and the agent-framework
   adapters, which compose governance primitives from the `agent_os`, `agent_sre`,
   and `agentmesh` packages (the Microsoft Agent Governance Toolkit, "MSGK") into a
-  single framework-neutral [`GuardPipeline`](../../governance/shared/enforcement/pipeline.py). The value
+  single framework-neutral [`GuardPipeline`](../../galaxy_gov/shared/enforcement/pipeline.py). The value
   the repository adds is the seam, the AWS binding, and the composition — not the
   guard logic itself, which comes from the upstream packages.
 - **What it governs.** A demonstration payload of three personas
@@ -97,7 +97,7 @@ in-memory ledger) backs fully offline runs.
    `agent_os` / `agent_sre` / `agentmesh` already provides it.
 8. **Tunable in YAML, clamped by a floor.** Per-agent toggles live in
    `payload_agents/config/<persona>.yaml`; a non-overridable
-   [`governance/inprocess/floor.py`](../../governance/inprocess/floor.py) clamps every field in the
+   [`galaxy_gov/inprocess/floor.py`](../../galaxy_gov/inprocess/floor.py) clamps every field in the
    stricter direction, so a config can tighten a control but never silently
    disable it.
 9. **Loud over silent.** Pydantic `extra="forbid"`; missing required environment
@@ -133,7 +133,7 @@ the AWS services behind each Protocol can change without touching governance cod
 ### AD-3 — A framework-neutral GuardPipeline with thin per-framework shims
 
 **Decision.** Implement the guard sequence once as
-[`governance/shared/enforcement/pipeline.py`](../../governance/shared/enforcement/pipeline.py) (`GuardPipeline`, with
+[`galaxy_gov/shared/enforcement/pipeline.py`](../../galaxy_gov/shared/enforcement/pipeline.py) (`GuardPipeline`, with
 `before_model` / `after_model` / `before_tool` / `after_tool` hooks) and have
 each framework wrap it in a thin shim — for LangGraph, the `GalaxyGuardMiddleware`
 in [`payload_agents/langgraph/_guard.py`](../../payload_agents/langgraph/_guard.py)
@@ -166,7 +166,7 @@ swappable. The cost is schema discipline on each intent.
 
 **Decision.** Express per-agent governance posture in
 `payload_agents/config/<persona>.yaml`, then pass it through
-[`governance/inprocess/floor.py`](../../governance/inprocess/floor.py), which can only make a config
+[`galaxy_gov/inprocess/floor.py`](../../galaxy_gov/inprocess/floor.py), which can only make a config
 stricter. **Context.** Tunable configuration is a weakening surface — a YAML that
 disables a guard would silently remove a control. **Consequence.** Developers
 tune within bounds; the floor guarantees a control cannot be dropped below
@@ -243,11 +243,11 @@ inventory is in [`docs/DELTA_OVER_AGENT_OS.md`](DELTA_OVER_AGENT_OS.md).
 *Figure 2. Platform delta over `agent_os` (grey = upstream primitive · blue = added features). Source: [`docs/diagrams/delta-over-agentos.svg`](../diagrams/delta-over-agentos.svg).*
 
 Net: roughly 2.7k lines of Python that *wire and extend* the toolkit — none of it
-reimplements an upstream guard. The added guards (`governance/shared/enforcement/`)
-and the ops controls (`governance/ops/`) are off by default and enabled per
+reimplements an upstream guard. The added guards (`galaxy_gov/shared/enforcement/`)
+and the ops controls (`galaxy_gov/ops/`) are off by default and enabled per
 scenario; all 28 of them are exercised in the live run
 ([§9.3](#93-flag-gated-controls--28-off-by-default)). The guard sequence runs once
-as `governance/shared/enforcement/pipeline.py` (`GuardPipeline`) behind a single
+as `galaxy_gov/shared/enforcement/pipeline.py` (`GuardPipeline`) behind a single
 `EnforcementSession` ([§6](#6-trust-boundaries)).
 
 ---
@@ -264,14 +264,14 @@ authority model is detailed in
 [`docs/governance-authority.md`](governance-authority.md).
 
 **One enforcement code path (trust-but-verify).** The guard sequence is
-implemented once as `governance/shared/enforcement/` (the `GuardPipeline` behind a
+implemented once as `galaxy_gov/shared/enforcement/` (the `GuardPipeline` behind a
 synchronous `EnforcementSession`). The in-process pipeline runs it for
 defense-in-depth; the out-of-process chokepoints re-run the *same*
 `EnforcementSession` at the boundary via the transport-neutral
-`governance/remote/enforce.py`. Both resolve the caller's controls from one
+`galaxy_gov/remote/enforce.py`. Both resolve the caller's controls from one
 **NHI-keyed policy registry** (`agent-controls.json`, produced by
-`governance/policy_export.py`, consumed by the stdlib-only
-`governance/shared/policy_registry.py`); an unknown identity is denied
+`galaxy_gov/policy_export.py`, consumed by the stdlib-only
+`galaxy_gov/shared/policy_registry.py`); an unknown identity is denied
 (fail-closed). The agent never supplies its own policy.
 
 ![Trust boundaries — governance authority, agent trust domain, out-of-process enforcement, Bedrock](../diagrams/trust-boundaries.svg)
@@ -283,15 +283,15 @@ The three mechanisms (numbered as in the authority doc):
 | # | Mechanism | Closes | Where |
 |---|---|---|---|
 | 1 | **Ownership split** — `.github/CODEOWNERS` puts `governance/`, the per-agent `governance:` blocks, `egress.yaml`, and `infra/` under the governing team | developer gap (merge-time) | a developer may *propose* a weakening change but cannot *merge* it |
-| 2 | **Non-overridable floor** — [`governance/inprocess/floor.py`](../../governance/inprocess/floor.py) clamps each validated config in the stricter direction; required guards are forced on, an attempt to disable one is logged as a `FloorViolation` | developer gap (defense-in-depth) | in-process, tamper-**evident** |
-| 4 | **Out-of-process enforcement** — the chokepoints run the *same* `EnforcementSession` ([`governance/remote/enforce.py`](../../governance/remote/enforce.py)) in a separate IAM identity, resolving controls from the NHI-keyed registry; on AWS, three chokepoints ([`bedrock_proxy.py`](../../cloud_adapters/aws/infra/lambda/bedrock_proxy.py) · [`data_proxy.py`](../../cloud_adapters/aws/infra/lambda/data_proxy.py) · [`a2a_broker.py`](../../cloud_adapters/aws/infra/lambda/a2a_broker.py)), or AgentCore Gateway interceptors + Cedar Policy | runtime gap | out-of-process, tamper-**resistant** |
+| 2 | **Non-overridable floor** — [`galaxy_gov/inprocess/floor.py`](../../galaxy_gov/inprocess/floor.py) clamps each validated config in the stricter direction; required guards are forced on, an attempt to disable one is logged as a `FloorViolation` | developer gap (defense-in-depth) | in-process, tamper-**evident** |
+| 4 | **Out-of-process enforcement** — the chokepoints run the *same* `EnforcementSession` ([`galaxy_gov/remote/enforce.py`](../../galaxy_gov/remote/enforce.py)) in a separate IAM identity, resolving controls from the NHI-keyed registry; on AWS, three chokepoints ([`bedrock_proxy.py`](../../cloud_adapters/aws/infra/lambda/bedrock_proxy.py) · [`data_proxy.py`](../../cloud_adapters/aws/infra/lambda/data_proxy.py) · [`a2a_broker.py`](../../cloud_adapters/aws/infra/lambda/a2a_broker.py)), or AgentCore Gateway interceptors + Cedar Policy | runtime gap | out-of-process, tamper-**resistant** |
 
 The dividing principle: **execution can stay in-process, but authority must leave
 the agent's trust domain.** The in-process pipeline is retained as
 defense-in-depth (it runs the richer, cheaper checks at low latency); the
 out-of-process chokepoints re-verify the same controls so they hold even if the
 agent runtime is hostile — the boundary enforcement is the *same* library
-(`governance/shared` + `governance/remote`), not a re-implementation. On AWS this
+(`galaxy_gov/shared` + `galaxy_gov/remote`), not a re-implementation. On AWS this
 boundary deploys two ways: our **API Gateway → Lambda** chokepoints, or, AgentCore-native,
 **AgentCore Gateway interceptors + a Cedar Policy engine** — Cedar owns coarse
 authorization (which tool, which recipient), the interceptors carry the content
@@ -328,7 +328,7 @@ The AWS reference topology (`main.tf`, tagged `project=galaxy-rp`) provisions:
 | A2A chokepoint | Lambda (`a2a_broker`, same image) | Fail-closed recipient allow-list from the registry |
 | Gateway key | Secrets Manager (`galaxy/bedrock-gateway-key`) | The `x-api-key` value the gateway validates |
 | Audit ledger | DynamoDB (`galaxy-trace-ledger`) | `DynamoDbHashChainBackend` — partition `run_id`, sort `entry_seq`, `entry_hash` / `prev_hash` |
-| Stateful-control store | DynamoDB (`governance/shared/state.py`) | drift baselines · circuit-breaker · cost · rate-limit windows |
+| Stateful-control store | DynamoDB (`galaxy_gov/shared/state.py`) | drift baselines · circuit-breaker · cost · rate-limit windows |
 | Artifact store | S3 (`galaxy-runs`) | Per-run inputs / outputs |
 | Tracing | OTel → ADOT collector → X-Ray (+ CloudWatch) | `AwsTraceExporterFactory`; the collector is not provisioned by `main.tf` |
 
@@ -352,7 +352,7 @@ to a Cedar Policy engine:
 
 | AgentCore primitive | What this platform attaches | Code |
 |---|---|---|
-| Policy engine (Cedar, ENFORCE) | one permit/forbid policy per (agent, tool), generated from the registry | [`governance/agentcore/cedar_export.py`](../../governance/agentcore/cedar_export.py) |
+| Policy engine (Cedar, ENFORCE) | one permit/forbid policy per (agent, tool), generated from the registry | [`galaxy_gov/agentcore/cedar_export.py`](../../galaxy_gov/agentcore/cedar_export.py) |
 | Gateway request interceptor | input guards (injection · credential · budget · blocked-pattern) + tool-plan checks | [`cloud_adapters/aws/agentcore/request_interceptor.py`](../../cloud_adapters/aws/agentcore/request_interceptor.py) |
 | Gateway response interceptor | output redaction + tool-list filtering | [`cloud_adapters/aws/agentcore/response_interceptor.py`](../../cloud_adapters/aws/agentcore/response_interceptor.py) |
 | Identity | NHI → AgentCore workload identity | [`cloud_adapters/aws/agentcore/identity.py`](../../cloud_adapters/aws/agentcore/identity.py) |
@@ -383,7 +383,7 @@ A single governed run, from build to audit. The per-framework builder
 persona-agnostic — everything is driven by the persona's YAML:
 
 1. **Build.** Load and validate `config/<persona>.yaml` (Pydantic
-   `extra="forbid"`), pass it through `governance/inprocess/floor.py` (clamp
+   `extra="forbid"`), pass it through `galaxy_gov/inprocess/floor.py` (clamp
    stricter), resolve the system prompt, and cross-check the `tools=[...]`
    callables against `governance.allowed_tools` (fail fast on a typo).
 2. **Identity.** Resolve the persona's NHI via `NHIRegistry.get(agent_type)` →
@@ -580,16 +580,16 @@ The `--aws` path needs the `.[aws]` extra (`boto3`), the `galaxy-rp` infra appli
 | **Bedrock gateway** | The API Gateway → Lambda → Bedrock Converse chokepoint; the agent's only path to the model, authenticated by the gateway `x-api-key`. |
 | **Cedar** | The policy language of AgentCore's Policy engine; this platform generates coarse permit/forbid authz from the registry (`cedar_export.py`). |
 | **Chokepoint** | An out-of-process enforcement point running `EnforcementSession` in a separate identity. AWS has three: `bedrock_proxy` (LLM), `data_proxy` (data), `a2a_broker` (A2A). |
-| **EnforcementSession** | `governance/shared/enforcement/session.py` — the synchronous wrapper around the `GuardPipeline` run by both the in-process path and the chokepoints (one code path, trust-but-verify). |
+| **EnforcementSession** | `galaxy_gov/shared/enforcement/session.py` — the synchronous wrapper around the `GuardPipeline` run by both the in-process path and the chokepoints (one code path, trust-but-verify). |
 | **FGAC** | Fine-grained access control — column masking, row filtering, and deny decisions on real data reads via the `DataAccessMediator`; pushed down as scoped Athena SQL (Lake Formation). |
-| **Floor** | `governance/inprocess/floor.py` — the non-overridable baseline that clamps a per-agent config in the stricter direction only. |
+| **Floor** | `galaxy_gov/inprocess/floor.py` — the non-overridable baseline that clamps a per-agent config in the stricter direction only. |
 | **Framework axis** | Selection of the agent-framework adapter (`payload_agents/<framework>/`) by `--framework` / `GALAXY_FRAMEWORK`. |
-| **GuardPipeline** | `governance/shared/enforcement/pipeline.py` — the framework-neutral guard sequence with `before_model` / `after_model` / `before_tool` / `after_tool` hooks. |
+| **GuardPipeline** | `galaxy_gov/shared/enforcement/pipeline.py` — the framework-neutral guard sequence with `before_model` / `after_model` / `before_tool` / `after_tool` hooks. |
 | **LLMGateway** | The `Protocol` for the single egress path; the AWS implementation resolves the API Gateway endpoint, key, and attribution headers. |
 | **MSGK** | Microsoft Agent Governance Toolkit — the `agent_os` / `agent_sre` / `agentmesh` packages this platform composes. |
 | **NHI** | Non-Human Identity — each agent type's own AWS principal, an **IAM role ARN**; no shared credentials. |
 | **Persona** | One of the three demo agents (FinOpsAnalyst / Auditor / Rogue), defined once in `_lib/personas.py` and built on each framework. |
-| **Policy registry** | The NHI-keyed control set (`agent-controls.json`) produced by `governance/policy_export.py` and read by every chokepoint via `governance/shared/policy_registry.py` (stdlib-only, fail-closed). |
+| **Policy registry** | The NHI-keyed control set (`agent-controls.json`) produced by `galaxy_gov/policy_export.py` and read by every chokepoint via `galaxy_gov/shared/policy_registry.py` (stdlib-only, fail-closed). |
 | **Rogue** | The untrusted persona, absent from every policy set, used to drive the denial side of each control. |
 | **Trace ledger** | The append-only, SHA-256 hash-chained audit record; one chain per NHI, persisted by the `DynamoDbHashChainBackend`. |
 | **Trust-but-verify** | The same `EnforcementSession` runs in-process (defense-in-depth) and is re-run at the out-of-process boundary, so controls hold even if the runtime is hostile. |

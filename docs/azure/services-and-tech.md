@@ -11,7 +11,7 @@ For the system design and sequence diagrams, see [architecture.md](architecture.
 
 ## 1. Azure resource topology
 
-This repository supports two Azure enforcement methods. Both methods consume the same policy registry (`governance/policy_export.py`) and run the full demo matrix. Method 1 routes agents through an API Management egress edge in front of an Azure Function and Azure OpenAI, and is provided as reference Bicep under [`cloud_adapters/azure/infra/main.bicep`](../../cloud_adapters/azure/infra/main.bicep). Method 2 composes the governance controls as a Microsoft Agent Framework middleware stack; the in-process middleware runs live, and managed hosting on Azure AI Foundry Agent Service is a reference deploy step. No live governance-persona deployment currently runs on Azure — on Azure the governance runs in-process today, and the out-of-process topology is reference IaC. The live reference deployment for the three personas is AWS AgentCore (us-east-2).
+This repository supports two Azure enforcement methods. Both methods consume the same policy registry (`galaxy_gov/policy_export.py`) and run the full demo matrix. Method 1 routes agents through an API Management egress edge in front of an Azure Function and Azure OpenAI, and is provided as reference Bicep under [`cloud_adapters/azure/infra/main.bicep`](../../cloud_adapters/azure/infra/main.bicep). Method 2 composes the governance controls as a Microsoft Agent Framework middleware stack; the in-process middleware runs live, and managed hosting on Azure AI Foundry Agent Service is a reference deploy step. No live governance-persona deployment currently runs on Azure — on Azure the governance runs in-process today, and the out-of-process topology is reference IaC. The live reference deployment for the three personas is AWS AgentCore (us-east-2).
 
 ### 1.1 Method 1 — APIM proxy (reference Bicep)
 
@@ -136,21 +136,21 @@ These frameworks are installed via the framework extras in `pyproject.toml`. Eac
 
 ## 5. Governance policies (YAML on disk)
 
-The `*.yaml` policy packs are loaded by `agent_os.policies.PolicyEvaluator` (or, on Azure, by `create_governance_middleware`) at agent build time. All files in `governance/policies/` are loaded automatically, and no manifest is required. The MAF middleware stack ([cloud_adapters/azure/maf/middleware.py](../../cloud_adapters/azure/maf/middleware.py)) wires the policy directory into the toolkit middleware.
+The `*.yaml` policy packs are loaded by `agent_os.policies.PolicyEvaluator` (or, on Azure, by `create_governance_middleware`) at agent build time. All files in `galaxy_gov/policies/` are loaded automatically, and no manifest is required. The MAF middleware stack ([cloud_adapters/azure/maf/middleware.py](../../cloud_adapters/azure/maf/middleware.py)) wires the policy directory into the toolkit middleware.
 
 | File | What it enforces |
 |---|---|
-| [governance/policies/galaxy-core.yaml](../../governance/policies/galaxy-core.yaml) | Prompt-injection regex (OWASP ASI-01) + oversized-prompt gate |
-| [governance/policies/galaxy-tools.yaml](../../governance/policies/galaxy-tools.yaml) | Per-agent tool allow-list. FinOps and Auditor declare their read tools; Rogue ships with `allowed_tools: []`, so every tool it attempts is denied. |
-| [governance/policies/galaxy-pii.yaml](../../governance/policies/galaxy-pii.yaml) | PII rules placeholder — `defaults.action=allow` (no-op) until a PII detector is wired |
-| [governance/policies/galaxy-ast.yaml](../../governance/policies/galaxy-ast.yaml) | **(archived)** AST-agent-specific rules (deny outbound A2A from leaf agent, etc.) |
+| [galaxy_gov/policies/galaxy-core.yaml](../../galaxy_gov/policies/galaxy-core.yaml) | Prompt-injection regex (OWASP ASI-01) + oversized-prompt gate |
+| [galaxy_gov/policies/galaxy-tools.yaml](../../galaxy_gov/policies/galaxy-tools.yaml) | Per-agent tool allow-list. FinOps and Auditor declare their read tools; Rogue ships with `allowed_tools: []`, so every tool it attempts is denied. |
+| [galaxy_gov/policies/galaxy-pii.yaml](../../galaxy_gov/policies/galaxy-pii.yaml) | PII rules placeholder — `defaults.action=allow` (no-op) until a PII detector is wired |
+| [galaxy_gov/policies/galaxy-ast.yaml](../../galaxy_gov/policies/galaxy-ast.yaml) | **(archived)** AST-agent-specific rules (deny outbound A2A from leaf agent, etc.) |
 
 Two further guard configurations are read by the pre-middleware guards rather than by `PolicyEvaluator`:
 
 | File | What it tunes |
 |---|---|
 | [cloud_adapters/azure/egress.yaml](../../cloud_adapters/azure/egress.yaml) | Outbound network egress allow-list — the APIM / Azure OpenAI / Key Vault / Application Insights hosts as the only permitted destinations |
-| [governance/configs/prompt-injection.yaml](../../governance/configs/prompt-injection.yaml) | Injection threat patterns + scoring thresholds |
+| [galaxy_gov/configs/prompt-injection.yaml](../../galaxy_gov/configs/prompt-injection.yaml) | Injection threat patterns + scoring thresholds |
 
 ### Per-agent config (separate from policies)
 
@@ -181,7 +181,7 @@ The offline demo (`scripts/demo_governance.py`) and the test suite require **non
 | `POSTGRES_DSN` | PostgreSQL DSN for the `trace_ledger` hash chain; stdout mode when unset | Optional (recommended for live runs) | [cloud_adapters/azure/audit.py](../../cloud_adapters/azure/audit.py) — `PostgresHashChainBackend.create` |
 | `NHI_CLIENT_ID_FINOPS` / `_AUDITOR` / `_ROGUE` | The three personas' NHI principal ids (Entra `clientId`); flow into `agent_id` and every audit row's `nhi_id` | Required for live runs (placeholder OK locally) | [cloud_adapters/azure/identity.py](../../cloud_adapters/azure/identity.py), [core/nhi_registry.py](../../core/nhi_registry.py) |
 | `CLOUD_PROVIDER` | Selects the cloud adapter; `azure` is the default binding | Optional (default `azure`) | [core/provider_factory.py](../../core/provider_factory.py) |
-| `GALAXY_GAP_*` / `GALAXY_OPS_*` | Toggle the flag-gated controls (26 off by default); truthy = `1`/`true`/`yes`/`on` | Optional (all off by default) | [governance/shared/enforcement/flags.py](../../governance/shared/enforcement/flags.py) |
+| `GALAXY_GAP_*` / `GALAXY_OPS_*` | Toggle the flag-gated controls (26 off by default); truthy = `1`/`true`/`yes`/`on` | Optional (all off by default) | [galaxy_gov/shared/enforcement/flags.py](../../galaxy_gov/shared/enforcement/flags.py) |
 
 Setting `CLOUD_PROVIDER=azure` (the default) selects the Azure adapter, comprising the PostgreSQL ledger, Key Vault secrets, Entra identity, Azure Monitor tracing, and the APIM / Azure OpenAI egress path.
 
@@ -248,8 +248,8 @@ The ledger can also be queried directly with SQL against `trace_ledger` (see [le
 | Concern | Configured in | Read by |
 |---|---|---|
 | Per-agent runtime tunables | [payload_agents/config/*.yaml](../../payload_agents/config/) | [payload_agents/config.py](../../payload_agents/config.py) |
-| Runtime governance rules | [governance/policies/*.yaml](../../governance/policies/) | `create_governance_middleware` via the MAF stack ([cloud_adapters/azure/maf/middleware.py](../../cloud_adapters/azure/maf/middleware.py)) |
-| Pre-middleware guard configs | [governance/configs/*.yaml](../../governance/configs/) | the prompt-injection / egress guards |
+| Runtime governance rules | [galaxy_gov/policies/*.yaml](../../galaxy_gov/policies/) | `create_governance_middleware` via the MAF stack ([cloud_adapters/azure/maf/middleware.py](../../cloud_adapters/azure/maf/middleware.py)) |
+| Pre-middleware guard configs | [galaxy_gov/configs/*.yaml](../../galaxy_gov/configs/) | the prompt-injection / egress guards |
 | NHI registry | [core/nhi_registry.py](../../core/nhi_registry.py) | `NHIRegistry.get(agent_type)` |
 | LLM deployment + APIM key + egress | `.env` (local) / Key Vault (deployed) | [cloud_adapters/azure/gateway.py](../../cloud_adapters/azure/gateway.py), [cloud_adapters/azure/secrets.py](../../cloud_adapters/azure/secrets.py) |
 | OTel exporter routing | `.env` `APPLICATIONINSIGHTS_CONNECTION_STRING` | [cloud_adapters/azure/tracing.py](../../cloud_adapters/azure/tracing.py), [core/run_tracer.py](../../core/run_tracer.py) |

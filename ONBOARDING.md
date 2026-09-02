@@ -12,7 +12,7 @@ page, the developer guide, and the offline demo.
 
 | You (agent developer) own | The governing team owns |
 |---|---|
-| Agent prompts, tools, and framework wiring under `payload_agents/` | The guard pipeline and guards (`governance/`) |
+| Agent prompts, tools, and framework wiring under `payload_agents/` | The guard pipeline and guards (`galaxy_gov/`) |
 | The *request* for capabilities and data scopes (your `governance:` config block) | The non-overridable floor, the policy registry, egress allow-lists |
 | Your agent's tests | The out-of-process enforcement service and the identity Registrar |
 

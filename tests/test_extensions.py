@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from governance.shared.enforcement import flags
+from galaxy_gov.shared.enforcement import flags
 
-_CATALOG = Path(__file__).parent.parent / "governance" / "shared" / "enforcement" / "configs" / "data-classification.example.yaml"
+_CATALOG = Path(__file__).parent.parent / "galaxy_gov" / "shared" / "enforcement" / "configs" / "data-classification.example.yaml"
 
 
 # ── Feature flags: all OFF by default ─────────────────────────────────────────
@@ -35,12 +35,12 @@ def test_flag_truthy_parsing(monkeypatch):
 # ── Gap 1: data-layer FGAC ────────────────────────────────────────────────────
 
 def _catalog():
-    from governance.shared.enforcement.data_classification import DataClassificationCatalog
+    from galaxy_gov.shared.enforcement.data_classification import DataClassificationCatalog
     return DataClassificationCatalog.load(_CATALOG)
 
 
 def test_catalog_loads_msgk_types_from_env(monkeypatch):
-    from governance.shared.enforcement.data_classification import (
+    from galaxy_gov.shared.enforcement.data_classification import (
         DataClassificationCatalog, DataClassification, DataLabel, ABACPolicy)
     monkeypatch.setenv("GALAXY_DATA_CLASSIFICATION_PATH", str(_CATALOG))
     cat = DataClassificationCatalog.load()  # no arg → resolves via env
@@ -54,7 +54,7 @@ def test_catalog_loads_msgk_types_from_env(monkeypatch):
 
 
 def test_fgac_masks_and_filters_for_finops():
-    from governance.shared.enforcement.data_fgac import DataAccessMediator
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
     med = DataAccessMediator(catalog=_catalog())
     rows = [
         {"account_id": "a1", "cost_usd": 10, "region": "us-east-1", "customer_email": "x@y.com", "tax_id": "T-1"},
@@ -78,7 +78,7 @@ def test_fgac_masks_and_filters_for_finops():
 def test_fgac_finops_reading_hr_masks_by_category():
     # FinOps HAS a policy, but HR-category columns aren't in its allowed categories
     # → MSGK's evaluator denies them → masked (not a whole-request deny).
-    from governance.shared.enforcement.data_fgac import DataAccessMediator
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
     med = DataAccessMediator(catalog=_catalog())
     d = med.authorize(agent_type="FinOps", dataset="hr", table="employees", columns=["employee_id", "salary"])
     assert d.permitted
@@ -86,7 +86,7 @@ def test_fgac_finops_reading_hr_masks_by_category():
 
 
 def test_fgac_unknown_agent_is_deny_all():
-    from governance.shared.enforcement.data_fgac import DataAccessMediator
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
     med = DataAccessMediator(catalog=_catalog())
     decision = med.authorize(agent_type="NoSuchAgent", dataset="finops", table="billing", columns=["cost_usd"])
     assert decision.denied
@@ -94,7 +94,7 @@ def test_fgac_unknown_agent_is_deny_all():
 
 def test_fgac_authorize_for_identity_binds_nhi():
     from dataclasses import dataclass
-    from governance.shared.enforcement.data_fgac import DataAccessMediator
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
 
     @dataclass
     class _Ident:
@@ -112,7 +112,7 @@ def test_fgac_authorize_for_identity_binds_nhi():
 # ── Gap 3: data-access drift ──────────────────────────────────────────────────
 
 def _drift():
-    from governance.shared.enforcement.data_drift import DataAccessDriftDetector, InMemoryBaselineStore, DriftConfig
+    from galaxy_gov.shared.enforcement.data_drift import DataAccessDriftDetector, InMemoryBaselineStore, DriftConfig
     return DataAccessDriftDetector(store=InMemoryBaselineStore(), config=DriftConfig(min_samples=3, z_threshold=2.0))
 
 
@@ -138,7 +138,7 @@ def test_drift_first_seen_table_and_sensitivity_escalation():
 
 
 def test_drift_baseline_persists_across_instances(tmp_path):
-    from governance.shared.enforcement.data_drift import DataAccessDriftDetector, JsonFileBaselineStore, DriftConfig
+    from galaxy_gov.shared.enforcement.data_drift import DataAccessDriftDetector, JsonFileBaselineStore, DriftConfig
     path = tmp_path / "baselines.json"
     cfg = DriftConfig(min_samples=3, z_threshold=2.0)
     det1 = DataAccessDriftDetector(store=JsonFileBaselineStore(path), config=cfg)
@@ -154,7 +154,7 @@ def test_drift_baseline_persists_across_instances(tmp_path):
 # ── Gap 4: reasoning-step validation ──────────────────────────────────────────
 
 def test_reasoning_guard_denies_unlisted_tool():
-    from governance.shared.enforcement.reasoning_guard import ReasoningStepValidator, ReasoningStep
+    from galaxy_gov.shared.enforcement.reasoning_guard import ReasoningStepValidator, ReasoningStep
     v = ReasoningStepValidator()
     plan = v.validate_plan(
         agent_type="Analyzer",
@@ -166,7 +166,7 @@ def test_reasoning_guard_denies_unlisted_tool():
 
 
 def test_reasoning_guard_allows_listed_tool():
-    from governance.shared.enforcement.reasoning_guard import ReasoningStepValidator, ReasoningStep
+    from galaxy_gov.shared.enforcement.reasoning_guard import ReasoningStepValidator, ReasoningStep
     v = ReasoningStepValidator()
     plan = v.validate_plan(
         agent_type="Coder", steps=[ReasoningStep(kind="tool_call", tool="read_file")],
@@ -176,8 +176,8 @@ def test_reasoning_guard_allows_listed_tool():
 
 
 def test_reasoning_guard_denies_out_of_scope_data_access():
-    from governance.shared.enforcement.data_fgac import DataAccessMediator
-    from governance.shared.enforcement.reasoning_guard import ReasoningStepValidator, ReasoningStep
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
+    from galaxy_gov.shared.enforcement.reasoning_guard import ReasoningStepValidator, ReasoningStep
     v = ReasoningStepValidator(mediator=DataAccessMediator(catalog=_catalog()))
     plan = v.validate_plan(
         agent_type="Intruder",   # no ABAC policy → mediator denies the whole request
@@ -191,19 +191,19 @@ def test_reasoning_guard_denies_out_of_scope_data_access():
 # ── Cedar standards-based authz (policy_engine) ───────────────────────────────
 
 def test_cedar_authorizer_permit_all():
-    from governance.shared.enforcement.policy_engine import CedarAuthorizer
+    from galaxy_gov.shared.enforcement.policy_engine import CedarAuthorizer
     auth = CedarAuthorizer(policy_content="permit(principal, action, resource);")
     assert auth.authorize_action(principal="FinOps", action="use_tool", resource="read_file") is True
 
 
 def test_cedar_authorizer_fail_closed():
-    from governance.shared.enforcement.policy_engine import CedarAuthorizer
+    from galaxy_gov.shared.enforcement.policy_engine import CedarAuthorizer
     auth = CedarAuthorizer(policy_content="forbid(principal, action, resource);")
     assert auth.authorize_action(principal="FinOps", action="use_tool", resource="rm_rf") is False
 
 
 def test_build_authorizer_flag_gated(monkeypatch):
-    from governance.shared.enforcement import policy_engine as pe
+    from galaxy_gov.shared.enforcement import policy_engine as pe
     monkeypatch.delenv(pe.POLICY_ENGINE_ENV, raising=False)
     assert pe.build_authorizer() is None              # off by default
     monkeypatch.setenv(pe.POLICY_ENGINE_ENV, "cedar")
@@ -211,8 +211,8 @@ def test_build_authorizer_flag_gated(monkeypatch):
 
 
 def test_reasoning_guard_uses_cedar_when_wired():
-    from governance.shared.enforcement.policy_engine import CedarAuthorizer
-    from governance.shared.enforcement.reasoning_guard import ReasoningStepValidator, ReasoningStep
+    from galaxy_gov.shared.enforcement.policy_engine import CedarAuthorizer
+    from galaxy_gov.shared.enforcement.reasoning_guard import ReasoningStepValidator, ReasoningStep
     # With Cedar wired, the engine is the tool-authz decision point (overrides the allow-list).
     permit = ReasoningStepValidator(authorizer=CedarAuthorizer(policy_content="permit(principal, action, resource);"))
     assert permit.validate_plan(agent_type="X", steps=[ReasoningStep(kind="tool_call", tool="anything")],
@@ -224,8 +224,8 @@ def test_reasoning_guard_uses_cedar_when_wired():
 
 def test_cedar_conditional_abac_full_engine():
     # cedarpy is a base dependency — conditional ABAC (when {...}) evaluates for real.
-    from governance.shared.enforcement.policy_engine import CedarAuthorizer
-    from governance.shared.enforcement.data_classification import DataClassification, DataLabel
+    from galaxy_gov.shared.enforcement.policy_engine import CedarAuthorizer
+    from galaxy_gov.shared.enforcement.data_classification import DataClassification, DataLabel
     auth = CedarAuthorizer()  # bundled authz.cedar
 
     def data(agent, cls):
@@ -255,7 +255,7 @@ class _FakeRedactor:
 
 
 def test_reasoning_trace_redacts_before_logging():
-    from governance.shared.enforcement.reasoning_trace import ReasoningTraceLogger
+    from galaxy_gov.shared.enforcement.reasoning_trace import ReasoningTraceLogger
     logger = ReasoningTraceLogger(redactor=_FakeRedactor())
     rec = logger.capture(
         run_id="run-1", agent_type="Analyzer", nhi_id="cid-1",
@@ -272,7 +272,7 @@ def test_reasoning_trace_redacts_before_logging():
 
 
 def test_reasoning_trace_writes_audit_record():
-    from governance.shared.enforcement.reasoning_trace import ReasoningTraceLogger
+    from galaxy_gov.shared.enforcement.reasoning_trace import ReasoningTraceLogger
 
     captured = []
 
@@ -295,6 +295,6 @@ def test_reasoning_trace_requires_a_redactor(monkeypatch):
     # Mandatory redaction: with no redactor and MSGK's unavailable, refuse to run.
     import sys
     monkeypatch.setitem(sys.modules, "agent_os.credential_redactor", None)
-    from governance.shared.enforcement.reasoning_trace import ReasoningTraceLogger
+    from galaxy_gov.shared.enforcement.reasoning_trace import ReasoningTraceLogger
     with pytest.raises(RuntimeError, match="mandatory redaction"):
         ReasoningTraceLogger()

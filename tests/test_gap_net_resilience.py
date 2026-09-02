@@ -12,8 +12,8 @@ OPEN state is asserted directly after crossing the failure threshold.
 
 from __future__ import annotations
 
-from governance.shared.enforcement.circuit_breaker_guard import CircuitBreakerGuard
-from governance.shared.enforcement.egress_guard import EgressGuard
+from galaxy_gov.shared.enforcement.circuit_breaker_guard import CircuitBreakerGuard
+from galaxy_gov.shared.enforcement.egress_guard import EgressGuard
 
 
 # --------------------------------------------------------------------------- #

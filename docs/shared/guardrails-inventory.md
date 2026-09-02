@@ -39,7 +39,7 @@ Stack ordering, fail-fast first. Built by [`cloud_adapters/azure/maf/middleware.
 | 2 | `CredentialRedactorGuardMiddleware` | wraps `agent_os.credential_redactor.CredentialRedactor` | [`cloud_adapters/azure/maf/guards/credential_redactor.py`](../../cloud_adapters/azure/maf/guards/credential_redactor.py) | LLM06 | API keys, AWS access keys, GitHub tokens, generic secret patterns. Two modes: `redact` (mutate prompt to `[REDACTED]`, proceed — the Analyzer default) or `deny` (block call). |
 | 3 | `ContextBudgetGuardMiddleware` | wraps `agent_os.context_budget.ContextScheduler` | [`cloud_adapters/azure/maf/guards/context_budget.py`](../../cloud_adapters/azure/maf/guards/context_budget.py) | LLM04 | Token-budget allocator + post-call usage record. `context_budget_total_tokens` defaults to 8000 in the stack; the Analyzer config raises it to 40000. |
 | 4 | `AuditTrailMiddleware` | from `agent_os.integrations.maf_adapter` | bundled | — | Hash-chain audit start/end pairs per agent invocation, with `entry_id` correlation. |
-| 5 | `GovernancePolicyMiddleware` | from `agent_os.integrations.maf_adapter` | bundled | — | YAML rule engine (`PolicyEvaluator`). Evaluates [`governance/policies/*.yaml`](../../governance/policies/) against the call context. |
+| 5 | `GovernancePolicyMiddleware` | from `agent_os.integrations.maf_adapter` | bundled | — | YAML rule engine (`PolicyEvaluator`). Evaluates [`galaxy_gov/policies/*.yaml`](../../galaxy_gov/policies/) against the call context. |
 | 6 | `CapabilityGuardMiddleware` | from `agent_os.integrations.maf_adapter` (conditional) | bundled | LLM08 | Function-level tool allow/deny. Activates only when `allowed_tools` or `denied_tools` is passed to `build_governance_stack`. The read-only `Analyzer` declares `allowed_tools: []`, so it is effectively a no-op for the current payload. |
 | 7 | `RogueDetectionMiddleware` | from `agent_os.integrations.maf_adapter` | bundled | LLM02 | Anomaly detection on tool-use patterns (`agent_sre.RogueAgentDetector`). Active when `enable_rogue_detection` is true. With no tools, the `Analyzer` exercises this guard as a low-signal no-op; it becomes meaningful once a tool-using agent lands. |
 
@@ -102,11 +102,11 @@ Each could become an additional middleware tomorrow if the use case materialises
 
 | Module | Class(es) | Status | Why it'd help |
 |---|---|---|---|
-| `agent_os.egress_policy` | `EgressPolicy`, `EgressRule`, `EgressDecision` | ✅ Wired (flag `GALAXY_GAP_EGRESS_POLICY`) | Outbound URL allow-list. Wrapped by [`governance/shared/enforcement/egress_guard.py`](../../governance/shared/enforcement/egress_guard.py), wired into `before_tool` — a network-shaped tool call to a non-allowlisted host is blocked (`egress_denied`). Control A3. |
-| `agent_os.escalation` | `EscalationManager`, `EscalationPolicy`, `EscalationRequest`, `EscalationDecision` | ✅ Wired (flag `GALAXY_GAP_HUMAN_ESCALATION`) | Human-in-the-loop on sensitive actions. [`governance/shared/enforcement/escalation_guard.py`](../../governance/shared/enforcement/escalation_guard.py): a sync `requires_approval` gate plus an async `approve_tool` that blocks on deny/timeout (default-on-timeout: deny). Control L1. |
-| `agent_os.transparency` | `TransparencyInterceptor`, `ToolCallRequest`, `ToolCallResult`, `TransparencyLevel` | ✅ Wired (flag `GALAXY_GAP_TRANSPARENCY`) | Surfaces tool-call intent before the tool runs; fail-closed until the session confirms disclosure. [`governance/shared/enforcement/transparency_guard.py`](../../governance/shared/enforcement/transparency_guard.py). Control L2. |
+| `agent_os.egress_policy` | `EgressPolicy`, `EgressRule`, `EgressDecision` | ✅ Wired (flag `GALAXY_GAP_EGRESS_POLICY`) | Outbound URL allow-list. Wrapped by [`galaxy_gov/shared/enforcement/egress_guard.py`](../../galaxy_gov/shared/enforcement/egress_guard.py), wired into `before_tool` — a network-shaped tool call to a non-allowlisted host is blocked (`egress_denied`). Control A3. |
+| `agent_os.escalation` | `EscalationManager`, `EscalationPolicy`, `EscalationRequest`, `EscalationDecision` | ✅ Wired (flag `GALAXY_GAP_HUMAN_ESCALATION`) | Human-in-the-loop on sensitive actions. [`galaxy_gov/shared/enforcement/escalation_guard.py`](../../galaxy_gov/shared/enforcement/escalation_guard.py): a sync `requires_approval` gate plus an async `approve_tool` that blocks on deny/timeout (default-on-timeout: deny). Control L1. |
+| `agent_os.transparency` | `TransparencyInterceptor`, `ToolCallRequest`, `ToolCallResult`, `TransparencyLevel` | ✅ Wired (flag `GALAXY_GAP_TRANSPARENCY`) | Surfaces tool-call intent before the tool runs; fail-closed until the session confirms disclosure. [`galaxy_gov/shared/enforcement/transparency_guard.py`](../../galaxy_gov/shared/enforcement/transparency_guard.py). Control L2. |
 | `agent_os.event_bus` | `GovernanceEventBus`, `GovernanceEvent` | 🟠 Available | Pub/sub for governance signals. Enables fan-out: one denial event triggers Slack alert + Service Bus enqueue + Sentinel rule simultaneously. Not wired. |
-| `agent_sre.cascade.circuit_breaker` | `CircuitBreaker`, `CircuitBreakerConfig`, `CircuitState`, `CascadeDetector` | ✅ Wired (flag `GALAXY_GAP_CIRCUIT_BREAKER`) | Per-tool circuit breaker. [`governance/shared/enforcement/circuit_breaker_guard.py`](../../governance/shared/enforcement/circuit_breaker_guard.py): `before_tool` rejects fast when a tool's breaker is OPEN; `after_tool`/`on_tool_error` record success/failure. Control J1. |
+| `agent_sre.cascade.circuit_breaker` | `CircuitBreaker`, `CircuitBreakerConfig`, `CircuitState`, `CascadeDetector` | ✅ Wired (flag `GALAXY_GAP_CIRCUIT_BREAKER`) | Per-tool circuit breaker. [`galaxy_gov/shared/enforcement/circuit_breaker_guard.py`](../../galaxy_gov/shared/enforcement/circuit_breaker_guard.py): `before_tool` rejects fast when a tool's breaker is OPEN; `after_tool`/`on_tool_error` record success/failure. Control J1. |
 
 ### Situational (need a tool-using or code-executing agent)
 
@@ -174,12 +174,12 @@ Separate package, ~30 sub-modules. Different concerns than runtime governance �
 | `cascade.circuit_breaker` | `CircuitBreaker`, `CircuitState`, `CircuitBreakerConfig`, `CascadeDetector` | 🔴 Mentioned but not wired | Per-service resilience (Foundry/AOAI outages → fail fast) |
 | `incidents.circuit_breaker` | (different impl) | 🔴 Not wired | Incident-level circuit breaker |
 | `anomaly` | `AnomalyDetector`, `RogueAgentDetector`, `RiskLevel` | ✅ Wired (via guard 7) — `RogueDetectionMiddleware` uses `RogueAgentDetector` | Statistical anomaly detection. **Gap 3** extends this with data-access features + persisted baselines — see roadmap. |
-| `slo` | `SLO`, `SLI`, `ErrorBudget` | ✅ Wired (flag `GALAXY_OPS_SLO_BUDGET`) | SLOs + error-budget burn per agent (`governance/ops/slo_report.py`). Control N1. |
-| `cost` | `CostGuard`, `CostEstimate` | ✅ Wired (flag `GALAXY_OPS_COST_GUARD`) | Per-task / per-agent cost ceiling, wired into `before_tool` (`governance/shared/enforcement/cost_guard.py`). Control J2. |
-| `chaos` | `AdversarialEvaluator`, `BUILTIN_VECTORS` | ✅ Wired (flag `GALAXY_GAP_ADVERSARIAL_EVAL`) | Adversarial red-team harness (`governance/ops/adversarial_harness.py`). Control N8. |
-| `evals` | `EvaluationEngine`, `RulesJudge`, `EvalSuite` | ✅ Wired (flag `GALAXY_OPS_EVAL_JUDGE`) | Eval suite over SAFETY/HALLUCINATION (`governance/ops/evals_report.py`). Control N3. |
-| `replay` | `GoldenTraceManager`, `GoldenTraceSuite` | ✅ Wired (flag `GALAXY_OPS_REPLAY_GOLDEN`) | Golden-trace replay regression (`governance/ops/replay_report.py`). Control N4. |
-| `accuracy_declaration`, `sbom`, `signing`, `certification` | various | ✅ Wired (flags `GALAXY_OPS_ACCURACY_DECL` / `GALAXY_OPS_SBOM` / `GALAXY_OPS_ARTIFACT_SIGNING` / `GALAXY_OPS_CERTIFICATION`) | Accuracy declaration (N2), SBOM (N5), Ed25519 signing (N6), certification gate (N7) — `governance/ops/`. |
+| `slo` | `SLO`, `SLI`, `ErrorBudget` | ✅ Wired (flag `GALAXY_OPS_SLO_BUDGET`) | SLOs + error-budget burn per agent (`galaxy_gov/ops/slo_report.py`). Control N1. |
+| `cost` | `CostGuard`, `CostEstimate` | ✅ Wired (flag `GALAXY_OPS_COST_GUARD`) | Per-task / per-agent cost ceiling, wired into `before_tool` (`galaxy_gov/shared/enforcement/cost_guard.py`). Control J2. |
+| `chaos` | `AdversarialEvaluator`, `BUILTIN_VECTORS` | ✅ Wired (flag `GALAXY_GAP_ADVERSARIAL_EVAL`) | Adversarial red-team harness (`galaxy_gov/ops/adversarial_harness.py`). Control N8. |
+| `evals` | `EvaluationEngine`, `RulesJudge`, `EvalSuite` | ✅ Wired (flag `GALAXY_OPS_EVAL_JUDGE`) | Eval suite over SAFETY/HALLUCINATION (`galaxy_gov/ops/evals_report.py`). Control N3. |
+| `replay` | `GoldenTraceManager`, `GoldenTraceSuite` | ✅ Wired (flag `GALAXY_OPS_REPLAY_GOLDEN`) | Golden-trace replay regression (`galaxy_gov/ops/replay_report.py`). Control N4. |
+| `accuracy_declaration`, `sbom`, `signing`, `certification` | various | ✅ Wired (flags `GALAXY_OPS_ACCURACY_DECL` / `GALAXY_OPS_SBOM` / `GALAXY_OPS_ARTIFACT_SIGNING` / `GALAXY_OPS_CERTIFICATION`) | Accuracy declaration (N2), SBOM (N5), Ed25519 signing (N6), certification gate (N7) — `galaxy_gov/ops/`. |
 | `experiments`, `delivery`, `fleet`, `k8s` | various | 🟠 Available | Multi-agent operational concerns. Not wired. |
 | `alerts`, `benchmarks`, `tracing` | various | 🟠 Available | Operational telemetry. Not wired. |
 
@@ -194,15 +194,15 @@ Separate package, ~30 sub-modules. Different concerns than runtime governance �
 | A2A envelope + dispatcher | [`a2a/`](../../a2a/) | `agent_os` has `agent_os.integrations.a2a_adapter` but for a different protocol shape. This envelope is purpose-built for Galaxy provenance/correlation and trace-linking. |
 | Pydantic+YAML per-agent config | [`payload_agents/config.py`](../../payload_agents/config.py) | `agent_os` has policy YAML loaders but not per-agent runtime config (`extra="forbid"`). |
 | APIM policy XML + KV-backed named values | Azure-side, not Python | These live in Azure Resource Manager, not in code. |
-| Output content safety | ✅ Wired (flag `GALAXY_GAP_CONTENT_QUALITY`) | [`governance/shared/enforcement/content_quality.py`](../../governance/shared/enforcement/content_quality.py) gates the model response in `after_model` over `agent_os.content_governance` quality dimensions. The scorer is heuristic (the production substitution is an LLM judge), so it is demonstrated per agent rather than blanket-wired. Control F2. |
-| Output PII redaction | ✅ Wired (flag `GALAXY_GAP_OUTPUT_PII`) | [`governance/shared/enforcement/output_pii.py`](../../governance/shared/enforcement/output_pii.py) masks PII in the model response in `after_model`. `agent_os.credential_redactor.redact()` covers credentials only, so the wrapper masks PII directly via `find_pii_matches`. Control F1. |
+| Output content safety | ✅ Wired (flag `GALAXY_GAP_CONTENT_QUALITY`) | [`galaxy_gov/shared/enforcement/content_quality.py`](../../galaxy_gov/shared/enforcement/content_quality.py) gates the model response in `after_model` over `agent_os.content_governance` quality dimensions. The scorer is heuristic (the production substitution is an LLM judge), so it is demonstrated per agent rather than blanket-wired. Control F2. |
+| Output PII redaction | ✅ Wired (flag `GALAXY_GAP_OUTPUT_PII`) | [`galaxy_gov/shared/enforcement/output_pii.py`](../../galaxy_gov/shared/enforcement/output_pii.py) masks PII in the model response in `after_model`. `agent_os.credential_redactor.redact()` covers credentials only, so the wrapper masks PII directly via `find_pii_matches`. Control F1. |
 
 ---
 
 ## Quick reference — wiring a new guard
 
 ```python
-# 1. Write a thin wrapper in governance/guards/<name>.py:
+# 1. Write a thin wrapper in galaxy_gov/guards/<name>.py:
 class MyGuardMiddleware(AgentMiddleware):
     def __init__(self, agent_id, audit_log=None, ...):
         self._agent_id = agent_id
@@ -259,7 +259,7 @@ Two tracks: (1) make the platform cloud-/framework-agnostic; (2) close the four 
 
 ### Track 2 — Gap-closing modules (WS7) — ✅ WIRED (behind flags)
 
-Built under `governance/shared/enforcement/`, **feature-flagged off by default** (`governance/shared/enforcement/flags.py`), cloud-neutral. Implemented and tested (WS7); enable per-module via the env flags below.
+Built under `galaxy_gov/shared/enforcement/`, **feature-flagged off by default** (`galaxy_gov/shared/enforcement/flags.py`), cloud-neutral. Implemented and tested (WS7); enable per-module via the env flags below.
 
 | Gap | OWASP | Status | Module / flag |
 |---|---|---|---|

@@ -21,9 +21,9 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 
 from payload_agents.pydantic import build_agent
-from governance.shared.enforcement.data_classification import DataClassificationCatalog
-from governance.shared.enforcement.data_fgac import DataAccessMediator
-from governance.shared.enforcement.pipeline import GovernanceViolation
+from galaxy_gov.shared.enforcement.data_classification import DataClassificationCatalog
+from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
+from galaxy_gov.shared.enforcement.pipeline import GovernanceViolation
 from payload_agents._lib import personas
 
 

@@ -1,7 +1,7 @@
 """
 Tests for the output-safety subgroup (Tier D):
-  - governance.shared.enforcement.content_quality.ContentQualityGuard
-  - governance.shared.enforcement.output_pii.OutputPiiGuard
+  - galaxy_gov.shared.enforcement.content_quality.ContentQualityGuard
+  - galaxy_gov.shared.enforcement.output_pii.OutputPiiGuard
 
 Each guard is exercised against the real agent_os symbol (no upstream mocking):
 ContentQualityEvaluator applies the threshold/gate rules, and CredentialRedactor
@@ -12,12 +12,12 @@ asserted, drawn from the discovery demo_scenario. No wall-clock dependence.
 from __future__ import annotations
 
 from agent_os.content_governance import ContentDimension, QualityGate
-from governance.shared.enforcement.content_quality import (
+from galaxy_gov.shared.enforcement.content_quality import (
     BLOCK_CODE as CONTENT_BLOCK_CODE,
 )
-from governance.shared.enforcement.content_quality import ContentQualityGuard
-from governance.shared.enforcement.output_pii import BLOCK_CODE as PII_BLOCK_CODE
-from governance.shared.enforcement.output_pii import OutputPiiGuard
+from galaxy_gov.shared.enforcement.content_quality import ContentQualityGuard
+from galaxy_gov.shared.enforcement.output_pii import BLOCK_CODE as PII_BLOCK_CODE
+from galaxy_gov.shared.enforcement.output_pii import OutputPiiGuard
 
 
 # --------------------------------------------------------------------------- #

@@ -24,30 +24,30 @@
 
 # ── Governance authority: the governing team owns every control surface ───────
 # The framework-neutral guard pipeline, guards, extensions, and policies.
-/governance/                            @org/agent-governance
+/galaxy_gov/                            @org/agent-governance
 
 # The non-overridable runtime floor (mechanism 2). The floor is the root of the
 # "config can only tighten" guarantee — it must not be editable by developers.
-/governance/inprocess/floor.py          @org/agent-governance
+/galaxy_gov/inprocess/floor.py          @org/agent-governance
 
 # The NHI-keyed policy registry (mechanism 3) — the single authoritative posture
 # both the in-process pipeline and the out-of-process chokepoints resolve.
-/governance/shared/policy_registry.py   @org/agent-governance
+/galaxy_gov/shared/policy_registry.py   @org/agent-governance
 
 # The identity control plane (mechanism 5): the Registrar that records
 # agent_type → cloud principal bindings, the store those bindings live in, and the
 # recorded bindings themselves. A developer must not be able to bind an agent to a
 # principal, or edit a binding, without governing-team approval.
-/governance/remote/registrar.py         @org/agent-governance
-/governance/remote/identity_store.py    @org/agent-governance
-/governance/configs/                    @org/agent-governance
+/galaxy_gov/remote/registrar.py         @org/agent-governance
+/galaxy_gov/remote/identity_store.py    @org/agent-governance
+/galaxy_gov/configs/                    @org/agent-governance
 
 # Read-only principal verification. Owned here so the "the authority never holds
 # iam:CreateRole" property cannot be relaxed in a developer PR.
 /cloud_adapters/*/principal_verify.py   @org/agent-governance
 
 # The data-classification catalogue that drives field-grained access control.
-/governance/shared/enforcement/configs/ @org/agent-governance
+/galaxy_gov/shared/enforcement/configs/ @org/agent-governance
 
 # Per-agent governance blocks live inside these YAMLs. Developers legitimately
 # tune prompts and a2a limits, but the `governance:` block and the egress
@@ -61,7 +61,7 @@
 # environment under a separate identity. Governance-owned on every cloud.
 /cloud_adapters/aws/infra/              @org/agent-governance
 /cloud_adapters/azure/infra/            @org/agent-governance
-/governance/remote/                     @org/agent-governance
+/galaxy_gov/remote/                     @org/agent-governance
 /deploy/                                @org/agent-governance
 
 # The release path for the authority image. Whoever can change this decides what

@@ -5,7 +5,7 @@ must be submitted to the governing team for review. The split is deliberate: a
 developer authors the agent and proposes its governance posture; the governing
 team owns and approves the control surface. The boundary is enforced by
 [`.github/CODEOWNERS`](../../.github/CODEOWNERS), the runtime floor
-([`governance/inprocess/floor.py`](../../governance/inprocess/floor.py)), and the egress proxy — see
+([`galaxy_gov/inprocess/floor.py`](../../galaxy_gov/inprocess/floor.py)), and the egress proxy — see
 [`docs/governance-authority.md`](governance-authority.md) for why.
 
 This guide assumes the demonstration payload conventions (`payload_agents/`).
@@ -36,7 +36,7 @@ touch `governance/` or `core/`.
 ## 2. Files a developer creates
 
 The `galaxy new-agent <Type>` console command
-([`governance/tooling/scaffold.py`](../../governance/tooling/scaffold.py)) scaffolds the
+([`galaxy_gov/tooling/scaffold.py`](../../galaxy_gov/tooling/scaffold.py)) scaffolds the
 config, prompt, and test for a new agent with a floor-safe default posture, so the
 developer edits generated files rather than hand-creating them from scratch. The list
 below is what those files are and who owns each for review.
@@ -50,7 +50,7 @@ For an agent named `myagent` (PascalCase type `MyAgent`):
 | `payload_agents/<framework>/myagent.py` | `build_myagent_agent(...)` per framework | Developer |
 | `payload_agents/<framework>/__init__.py` (extend) | Export `build_myagent_agent` | Developer |
 | `payload_agents/config/myagent.yaml` | Per-agent config incl. the `governance:` block | **Governance** (CODEOWNERS-gated) |
-| `governance/shared/enforcement/configs/data-classification*.yaml` (extend) | ABAC policy keyed by `MyAgent`, if it reads data | **Governance** |
+| `galaxy_gov/shared/enforcement/configs/data-classification*.yaml` (extend) | ABAC policy keyed by `MyAgent`, if it reads data | **Governance** |
 | `cloud_adapters/*/egress.yaml` (extend) | Egress hosts the agent needs, if any | **Governance** |
 | Environment | `NHI_CLIENT_ID_MYAGENT` → the agent's cloud identity | **Governance / platform** |
 
@@ -79,7 +79,7 @@ The developer proposes values; the governing team approves them. Two constraints
 the developer should know up front:
 
 1. **The floor only tightens.** The `governance:` block can be stricter than the
-   baseline in [`governance/inprocess/floor.py`](../../governance/inprocess/floor.py) but never looser.
+   baseline in [`galaxy_gov/inprocess/floor.py`](../../galaxy_gov/inprocess/floor.py) but never looser.
    A config that disables a required guard, loosens the prompt-injection
    threshold past `high`, drops `credential_mode` below `redact`, exceeds the
    token-budget ceiling, or omits a mandatory blocked pattern is clamped at load
@@ -146,7 +146,7 @@ left blank blocks the review.
 - Columns that must always be masked:
 - Row-scope filters (e.g. region in [...]):
 - Justification for the clearance level requested:
-  (Reviewer cross-checks against governance/shared/enforcement/configs/data-classification*.yaml.
+  (Reviewer cross-checks against galaxy_gov/shared/enforcement/configs/data-classification*.yaml.
    No policy entry → deny-all. Unclassified columns fail closed to RESTRICTED.)
 
 ### 4. Tools / capabilities

@@ -3,11 +3,11 @@ tests/test_policy_store.py — the centralized policy store.
 
 The registry is one versioned object the governing team writes and every
 enforcement tier reads. These tests pin the loading contract of
-``governance.shared.policy_registry.resolve_registry``: the source precedence,
+``galaxy_gov.shared.policy_registry.resolve_registry``: the source precedence,
 the TTL cache, the stale-serve behaviour when a refresh fails, and the
 fail-closed paths (no source configured, and a first load that fails). They also
 cover the ``s3://`` URI parsing and the publish side
-(``governance.policy_export.publish_registry``).
+(``galaxy_gov.policy_export.publish_registry``).
 
 No AWS is reached: the S3 client is replaced with a stub, or a fetcher is
 injected directly.
@@ -19,7 +19,7 @@ import json
 
 import pytest
 
-from governance.shared.policy_registry import (
+from galaxy_gov.shared.policy_registry import (
     RegistryUnavailable,
     fetch_registry_uri,
     parse_s3_uri,
@@ -102,7 +102,7 @@ class TestPrecedence:
 
 def _recording_fetcher(chosen: list):
     """Record which source kind the resolver selected, then load it for real."""
-    from governance.shared.policy_registry import _fetch_source
+    from galaxy_gov.shared.policy_registry import _fetch_source
 
     def fetcher(kind, value):
         chosen.append(kind)
@@ -193,7 +193,7 @@ class TestStaleServe:
                          fetcher=lambda kind, value: (_registry("FinOps"), "v7"))
 
         clock.advance(600)
-        with caplog.at_level("WARNING", logger="governance.shared.policy_registry"):
+        with caplog.at_level("WARNING", logger="galaxy_gov.shared.policy_registry"):
             served = resolve_registry(
                 env=env, clock=clock,
                 fetcher=_raiser(RuntimeError("s3 unavailable")))
@@ -337,7 +337,7 @@ class TestS3Uri:
 
     def test_fetch_reads_the_object_and_returns_its_version(self, monkeypatch):
         stub = _StubS3(_json("FinOps"), version_id="v42")
-        monkeypatch.setattr("governance.shared.policy_registry._s3_client", lambda: stub)
+        monkeypatch.setattr("galaxy_gov.shared.policy_registry._s3_client", lambda: stub)
 
         registry, version_id = fetch_registry_uri("s3://policy-store/agent-controls.json")
 
@@ -347,7 +347,7 @@ class TestS3Uri:
 
     def test_unversioned_bucket_yields_no_version_id(self, monkeypatch):
         stub = _StubS3(_json("FinOps"), version_id=None)
-        monkeypatch.setattr("governance.shared.policy_registry._s3_client", lambda: stub)
+        monkeypatch.setattr("galaxy_gov.shared.policy_registry._s3_client", lambda: stub)
 
         _, version_id = fetch_registry_uri("s3://policy-store/agent-controls.json")
 
@@ -355,7 +355,7 @@ class TestS3Uri:
 
     def test_resolve_uses_the_s3_source_end_to_end(self, monkeypatch):
         stub = _StubS3(_json("FinOps", "Auditor"))
-        monkeypatch.setattr("governance.shared.policy_registry._s3_client", lambda: stub)
+        monkeypatch.setattr("galaxy_gov.shared.policy_registry._s3_client", lambda: stub)
 
         reg = resolve_registry(env={"GOV_POLICY_REGISTRY_URI": "s3://policy-store/agent-controls.json"})
 
@@ -368,7 +368,7 @@ class TestPublish:
     def test_uploads_the_exact_bytes_and_reports_version_and_digest(self):
         from hashlib import sha256
 
-        from governance.policy_export import publish_registry
+        from galaxy_gov.policy_export import publish_registry
 
         stub = _StubS3("", version_id="v9")
         body = _json("FinOps") + "\n"
@@ -385,19 +385,19 @@ class TestPublish:
         assert call["ContentType"] == "application/json"
 
     def test_published_document_round_trips_through_the_resolver(self, monkeypatch):
-        from governance.policy_export import publish_registry
+        from galaxy_gov.policy_export import publish_registry
 
         body = _json("FinOps") + "\n"
         stub = _StubS3(body, version_id="v9")
         publish_registry("s3://policy-store/agent-controls.json", body, client=stub)
 
-        monkeypatch.setattr("governance.shared.policy_registry._s3_client", lambda: stub)
+        monkeypatch.setattr("galaxy_gov.shared.policy_registry._s3_client", lambda: stub)
         reg = resolve_registry(env={"GOV_POLICY_REGISTRY_URI": "s3://policy-store/agent-controls.json"})
 
         assert sorted(reg["agents"]) == ["FinOps"]
 
     def test_unversioned_bucket_reports_no_version(self):
-        from governance.policy_export import publish_registry
+        from galaxy_gov.policy_export import publish_registry
 
         stub = _StubS3("", version_id=None)
         result = publish_registry("s3://policy-store/agent-controls.json", _json("FinOps"), client=stub)
@@ -405,7 +405,7 @@ class TestPublish:
         assert result["version_id"] is None
 
     def test_rejects_a_non_s3_destination(self):
-        from governance.policy_export import publish_registry
+        from galaxy_gov.policy_export import publish_registry
 
         with pytest.raises(ValueError):
             publish_registry("https://example.com/registry.json", _json("FinOps"), client=_StubS3(""))
@@ -415,12 +415,12 @@ class TestPublish:
 
 class TestConsumers:
     def test_authority_serves_the_store_and_falls_back_to_empty(self, monkeypatch):
-        from governance.remote import server
+        from galaxy_gov.remote import server
 
         monkeypatch.delenv("GOV_POLICY_REGISTRY", raising=False)
         monkeypatch.delenv("GOV_POLICY_REGISTRY_PATH", raising=False)
         monkeypatch.setenv("GOV_POLICY_REGISTRY_URI", "s3://policy-store/agent-controls.json")
-        monkeypatch.setattr("governance.shared.policy_registry._s3_client",
+        monkeypatch.setattr("galaxy_gov.shared.policy_registry._s3_client",
                             lambda: _StubS3(_json("FinOps")))
         assert sorted(server._registry()["agents"]) == ["FinOps"]
 

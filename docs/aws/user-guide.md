@@ -132,7 +132,7 @@ The AWS bindings reside under [`cloud_adapters/aws/`](../../cloud_adapters/aws/)
 
 ## 2. Anatomy of a governed agent run
 
-The platform wraps an agent so that **every** model and tool call passes through a layered guard pipeline, with full identity attribution and a tamper-evident audit trail, regardless of which framework orchestrates the agent. The shared, framework-neutral [`GuardPipeline`](../../governance/shared/enforcement/pipeline.py) holds the guard logic; each framework adapter maps its own hooks onto the pipeline's `before_model` / `after_model` / `before_tool` / `after_tool` methods. **FinOpsAnalyst** serves as the running example below.
+The platform wraps an agent so that **every** model and tool call passes through a layered guard pipeline, with full identity attribution and a tamper-evident audit trail, regardless of which framework orchestrates the agent. The shared, framework-neutral [`GuardPipeline`](../../galaxy_gov/shared/enforcement/pipeline.py) holds the guard logic; each framework adapter maps its own hooks onto the pipeline's `before_model` / `after_model` / `before_tool` / `after_tool` methods. **FinOpsAnalyst** serves as the running example below.
 
 ### How an agent is built
 
@@ -302,9 +302,9 @@ See [`cloud_adapters/aws/audit.py`](../../cloud_adapters/aws/audit.py) for the `
 
 ## 6. Policies — the YAML rule engine
 
-Runtime governance is declarative. The policy guard evaluates every model call against `governance/policies/*.yaml`, sorted by priority in descending order, on a first-match-wins basis. All files in the directory are auto-loaded at agent build time; no manifest is needed.
+Runtime governance is declarative. The policy guard evaluates every model call against `galaxy_gov/policies/*.yaml`, sorted by priority in descending order, on a first-match-wins basis. All files in the directory are auto-loaded at agent build time; no manifest is needed.
 
-The shipped packs are `governance/policies/galaxy-core.yaml`, `galaxy-tools.yaml`, `galaxy-pii.yaml`, and `galaxy-ast.yaml`.
+The shipped packs are `galaxy_gov/policies/galaxy-core.yaml`, `galaxy-tools.yaml`, `galaxy-pii.yaml`, and `galaxy-ast.yaml`.
 
 ### Policy schema
 
@@ -365,7 +365,7 @@ Use a single `matches` regex with alternation rather than N separate rules; this
     action: deny
 ```
 
-Add the rule to any file under `governance/policies/` and restart the agent process. No code change is needed.
+Add the rule to any file under `galaxy_gov/policies/` and restart the agent process. No code change is needed.
 
 ### Testing a policy
 
@@ -597,7 +597,7 @@ See [`payload_agents/config/finops.yaml`](../../payload_agents/config/finops.yam
 
 ### 9.3 Policy YAML schema
 
-The schema applies to files under `governance/policies/*.yaml`. All files in the directory are auto-loaded at agent build time; no manifest is needed.
+The schema applies to files under `galaxy_gov/policies/*.yaml`. All files in the directory are auto-loaded at agent build time; no manifest is needed.
 
 ```yaml
 version: "1.0"

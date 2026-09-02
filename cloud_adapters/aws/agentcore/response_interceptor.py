@@ -12,7 +12,7 @@ AgentCore interceptor contract:
 
 import json
 
-from governance.shared.enforcement.session import build_enforcement
+from galaxy_gov.shared.enforcement.session import build_enforcement
 
 _POSTURE = {"model_boundary": {
     "injection_enabled": False, "credential_enabled": False, "budget_enabled": False,

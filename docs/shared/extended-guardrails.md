@@ -9,20 +9,20 @@ control catalogue (all 15 categories with the Default column), see the AWS
 `architecture.md` §3.2.
 
 Each guard is **off by default** and is enabled by a single `GALAXY_*` environment
-flag (see [`governance/shared/enforcement/flags.py`](../../governance/shared/enforcement/flags.py)).
+flag (see [`galaxy_gov/shared/enforcement/flags.py`](../../galaxy_gov/shared/enforcement/flags.py)).
 An unconfigured run behaves as the default-on set only — the identity/egress/FGAC/A2A
 matrix in `scripts/demo_agents.py` is unchanged across all three framework axes.
 
 ## Design
 
 There is one source of governance truth, the `GuardPipeline`
-([`governance/shared/enforcement/pipeline.py`](../../governance/shared/enforcement/pipeline.py)), and one thin adapter per
+([`galaxy_gov/shared/enforcement/pipeline.py`](../../galaxy_gov/shared/enforcement/pipeline.py)), and one thin adapter per
 framework (LangGraph, raw, Pydantic AI). The flag-gated effort added three things to that pipeline:
 
 1. **A guard registry.** The pipeline holds three lists — `before_tool`,
    `after_model`, `after_tool` — that `build_guard_pipeline` populates from the
    enabled flags. Each guard wrapper returns a `GuardDecision`
-   ([`governance/shared/enforcement/decision.py`](../../governance/shared/enforcement/decision.py));
+   ([`galaxy_gov/shared/enforcement/decision.py`](../../galaxy_gov/shared/enforcement/decision.py));
    the pipeline is the single place that maps `allowed=False` onto a
    `GovernanceViolation` at the hook seam, so block-vs-audit policy lives in one location.
 2. **A new `after_tool` hook.** The pipeline previously governed the model input
@@ -124,10 +124,10 @@ Four enforcement modes, by how the guard binds:
 | F2 | output content quality | `GALAXY_GAP_CONTENT_QUALITY` | `agent_os.content_governance.ContentQualityEvaluator` |
 
 The MCP guards above share one in-memory audit sink, built by
-`governance.extensions.mcp_substrate.make_mcp_audit_sink` over
+`galaxy_gov.extensions.mcp_substrate.make_mcp_audit_sink` over
 `agent_os.mcp_protocols`.
 
-### OPS — fleet-level operational capabilities (`governance/ops/`)
+### OPS — fleet-level operational capabilities (`galaxy_gov/ops/`)
 
 | Control | Capability | Flag | Upstream primitive |
 |---|---|---|---|

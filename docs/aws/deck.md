@@ -236,7 +236,7 @@ The `GuardPipeline` (4 hooks plus the guard library), the floor, the core seam, 
 **Out-of-process (governing-team boundary) — authoritative**
 The Bedrock proxy Lambda, the data proxy (FGAC), and the AgentCore gateway with its interceptors and Cedar engine.
 
-The same `EnforcementSession` (`governance/remote/enforce.py`) runs in both places, so
+The same `EnforcementSession` (`galaxy_gov/remote/enforce.py`) runs in both places, so
 the in-process and boundary decisions cannot drift.
 
 ---

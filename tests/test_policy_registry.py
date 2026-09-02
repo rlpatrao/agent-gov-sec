@@ -6,12 +6,12 @@ Resolution applies the floor, export round-trips, and lookups are fail-closed.
 
 from __future__ import annotations
 
-from governance.policy_export import (
+from galaxy_gov.policy_export import (
     authorize_recipient_live,
     export_registry,
     resolve_policy,
 )
-from governance.shared.policy_registry import (
+from galaxy_gov.shared.policy_registry import (
     authorize_recipient,
     load_registry,
     policy_for,

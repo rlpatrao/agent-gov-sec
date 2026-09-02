@@ -1,4 +1,4 @@
-# Egress allow-list (GCP) — loaded by governance.guards.egress.load_egress_policy()
+# Egress allow-list (GCP) — loaded by galaxy_gov.guards.egress.load_egress_policy()
 # and passed into agent_os.egress_policy.EgressPolicy. Sibling of
 # adapters/azure/egress.yaml and adapters/aws/egress.yaml; selected when
 # CLOUD_PROVIDER=gcp.

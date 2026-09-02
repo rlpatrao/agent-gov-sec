@@ -26,7 +26,7 @@ def _register_local_nhi_defaults() -> None:
     offline demo runs with no env configuration. A real ``NHI_CLIENT_ID_*`` in the
     environment always wins."""
     try:
-        from governance.policy_export import discover_agent_types
+        from galaxy_gov.policy_export import discover_agent_types
         agent_types = discover_agent_types()
     except Exception:
         # Never let identity convenience break importing the package.

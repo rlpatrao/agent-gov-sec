@@ -143,6 +143,12 @@ versioning of the platform wheel (`galaxy-agentkit`).
   `docs/shared/agent-registration-plan.md`.
 
 ### Changed
+- **Package renamed: `governance/` → `galaxy_gov/`.** The authority-side package now
+  matches the architecture's naming (the `Galaxy_gov` containers). Import paths,
+  packaging globs, container COPY paths, CODEOWNERS rules, and documentation move with
+  it. Unchanged on purpose: the `governance:` block key in agent configs, telemetry
+  attribute names (`governance.agent_id`, …), AWS resource names (`galaxy-governance-gw`,
+  the `galaxy_governance` Cedar engine), and historical CHANGELOG entries.
 - **One command line.** The two scaffolders are consolidated into the `galaxy` console
   script. `galaxy init <project>` replaces `galaxy-agentkit init <project>` and sits
   alongside `new-agent`, `enroll`, `verify`, and `export-registry`; the generated project

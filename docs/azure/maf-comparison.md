@@ -151,7 +151,7 @@ The integration assigns responsibilities as follows:
   the authoritative re-check happens at the Function boundary rather than in a
   Cedar service.
 - Rich controls run as MAF guard middlewares in-process and are re-run at the
-  boundary. `governance/shared/enforcement` and `governance/remote` supply the
+  boundary. `galaxy_gov/shared/enforcement` and `galaxy_gov/remote` supply the
   single `EnforcementSession`; the MAF guards
   (`cloud_adapters/azure/maf/guards/`) wrap the same detectors for the in-process
   path.

@@ -7,7 +7,7 @@ decided, which controls fired, and how those controls map to external frameworks
 ## Where it runs
 
 The dashboard is part of the enforcement service
-([`governance/remote/server.py`](../../governance/remote/server.py)), so it is available
+([`galaxy_gov/remote/server.py`](../../galaxy_gov/remote/server.py)), so it is available
 wherever that service runs — the local container from
 [`deploy/docker-compose.yml`](../../deploy/docker-compose.yml), or the deployed service.
 It is served from the same port as the data plane:
@@ -32,7 +32,7 @@ network-isolated environment.
 ## The buffer is not the ledger
 
 The dashboard reads
-[`governance/remote/decision_log.py`](../../governance/remote/decision_log.py): a bounded,
+[`galaxy_gov/remote/decision_log.py`](../../galaxy_gov/remote/decision_log.py): a bounded,
 in-memory, process-local ring buffer written to by the server on every data-plane request.
 It is observability, not audit.
 
@@ -72,7 +72,7 @@ line reflects `GOV_POLICY_REGISTRY` / `GOV_POLICY_REGISTRY_PATH`.
 ## Regenerating the crosswalk
 
 The service image does not contain `docs/`, so the crosswalk table is compiled into
-`governance/remote/_crosswalk.py` at development time and imported at runtime. After
+`galaxy_gov/remote/_crosswalk.py` at development time and imported at runtime. After
 editing [`standards-crosswalk.md`](standards-crosswalk.md):
 
 ```bash
