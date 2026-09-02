@@ -173,7 +173,7 @@ provision.
 ### AD-5 — A2A as the only inter-agent path, behind typed envelopes
 
 **Decision.** Inter-agent calls use validated `A2ARequest` / `A2AResponse`
-envelopes dispatched through [`a2a/dispatcher.py`](../../a2a/dispatcher.py); the
+envelopes dispatched through [`core/a2a/dispatcher.py`](../../core/a2a/dispatcher.py); the
 callee runs inside its own guard pipeline. **Context.** Direct calls between agent
 classes would bypass governance and couple agents to each other.
 **Consequence.** Every hop is allow-listed, audited, and traced; recipients are
@@ -253,7 +253,7 @@ The guard *logic* (detection and decision primitives) comes from the upstream
 is the **composition, the AWS bindings, the attribution, and a set of additional
 guards and fleet-ops controls**. The diagram below separates the two by
 provenance (grey = upstream primitive; blue = added features). The full per-module
-inventory is in [`docs/DELTA_OVER_AGENT_OS.md`](DELTA_OVER_AGENT_OS.md).
+inventory is in [`docs/shared/DELTA_OVER_AGENT_OS.md`](DELTA_OVER_AGENT_OS.md).
 
 ![Platform delta over agent_os — grey = upstream primitives, blue = added features](../diagrams/delta-over-agentos.svg)
 
@@ -278,7 +278,7 @@ enforced*. An in-process guard stack alone has two gaps: a **developer gap** (th
 weaken it) and a **runtime gap** (the guards run in the agent's own process, so a
 compromised runtime could bypass them). Three mechanisms close those gaps; the
 authority model is detailed in
-[`docs/governance-authority.md`](governance-authority.md).
+[`docs/shared/governance-authority.md`](governance-authority.md).
 
 **One enforcement code path (trust-but-verify).** The guard sequence is
 implemented once as `galaxy_gov/shared/enforcement/` (the `GuardPipeline` behind a
@@ -332,7 +332,7 @@ path.
 *Figure 4. Infrastructure (AWS) architecture. Source:
 [`docs/diagrams/arch-infra-aws.svg`](../diagrams/arch-infra-aws.svg) (PNG:
 [`arch-infra-aws.png`](../diagrams/arch-infra-aws.png)). A layered, slide-ready
-variant is [`docs/aws-deployment-topology.html`](../aws/deployment-topology.html).*
+variant is [`docs/aws/deployment-topology.html`](../aws/deployment-topology.html).*
 
 The AWS reference topology (`main.tf`, tagged `project=galaxy-rp`) provisions:
 
@@ -358,7 +358,7 @@ per-agent NHI scope. Resilience: every adapter imports `boto3` lazily and is
 guarded, so with no SDK installed or no live session the platform degrades to
 environment-variable identity and an in-memory ledger. The per-service detail,
 the Terraform, and "Viewing traces on AWS" are in
-[`docs/architecture-framework-aws.md`](../aws/architecture.md).
+[`docs/aws/architecture.md`](../aws/architecture.md).
 
 ### 7.1 AgentCore integration
 
@@ -387,7 +387,7 @@ workload identities `galaxy_{finops,auditor,rogue}`, and the three personas as
 allowed and Rogue's denied by Cedar at the gateway. The interceptor and Runtime
 code ship as zip Lambdas / S3 code artifacts (the ECR/container path is blocked by
 an org SCP in this account). See
-[`docs/agentcore-comparison.md`](../aws/agentcore-comparison.md) for the overlap analysis
+[`docs/aws/agentcore-comparison.md`](../aws/agentcore-comparison.md) for the overlap analysis
 and [`cloud_adapters/aws/agentcore/README.md`](../../cloud_adapters/aws/agentcore/README.md)
 for deploy steps.
 
@@ -464,7 +464,7 @@ misbehaved; exits non-zero).
 > **Full report.** The complete self-contained HTML report from a live AWS run —
 > every check with its control description, input, verdict, and output, plus the
 > control catalogue — is committed at
-> [`docs/aws-guardrail-report.html`](../aws/guardrail-report.html) (open in any
+> [`docs/aws/guardrail-report.html`](../aws/guardrail-report.html) (open in any
 > browser; CSS is inline, no external assets). It is produced by `--html` (see
 > [§9.4](#94-reproduce)). The tables in §9.2–§9.3 below summarize it.
 
@@ -566,8 +566,8 @@ intercept case (`47/47` checks). Observed on the same AWS run:
 
 ```bash
 .venv/bin/python scripts/demo_agents.py --aws --extended                              # live Bedrock, all 49 controls
-.venv/bin/python scripts/demo_agents.py --aws --html docs/aws-guardrail-report.html    # regenerate the committed HTML report
-.venv/bin/python scripts/demo_agents.py --aws --extended --agentcore --html docs/aws-guardrail-report.html  # + AgentCore Runtime rows (one command, end-to-end)
+.venv/bin/python scripts/demo_agents.py --aws --html docs/aws/guardrail-report.html    # regenerate the committed HTML report
+.venv/bin/python scripts/demo_agents.py --aws --extended --agentcore --html docs/aws/guardrail-report.html  # + AgentCore Runtime rows (one command, end-to-end)
 .venv/bin/python scripts/demo_agents.py --fake --extended                             # deterministic, asserts the 2 N/A rows too
 .venv/bin/python scripts/demo_agents.py --aws --framework raw                          # same matrix, no agent framework
 ```
@@ -578,7 +578,7 @@ folds their per-agent Cedar decisions into the same matrix and HTML — controls
 (tool-list filtering). It skips gracefully if the Runtimes are not deployed. With it
 the unified total is **90 checks · 49 controls** (88 passed); without it, **84 checks · 47 controls** (82 passed).
 
-The committed report is [`docs/aws-guardrail-report.html`](../aws/guardrail-report.html).
+The committed report is [`docs/aws/guardrail-report.html`](../aws/guardrail-report.html).
 The `--aws` path needs the `.[aws]` extra (`boto3`), the `galaxy-rp` infra applied
 (`cloud_adapters/aws/infra`), and `AWS_BEDROCK_GATEWAY_ENDPOINT` +
 `AWS_BEDROCK_GATEWAY_KEY` set (from `terraform output`).
@@ -617,21 +617,21 @@ The `--aws` path needs the `.[aws]` extra (`boto3`), the `galaxy-rp` infra appli
 
 - [`README.md`](../../README.md) — quick start, install, the AWS setup (`.[aws]`,
   Terraform, gateway env vars).
-- [`docs/user-guide.md`](../aws/user-guide.md) — the full walkthrough (identity,
+- [`docs/aws/user-guide.md`](../aws/user-guide.md) — the full walkthrough (identity,
   guards, A2A, FGAC, ledger) with runnable snippets.
-- [`docs/adding-an-agent.md`](adding-an-agent.md) — the developer / governing-team
+- [`docs/shared/adding-an-agent.md`](adding-an-agent.md) — the developer / governing-team
   split for adding a governed agent.
-- [`docs/aws-guardrail-report.html`](../aws/guardrail-report.html) — the committed
+- [`docs/aws/guardrail-report.html`](../aws/guardrail-report.html) — the committed
   self-contained HTML conformance report from a live AWS run (all 47 platform controls).
-- [`docs/langgraph-demo.md`](../aws/langgraph-demo.md) — the demo runner, flags, and the
+- [`docs/aws/langgraph-demo.md`](../aws/langgraph-demo.md) — the demo runner, flags, and the
   verdict semantics in detail.
-- [`docs/architecture-framework-aws.md`](../aws/architecture.md) — the
+- [`docs/aws/architecture.md`](../aws/architecture.md) — the
   framework core, the AWS adapter per service, and "Viewing traces on AWS".
-- [`docs/governance-authority.md`](governance-authority.md) — the trust-boundary
+- [`docs/shared/governance-authority.md`](governance-authority.md) — the trust-boundary
   authority model (ownership split · floor · out-of-process enforcement).
-- [`docs/agentcore-comparison.md`](../aws/agentcore-comparison.md) — overlap and
+- [`docs/aws/agentcore-comparison.md`](../aws/agentcore-comparison.md) — overlap and
   integration with Amazon Bedrock AgentCore (Gateway · Policy · Identity).
-- [`docs/extended-guardrails.md`](extended-guardrails.md) — the 28 off-by-default
+- [`docs/shared/extended-guardrails.md`](extended-guardrails.md) — the 28 off-by-default
   flag-gated controls.
-- [`docs/standards-crosswalk.md`](standards-crosswalk.md) — NIST AI RMF / ISO
+- [`docs/shared/standards-crosswalk.md`](standards-crosswalk.md) — NIST AI RMF / ISO
   42001 / EU AI Act / MITRE ATLAS mapping.

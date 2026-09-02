@@ -6,7 +6,7 @@ developer authors the agent and proposes its governance posture; the governing
 team owns and approves the control surface. The boundary is enforced by
 [`.github/CODEOWNERS`](../../.github/CODEOWNERS), the runtime floor
 ([`galaxy_gov/inprocess/floor.py`](../../galaxy_gov/inprocess/floor.py)), and the egress proxy — see
-[`docs/governance-authority.md`](governance-authority.md) for why.
+[`docs/shared/governance-authority.md`](governance-authority.md) for why.
 
 This guide assumes the demonstration payload conventions (`payload_agents/`).
 The same structure applies to any agent built on the platform.

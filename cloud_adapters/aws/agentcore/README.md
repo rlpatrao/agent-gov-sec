@@ -1,7 +1,7 @@
 # Deploying the governance integration on AgentCore
 
 This wires the framework's enforcement into Amazon Bedrock AgentCore. The split
-follows `docs/agentcore-comparison.md`: AgentCore Policy (Cedar) handles coarse
+follows `docs/aws/agentcore-comparison.md`: AgentCore Policy (Cedar) handles coarse
 authorization; the governance **interceptors** add the content controls Cedar
 cannot express; both read the one NHI-keyed registry.
 

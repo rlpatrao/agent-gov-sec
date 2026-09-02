@@ -18,3 +18,9 @@ Changes under `galaxy_gov/`, `payload_agents/config/`, `cloud_adapters/*/egress.
 enforcement service require review from **@org/agent-governance** (see `.github/CODEOWNERS`).
 
 <!-- Paste the governance-review request here for agent changes. -->
+
+## Refactor checklist (renames, moves, removals)
+
+- [ ] `python scripts/check_doc_refs.py` passes — documentation references match the tree
+- [ ] Documents describing removed functionality are moved to `docs/archive/` (see its README), not deleted
+

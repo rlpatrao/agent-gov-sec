@@ -201,7 +201,7 @@ denies it that access. Unknown or unscoped agents resolve to deny-all.
 [`cloud_adapters/aws/infra/lambda/a2a_broker.py`](../../cloud_adapters/aws/infra/lambda/a2a_broker.py).
 Dispatch authorization is resolved from the sender's registry allow-list, not a
 list the sender passes in. The shared decision (`policy_registry.authorize_recipient`)
-is also consulted in-process by [`a2a/dispatcher.py`](../../a2a/dispatcher.py) when
+is also consulted in-process by [`core/a2a/dispatcher.py`](../../core/a2a/dispatcher.py) when
 `GOV_A2A_BROKER_ENDPOINT` is set, so both tiers apply identical authorization.
 
 All policy comes from the deployed registry, never the request body. Each
@@ -295,7 +295,7 @@ drifts from them.
 ## AgentCore integration
 
 On AWS, the chokepoints map onto Amazon Bedrock AgentCore rather than bespoke
-plumbing (see `docs/agentcore-comparison.md`). Coarse authorization is generated
+plumbing (see `docs/aws/agentcore-comparison.md`). Coarse authorization is generated
 as Cedar from the registry (`galaxy_gov/agentcore/cedar_export.py`) and enforced
 by AgentCore Policy; the content controls run as AgentCore Gateway **interceptors**
 (`cloud_adapters/aws/agentcore/{request,response}_interceptor.py`) — thin adapters

@@ -49,10 +49,10 @@ Stack ordering, fail-fast first. Built by [`cloud_adapters/azure/maf/middleware.
 |---|---|---|
 | **APIM gateway** | Azure-side (reference topology) | Sub-key validation, required-headers guard (`x-agent-type` / `x-galaxy-run-id`), per-subscription RPM rate-limit, real AOAI key injection. The sole LLM-egress path when `APIM_ENDPOINT` is set. |
 | **Hash-chained ledger** | [`cloud_adapters/azure/audit.py`](../../cloud_adapters/azure/audit.py) | Tamper-evident SHA-256 audit chain (stdout/in-memory mode by default; Postgres when `POSTGRES_DSN` is set). |
-| **OTel audit backend** | [`governance/adapters/otel_audit_backend.py`](../../governance/adapters/otel_audit_backend.py) | Every `AuditEntry` becomes a span event on the current OTel span → App Insights `customEvents`. |
-| **A2A allow-list** | [`a2a/dispatcher.py`](../../a2a/dispatcher.py) + per-agent YAML | Two-layer allow-list (compile-time + runtime) on every A2A hop. The shipped `Analyzer` is a leaf (`allowed_recipients: []`), so the dispatcher governs inbound only. |
+| **OTel audit backend** | [`galaxy_gov/adapters/otel_audit_backend.py`](../../galaxy_gov/adapters/otel_audit_backend.py) | Every `AuditEntry` becomes a span event on the current OTel span → App Insights `customEvents`. |
+| **A2A allow-list** | [`core/a2a/dispatcher.py`](../../core/a2a/dispatcher.py) + per-agent YAML | Two-layer allow-list (compile-time + runtime) on every A2A hop. The shipped `Analyzer` is a leaf (`allowed_recipients: []`), so the dispatcher governs inbound only. |
 
-**Per-agent tuning** lives in `payload_agents/config/<agent>.yaml`. For the shipped `Analyzer` (`payload_agents/config/analyzer.yaml`): `context_budget_tokens: 40000`, `prompt_injection_block_threshold: high`, `credential_mode: redact`, `enable_rogue_detection: true`, `allowed_tools: []` (read-only, no tools).
+**Per-agent tuning** lives in `payload_agents/config/<agent>.yaml`. For the shipped `FinOps` persona (`payload_agents/config/finops.yaml`): `context_budget_tokens: 40000`, `prompt_injection_block_threshold: high`, `credential_mode: redact`, `enable_rogue_detection: true`, `allowed_tools: []` (read-only, no tools).
 
 ---
 
@@ -190,8 +190,8 @@ Separate package, ~30 sub-modules. Different concerns than runtime governance �
 | Concern | What this repo built | Why custom |
 |---|---|---|
 | Hash-chained Postgres audit | [`cloud_adapters/azure/audit.py`](../../cloud_adapters/azure/audit.py) | `agent_os` ships an `audit_logger.AuditBackend` protocol but no concrete SHA-256 hash-chain backend. ~200 LOC fills the compliance-archive gap. (Reconcile against `agent_os`'s Merkle audit trail in WS4.) |
-| OTel-event-on-current-span audit backend | [`governance/adapters/otel_audit_backend.py`](../../governance/adapters/otel_audit_backend.py) | No bundled OTel span-event sink. ~70 LOC. |
-| A2A envelope + dispatcher | [`core/a2a/`](../../a2a/) | `agent_os` has `agent_os.integrations.a2a_adapter` but for a different protocol shape. This envelope is purpose-built for Galaxy provenance/correlation and trace-linking. |
+| OTel-event-on-current-span audit backend | [`galaxy_gov/adapters/otel_audit_backend.py`](../../galaxy_gov/adapters/otel_audit_backend.py) | No bundled OTel span-event sink. ~70 LOC. |
+| A2A envelope + dispatcher | [`core/a2a/`](../../core/a2a/) | `agent_os` has `agent_os.integrations.a2a_adapter` but for a different protocol shape. This envelope is purpose-built for Galaxy provenance/correlation and trace-linking. |
 | Pydantic+YAML per-agent config | [`payload_agents/config.py`](../../payload_agents/config.py) | `agent_os` has policy YAML loaders but not per-agent runtime config (`extra="forbid"`). |
 | APIM policy XML + KV-backed named values | Azure-side, not Python | These live in Azure Resource Manager, not in code. |
 | Output content safety | ✅ Wired (flag `GALAXY_GAP_CONTENT_QUALITY`) | [`galaxy_gov/shared/enforcement/content_quality.py`](../../galaxy_gov/shared/enforcement/content_quality.py) gates the model response in `after_model` over `agent_os.content_governance` quality dimensions. The scorer is heuristic (the production substitution is an LLM judge), so it is demonstrated per agent rather than blanket-wired. Control F2. |
@@ -268,6 +268,6 @@ Built under `galaxy_gov/shared/enforcement/`, **feature-flagged off by default**
 | **Gap 3 — Data-access drift** | ASI — rogue/behavioral; LLM10:2025 (Unbounded Consumption — volume) | ✅ **Wired (flag).** `DataAccessDriftDetector` adds data-access features (volume z-score, first-seen table, sensitivity escalation, table entropy, denial rate) → risk + quarantine; **persistent** baselines (`JsonFileBaselineStore`) survive cold starts. Complements the action-level `RogueAgentDetector` (guard 7). | `data_drift.py` · `GALAXY_GAP_DATA_DRIFT` |
 | **Gap 4 — Reasoning-chain guards** | LLM06:2025 (Excessive Agency); ASI — tool misuse / intent-breaking | ✅ **Wired (flag).** (a) **Enforcement:** `ReasoningStepValidator` gates plan/tool-selection/data-access steps against the capability allow-list + Gap-1 mediator *before* execution. (b) **Observability (Gap 4+):** `ReasoningTraceLogger` mandatorily redacts (CredentialRedactor + PII), then emits `reasoning.cot`/`reasoning.cove` span events keyed to `nhi_id` + a hash-stamped `reasoning_trace` audit entry (supports LLM02 detection). Semantic CoT analysis (consistency/goal-drift) is deferred. | `reasoning_guard.py` · `reasoning_trace.py` · `GALAXY_GAP_REASONING_GUARD` / `GALAXY_GAP_REASONING_TRACE` |
 
-OWASP IDs reference the **OWASP LLM Top 10 (2025)** plus the **OWASP Agentic Security Initiative (ASI)** threat classes. The NIST AI RMF / ISO/IEC 42001 / EU AI Act / MITRE ATLAS crosswalk is in [`standards-crosswalk.md`](standards-crosswalk.md). See `docs/observability-governance-showcase.md` for the CoT/CoVe query examples (incl. AWS CloudWatch Logs Insights).
+OWASP IDs reference the **OWASP LLM Top 10 (2025)** plus the **OWASP Agentic Security Initiative (ASI)** threat classes. The NIST AI RMF / ISO/IEC 42001 / EU AI Act / MITRE ATLAS crosswalk is in [`standards-crosswalk.md`](standards-crosswalk.md). See `docs/aws/observability-governance-showcase.md` for the CoT/CoVe query examples (incl. AWS CloudWatch Logs Insights).
 
 For deferred 🔴 items (circuit breaker) and 🟡 situational modules (sandbox, reversibility, secure-codegen, diff-policy, MCP gateway), pick them up when the corresponding agent shape or operational concern materialises — don't pre-wire.

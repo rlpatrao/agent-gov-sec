@@ -330,7 +330,7 @@ The developer trust domain comprises the following components:
 - **Core seam** (`core/interfaces.py`, `provider_factory.py`, `nhi_registry.py`,
   `run_tracer.py`, `trace_ledger.py`) — comprises the Protocols, provider selection, NHI
   binding, tracing, and the hash-chain schema.
-- **A2A** (`a2a/envelope.py`, `a2a/dispatcher.py`) — provides typed envelopes and audited
+- **A2A** (`a2a/envelope.py`, `core/a2a/dispatcher.py`) — provides typed envelopes and audited
   dispatch with a recipient allow-list.
 
 In-process guards are fast and inexpensive and catch most violations early, but they run

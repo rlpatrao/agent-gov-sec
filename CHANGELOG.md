@@ -142,6 +142,17 @@ versioning of the platform wheel (`galaxy-agentkit`).
   already resolved its NHI. Full list with severities and sequencing in
   `docs/shared/agent-registration-plan.md`.
 
+### Added (refactor hygiene)
+- **Documentation-reference gate.** `scripts/check_doc_refs.py` verifies every path-like
+  and module reference in tracked Markdown against the tree (1,200+ references across 40
+  documents), with `scripts/docref-allow.txt` for deliberate forward references such as
+  scaffold output. Runs in the governance gate in CI, as a Claude Code Stop hook
+  (`.claude/settings.json`), and as a PR-template checklist item. The first run found and
+  fixed 60+ stale references left by earlier reorganizations.
+- **`docs/archive/` (tracked).** Retired documents move here rather than being deleted or
+  placed in the local-only `archive/`, so history stays visible in every checkout. Policy
+  in `docs/archive/README.md`; the reference checker exempts the directory.
+
 ### Changed
 - **`a2a/` folded into `core/a2a/`.** The agent-to-agent protocol (envelope + audited
   dispatcher) is seam code used by both sides, so it now lives inside the agnostic core

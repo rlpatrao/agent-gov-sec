@@ -24,14 +24,14 @@ and MITRE ATLAS columns are an indicative crosswalk.
 |---|---|---|---|---|---|---|---|
 | A1 | NHI identity (per-agent principal) | `core/nhi_registry.py` + `cloud_adapters/<cloud>/identity.py` | ASI — agent identity | GOVERN, MANAGE | A.9 roles & responsibilities | Art.12 record-keeping (attribution) | — |
 | A2 | LLM-egress chokepoint | `cloud_adapters/<cloud>/gateway.py` | ASI — excessive agency | MANAGE | A.6 lifecycle controls | Art.15 robustness/cybersecurity | LLM data leakage; exfiltration |
-| A3 | Egress allow-list | `galaxy_gov/guards/egress.py` + `cloud_adapters/<cloud>/egress.yaml` | LLM05 / ASI | MANAGE | A.6 | Art.15 | Exfiltration over web service |
+| A3 | Egress allow-list | `galaxy_gov/shared/enforcement/egress_guard.py` + `cloud_adapters/<cloud>/egress.yaml` | LLM05 / ASI | MANAGE | A.6 | Art.15 | Exfiltration over web service |
 | B1 | Prompt-injection guard | `galaxy_gov/shared/enforcement/pipeline.py` (`agent_os.PromptInjectionDetector`) | LLM01 / ASI-01 | MEASURE, MANAGE | A.6 | Art.15 | Prompt injection (direct/indirect) |
 | B2 | Credential redactor | `galaxy_gov/shared/enforcement/pipeline.py` (`agent_os.CredentialRedactor`) | LLM06 / LLM02:2025 | MAP, MEASURE | A.7 data | Art.10 data governance | LLM data leakage |
 | B3 | Context-budget guard | `galaxy_gov/shared/enforcement/pipeline.py` (`agent_os.ContextScheduler`) | LLM04 (unbounded consumption) | MANAGE | A.6 | Art.15 | Denial of ML service / cost |
 | C1 | Capability guard (tool allow-list) | `galaxy_gov/shared/enforcement/pipeline.py` + `galaxy_gov/shared/enforcement/reasoning_guard.py` | LLM08 (excessive agency) | MANAGE | A.6 | Art.14 human oversight | LLM plugin/tool compromise |
 | C2 | Blocked-pattern scan (tool args) | `galaxy_gov/shared/enforcement/pipeline.py` | LLM05 (improper output handling) | MEASURE | A.6 | Art.15 | — |
-| I1 | A2A recipient allow-list | `a2a/dispatcher.py` + per-agent YAML | ASI — multi-agent | MANAGE | A.6 | Art.15 | — |
-| I2 | A2A audited dispatch | `a2a/dispatcher.py` + `governance/adapters/otel_audit_backend.py` | ASI — multi-agent | GOVERN | A.9 logging | Art.12 record-keeping | — |
+| I1 | A2A recipient allow-list | `core/a2a/dispatcher.py` + per-agent YAML | ASI — multi-agent | MANAGE | A.6 | Art.15 | — |
+| I2 | A2A audited dispatch | `core/a2a/dispatcher.py` + `galaxy_gov/adapters/otel_audit_backend.py` | ASI — multi-agent | GOVERN | A.9 logging | Art.12 record-keeping | — |
 | D1–D4 | Data FGAC (ABAC allow / mask / row-filter) | `galaxy_gov/shared/enforcement/data_fgac.py` + `data_classification.py` (`agent_os.DataAccessEvaluator`) | LLM02:2025 / ASI | MAP, MANAGE | A.7 data governance | Art.10 data governance | LLM data leakage |
 | D5 | FGAC store-side pushdown | `cloud_adapters/aws/data_fgac.py` (Lake Formation / Athena SQL) | LLM02:2025 | MANAGE | A.7 | Art.10 | LLM data leakage |
 | D6 | Data FGAC deny-all (no policy) | `galaxy_gov/shared/enforcement/data_fgac.py` | LLM02:2025 / ASI | MANAGE | A.7 | Art.10 | — |
@@ -39,7 +39,7 @@ and MITRE ATLAS columns are an indicative crosswalk.
 | H1 | Reasoning-step guard (pre-exec CoT check) | `galaxy_gov/shared/enforcement/reasoning_guard.py` | ASI — reasoning / LLM09 | MEASURE | A.6 | Art.14 human oversight | — |
 | H2 | CoT/CoVe reasoning trace (redacted) | `galaxy_gov/shared/enforcement/reasoning_trace.py` | ASI — reasoning | MEASURE (explainability) | A.6 | Art.12 logging; Art.13 transparency | — |
 | M1 | Hash-chained audit ledger | `cloud_adapters/<cloud>/audit.py` + `core/trace_ledger.py` | — | GOVERN (accountability) | A.9 logging | Art.12 record-keeping | — |
-| L1 | HITL escalation | `galaxy_gov/guards/escalation.py` | ASI — human-in-the-loop | GOVERN, MANAGE | A.9 | Art.14 human oversight | — |
+| L1 | HITL escalation | `galaxy_gov/shared/enforcement/escalation_guard.py` | ASI — human-in-the-loop | GOVERN, MANAGE | A.9 | Art.14 human oversight | — |
 
 ## Notes per framework
 

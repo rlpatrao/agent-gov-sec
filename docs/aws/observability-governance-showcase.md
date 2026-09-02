@@ -103,14 +103,14 @@ The trace tree for a single-agent payload:
 
 ```
 [pipeline.run — root span]               trace_id = 1-152a581f...   attrs: galaxy.run_id, galaxy.module
-  └── a2a.dispatch.<Agent>               span_id  = aa581114...     (a2a/dispatcher.py)
+  └── a2a.dispatch.<Agent>               span_id  = aa581114...     (core/a2a/dispatcher.py)
         └── chat <model>                 span_id  = ad87b3b8...     (telemetry layer)
               parent_id                          = aa581114...
               attrs: gen_ai.request.model, gen_ai.usage.input_tokens, gen_ai.usage.output_tokens
               + governance.* span events (NHI-attributed audit entries)
 ```
 
-The `a2a.dispatch.<Agent>` span is opened by `a2a_call()` in [`a2a/dispatcher.py`](../../a2a/dispatcher.py); the `chat <model>` span is emitted automatically by the framework telemetry layer when `agent.run()` calls the LLM. Both inherit `trace_id` from the root and set their `parent_id` from the active context, which is how one trace covers the whole run.
+The `a2a.dispatch.<Agent>` span is opened by `a2a_call()` in [`core/a2a/dispatcher.py`](../../core/a2a/dispatcher.py); the `chat <model>` span is emitted automatically by the framework telemetry layer when `agent.run()` calls the LLM. Both inherit `trace_id` from the root and set their `parent_id` from the active context, which is how one trace covers the whole run.
 
 When the payload runs multiple agents, the same root fans out to one `a2a.dispatch.<Agent>` span per stage. The nesting mechanism is identical; only the number of child dispatch spans changes. Everything that follows applies equally to one agent or many.
 
@@ -265,7 +265,7 @@ agent_id = f"{cfg.agent_type}-{identity.client_id}"
 
 `build_agent()` sets `x-nhi-id: <client_id>` as a default header on the chat client. The API Gateway reads `x-nhi-id` in its request authorizer/Lambda and logs it in CloudWatch access logs, and the value forms an unbroken chain: Python process → API Gateway → Lambda → Bedrock → X-Ray.
 
-**Step 3 — Stamp it on every governance audit span event** ([`governance/adapters/otel_audit_backend.py`](../../governance/adapters/otel_audit_backend.py))
+**Step 3 — Stamp it on every governance audit span event** ([`galaxy_gov/adapters/otel_audit_backend.py`](../../galaxy_gov/adapters/otel_audit_backend.py))
 
 NHI attribution is not an attribute on the `pipeline.run` root span. It travels on the governance span events that `OtelAuditBackend` adds to the currently active span for every governance decision:
 

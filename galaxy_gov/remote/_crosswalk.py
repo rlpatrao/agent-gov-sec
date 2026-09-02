@@ -40,7 +40,7 @@ CROSSWALK: tuple[dict[str, str], ...] = (
     {
         'code': 'A3',
         'name': 'Egress allow-list',
-        'module': '`galaxy_gov/guards/egress.py` + `cloud_adapters/<cloud>/egress.yaml`',
+        'module': '`galaxy_gov/shared/enforcement/egress_guard.py` + `cloud_adapters/<cloud>/egress.yaml`',
         'owasp': 'LLM05 / ASI',
         'nist': 'MANAGE',
         'iso42001': 'A.6',
@@ -100,7 +100,7 @@ CROSSWALK: tuple[dict[str, str], ...] = (
     {
         'code': 'I1',
         'name': 'A2A recipient allow-list',
-        'module': '`a2a/dispatcher.py` + per-agent YAML',
+        'module': '`core/a2a/dispatcher.py` + per-agent YAML',
         'owasp': 'ASI — multi-agent',
         'nist': 'MANAGE',
         'iso42001': 'A.6',
@@ -110,7 +110,7 @@ CROSSWALK: tuple[dict[str, str], ...] = (
     {
         'code': 'I2',
         'name': 'A2A audited dispatch',
-        'module': '`a2a/dispatcher.py` + `governance/adapters/otel_audit_backend.py`',
+        'module': '`core/a2a/dispatcher.py` + `galaxy_gov/adapters/otel_audit_backend.py`',
         'owasp': 'ASI — multi-agent',
         'nist': 'GOVERN',
         'iso42001': 'A.9 logging',
@@ -190,7 +190,7 @@ CROSSWALK: tuple[dict[str, str], ...] = (
     {
         'code': 'L1',
         'name': 'HITL escalation',
-        'module': '`galaxy_gov/guards/escalation.py`',
+        'module': '`galaxy_gov/shared/enforcement/escalation_guard.py`',
         'owasp': 'ASI — human-in-the-loop',
         'nist': 'GOVERN, MANAGE',
         'iso42001': 'A.9',

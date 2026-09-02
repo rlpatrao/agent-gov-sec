@@ -265,7 +265,7 @@ or the build fails fast.
 ### Step 5: Add tests
 
 Add cases to the relevant framework test file (`tests/test_langgraph_agents.py`,
-`tests/test_maf_framework.py`, `tests/test_pydantic_framework.py`,
+`tests/test_azure_adapter.py`, `tests/test_pydantic_framework.py`,
 `tests/test_raw_framework.py`), covering at minimum the success path of each
 control the persona wires and, if you add a deny rule, a policy probe. See the
 patterns in [§7](#7-testing).
@@ -603,7 +603,7 @@ made.
 |---|---|
 | `tests/test_azure_adapter.py` | The Azure adapter against the core interfaces with the Azure SDK forced absent: factory resolution, secret env-var fallback, identity degradation, the egress allow-list, stdout-mode audit, the Azure SQL / Synapse FGAC pushdown, the out-of-process Function chokepoints failing closed, and the Container Apps Jobs orchestrator degrading without the management SDK |
 | `tests/test_langgraph_agents.py` | Success + intercept path of every wired control across the three personas on LangGraph |
-| `tests/test_maf_framework.py`, `tests/test_pydantic_framework.py`, `tests/test_raw_framework.py` | Governance parity on the MAF, Pydantic AI, and raw framework axes |
+| `tests/test_azure_adapter.py`, `tests/test_pydantic_framework.py`, `tests/test_raw_framework.py` | Governance parity on the MAF, Pydantic AI, and raw framework axes |
 | `tests/test_a2a_envelope.py` | Envelope schema, provenance validation, dispatcher audit events, `allowed_recipients` deny |
 | `tests/test_config.py` | Pydantic + YAML config loading, schema validation, typo rejection (`extra="forbid"`) |
 | `tests/test_guards.py`, `tests/test_extensions.py`, `tests/test_extended_guardrails.py` | Guard logic + gap modules (FGAC, drift, reasoning guard/trace) directly, no framework |

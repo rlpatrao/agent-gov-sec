@@ -1,0 +1,16 @@
+{
+    "hooks": {
+        "Stop": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "[ -f \"$CLAUDE_PROJECT_DIR/scripts/check_doc_refs.py\" ] || exit 0; python3 \"$CLAUDE_PROJECT_DIR/scripts/check_doc_refs.py\" >/dev/null || exit 2",
+                        "timeout": 30,
+                        "statusMessage": "Checking documentation references against the tree"
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -48,6 +48,9 @@ jobs:
       - name: Third-party notices are current
         run: python scripts/gen_third_party_notices.py --check
 
+      - name: Documentation references match the tree
+        run: python scripts/check_doc_refs.py
+
       - name: Confirm the wheel excludes payload_agents / tests and carries its licenses
         run: |
           python - <<'PY'

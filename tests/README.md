@@ -61,7 +61,7 @@ with real behavior as the impls land.
   delegation.
 
 **Still owed (tracked, not done here):**
-1. **Defer the MAF import in `payload_agents/analyzer_agent.py`** (and the chat
+1. **Defer the MAF import in `payload_agents/langgraph/_runner.py`** (and the chat
    client in `_base.py`) so `AnalyzerHandler`'s validation/classification/mapping
    logic — which already runs against a fake agent — can be tested in Tier 1
    without MAF. Today it skips only because the module pulls `agent_framework`
