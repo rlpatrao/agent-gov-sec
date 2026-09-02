@@ -126,7 +126,7 @@ traceparent: 00-152a581f33366b518fbdd1bec9dc36d2-ad87b3b8126c5d5c-01
              ver  trace_id                          span_id           flags
 ```
 
-Alongside `traceparent`, `build_agent()` stamps the governance headers on every API Gateway request. From [`payload_agents/_base.py`](../../payload_agents/_base.py):
+Alongside `traceparent`, `build_agent()` stamps the governance headers on every API Gateway request. From [`framework_adapters/langgraph/bedrock_gateway.py`](../../framework_adapters/langgraph/bedrock_gateway.py):
 
 ```python
 # Default headers on the chat client (set once at build time):
@@ -253,7 +253,7 @@ In production on ECS/EKS, `NHI_CLIENT_ID_FINOPS` is set to a real IAM role/sessi
 
 ### 3.3 How the Identity Is Obtained and Stamped
 
-**Step 1 — Resolve identity at agent construction time** (`payload_agents/_base.py`)
+**Step 1 — Resolve identity at agent construction time** (`framework_adapters/langgraph/runner.py`)
 
 ```python
 identity = NHIRegistry.get(cfg.agent_type)
@@ -476,7 +476,7 @@ Adding a new enterprise policy requires only a new YAML file in `galaxy_gov/poli
 
 ### 4.6 Guard 6 — Capability Guard (Tool Allow-List)
 
-**File:** [`payload_agents/_base.py`](../../payload_agents/_base.py)
+**File:** [`framework_adapters/langgraph/bedrock_gateway.py`](../../framework_adapters/langgraph/bedrock_gateway.py)
 
 Every tool callable is cross-checked at construction time against the YAML `allowed_tools` list. If a tool is wired in Python but not declared in YAML, the agent refuses to build:
 

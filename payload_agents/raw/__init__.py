@@ -9,7 +9,7 @@ Selected by --framework raw / GALAXY_FRAMEWORK.
 from __future__ import annotations
 
 from payload_agents._lib.scripting import to_script_steps
-from payload_agents.raw._runner import RawAgentBundle, ScriptedChatClient, build_agent
+from framework_adapters.raw.runner import RawAgentBundle, ScriptedChatClient, build_agent
 from payload_agents.raw.auditor import build_auditor_agent
 from payload_agents.raw.finops import build_finops_agent
 from payload_agents.raw.rogue import build_rogue_agent

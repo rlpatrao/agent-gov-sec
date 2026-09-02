@@ -13,7 +13,7 @@ no framework at all.
 
 Each ``payload_agents/<framework>/`` package must expose the builder surface the
 demo uses (``make_model`` + the per-persona ``build_*_agent`` coroutines) and
-return an object satisfying ``payload_agents._runtime.contract.AgentBundle`` (a
+return an object satisfying ``framework_adapters.contract.AgentBundle`` (a
 framework-neutral ``invoke(prompt) -> RunResult``).
 """
 

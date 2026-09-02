@@ -8,7 +8,7 @@ per-agent tunables — nothing here should duplicate them as Python defaults.
 If a required field is missing from the YAML, Pydantic raises — loud is good.
 
 Usage:
-    from payload_agents.config import load_agent_config_cached
+    from galaxy_gov.agent_config import load_agent_config_cached
 
     config = load_agent_config_cached("scanner")
     config.agent_type                         # "Scanner"
@@ -19,6 +19,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -132,7 +133,7 @@ class AgentConfigModel(BaseModel):
     prompt_file: str = Field(
         description="Path to the system-prompt markdown file, relative to the "
                     "`agents/` package root (e.g. 'prompts/scanner.md'). "
-                    "Required — agents/_base.py reads this at build time so the "
+                    "Required — the framework adapters read this at build time so the "
                     "prompt is the sole source of truth and version-controlled.",
     )
     shared_prompt_files: list[str] = Field(
@@ -167,6 +168,21 @@ class ConfigError(Exception):
     """Raised when a config file is missing, malformed, or fails schema."""
 
 
+def default_config_dir() -> Path:
+    """Where agent config YAMLs live when no directory is given.
+
+    Resolution: ``GALAXY_AGENT_CONFIG_DIR`` (a consuming repo's own config
+    directory) → the in-tree demo payload's ``payload_agents/config/``. The
+    schema lives in ``galaxy_gov`` (the governing team owns it via CODEOWNERS);
+    the YAML documents live with the agents it validates, so the default is a
+    lookup, not a path relative to this file.
+    """
+    env = os.environ.get("GALAXY_AGENT_CONFIG_DIR")
+    if env:
+        return Path(env)
+    return Path(__file__).resolve().parent.parent / "payload_agents" / "config"
+
+
 def load_agent_config(
     agent_name: str,
     config_dir: Optional[Path] = None,
@@ -180,7 +196,7 @@ def load_agent_config(
     Raises ConfigError on missing file, YAML parse failure, or schema mismatch.
     """
     if config_dir is None:
-        config_dir = Path(__file__).parent / "config"
+        config_dir = default_config_dir()
 
     normalized = agent_name.lower().replace("-", "_")
     # Also accept PascalCase -> snake_case (ASTAnalyzer -> astanalyzer; not ideal

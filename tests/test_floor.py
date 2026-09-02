@@ -8,7 +8,7 @@ field it clamps must be reported as a violation.
 from __future__ import annotations
 
 from galaxy_gov.inprocess.floor import GovernanceFloor, apply_floor
-from payload_agents.config import GovernanceConfig, load_agent_config
+from galaxy_gov.agent_config import GovernanceConfig, load_agent_config
 
 
 class TestFloorClampsWeakening:

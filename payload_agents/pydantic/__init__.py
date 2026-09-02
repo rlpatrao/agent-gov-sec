@@ -9,8 +9,8 @@ the uniform framework surface (make_model + build_*). Selected by
 from __future__ import annotations
 
 from payload_agents._lib.scripting import to_script_steps
-from payload_agents._runtime.contract import ScriptStep
-from payload_agents.pydantic._runner import GovernedModel, PydanticAgentBundle, build_agent
+from framework_adapters.contract import ScriptStep
+from framework_adapters.pydantic.runner import GovernedModel, PydanticAgentBundle, build_agent
 from payload_agents.pydantic.auditor import build_auditor_agent
 from payload_agents.pydantic.finops import build_finops_agent
 from payload_agents.pydantic.rogue import build_rogue_agent

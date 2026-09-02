@@ -34,7 +34,7 @@ at collection:
 
 | Module | Covers | Run it with |
 |---|---|---|
-| `test_guards.py` | The 3 MAF `AgentMiddleware` guard wrappers (`cloud_adapters/azure/maf/guards/`) against a context stub | `pip install '.[azure]'` |
+| `test_guards.py` | The 3 MAF `AgentMiddleware` guard wrappers (`framework_adapters/maf/guards/`) against a context stub | `pip install '.[azure]'` |
 | `test_analyzer_agent.py` | `AnalyzerHandler` logic against a fake agent (currently MAF-coupled only at *import*) | `pip install '.[azure]'` |
 
 ## Tier 3 — Per-cloud adapter contract (WS5 / WS6, not yet built)
@@ -61,7 +61,7 @@ with real behavior as the impls land.
   delegation.
 
 **Still owed (tracked, not done here):**
-1. **Defer the MAF import in `payload_agents/langgraph/_runner.py`** (and the chat
+1. **Defer the MAF import in `framework_adapters/langgraph/runner.py`** (and the chat
    client in `_base.py`) so `AnalyzerHandler`'s validation/classification/mapping
    logic — which already runs against a fake agent — can be tested in Tier 1
    without MAF. Today it skips only because the module pulls `agent_framework`

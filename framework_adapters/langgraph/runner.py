@@ -1,5 +1,5 @@
 """
-payload_agents.langgraph._runner — the LangGraph agent factory.
+framework_adapters.langgraph.runner — the LangGraph agent factory.
 
 ``build_langgraph_agent`` is the LangGraph counterpart to
 ``payload_agents/_base.build_agent`` (the MAF factory). It wires the same
@@ -30,14 +30,14 @@ from typing import Any, Callable, Optional
 from langchain.agents import create_agent
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from payload_agents._runtime.contract import RunResult, ToolCall, Turn
-from payload_agents.langgraph._guard import build_langgraph_governance
+from framework_adapters.contract import RunResult, ToolCall, Turn
+from framework_adapters.langgraph.guard import build_langgraph_governance
 from agent_os.audit_logger import GovernanceAuditLogger
 from core.interfaces import SecretProvider
 from core.nhi_registry import NHIRegistry
 from galaxy_gov.shared.enforcement.data_classification import DataClassificationCatalog
 from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
-from payload_agents.config import AgentConfigModel, load_agent_config_cached
+from galaxy_gov.agent_config import AgentConfigModel, load_agent_config_cached
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,5 @@
 """
-payload_agents.pydantic._runner — the Pydantic AI framework binding.
+framework_adapters.pydantic.runner — the Pydantic AI framework binding.
 
 Third member of the framework axis (alongside ``langgraph`` and ``raw``). Pydantic
 AI is a minimal, typed, model-agnostic agent framework, so it reuses the
@@ -30,12 +30,12 @@ from pydantic_ai import Agent
 from pydantic_ai.models.wrapper import WrapperModel
 from pydantic_ai.tools import Tool
 
-from payload_agents._runtime.contract import RunResult, ToolCall, ToolSpec, Turn
+from framework_adapters.contract import RunResult, ToolCall, ToolSpec, Turn
 from core.nhi_registry import NHIRegistry
 from galaxy_gov.shared.enforcement.data_classification import DataClassificationCatalog
 from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
 from galaxy_gov.shared.enforcement.pipeline import GuardPipeline, build_guard_pipeline
-from payload_agents.config import load_agent_config_cached
+from galaxy_gov.agent_config import load_agent_config_cached
 
 logger = logging.getLogger(__name__)
 

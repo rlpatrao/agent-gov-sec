@@ -104,7 +104,7 @@ galaxy = "galaxy_gov.tooling.scaffold:main"
 # NOT ship payload_agents (that is example/demo code, or the consuming team's
 # own repo), tests, docs, or the local-only archive.
 [tool.setuptools.packages.find]
-include = ["galaxy_agentkit*", "core*", "galaxy_gov*", "cloud_adapters*"]
+include = ["galaxy_agentkit*", "core*", "galaxy_gov*", "framework_adapters*", "cloud_adapters*"]
 exclude = ["payload_agents*", "tests*", "archive*", "docs*", "scripts*", "deploy*"]
 
 # Package data is declared explicitly, not by a blanket glob. The guards read

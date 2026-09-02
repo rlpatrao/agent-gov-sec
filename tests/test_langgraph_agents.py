@@ -21,7 +21,7 @@ pytest.importorskip("langchain.agents", reason="LangGraph axis requires langchai
 from langchain_core.messages import AIMessage  # noqa: E402
 
 from galaxy_gov.shared.enforcement.pipeline import GovernanceViolation  # noqa: E402
-from payload_agents._runtime.models import scripted_model  # noqa: E402
+from framework_adapters.langgraph.models import scripted_model  # noqa: E402
 from payload_agents.langgraph import build_auditor_agent  # noqa: E402
 from payload_agents.langgraph import build_finops_agent  # noqa: E402
 from payload_agents.langgraph import build_rogue_agent  # noqa: E402

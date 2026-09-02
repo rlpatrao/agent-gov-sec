@@ -1,5 +1,5 @@
 """
-payload_agents._runtime.contract — the framework-neutral agent contract.
+framework_adapters.contract — the framework-neutral agent contract.
 
 The framework axis (``--framework langgraph|raw|pydantic``) needs one shape the
 demo and tests can read regardless of which agent framework actually ran. These

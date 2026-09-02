@@ -48,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 os.environ.setdefault("CLOUD_PROVIDER", "local")
 
-from payload_agents._runtime.contract import RunResult, ScriptStep, ToolCall, ToolSpec
+from framework_adapters.contract import RunResult, ScriptStep, ToolCall, ToolSpec
 from payload_agents.raw import RawAgentBundle, ScriptedChatClient
 from galaxy_gov.shared.enforcement.decision import GuardDecision
 from galaxy_gov.shared.enforcement.pipeline import GovernanceViolation, build_guard_pipeline

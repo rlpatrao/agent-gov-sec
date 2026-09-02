@@ -82,7 +82,7 @@ Rules:
 _TEST_TMPL = '''"""Governance pre-check for the {Type} agent — its config must load and must
 not be clamped by the non-overridable floor (a correctly-scoped request)."""
 
-from payload_agents.config import load_agent_config_cached
+from galaxy_gov.agent_config import load_agent_config_cached
 
 
 def test_{slug}_config_loads():

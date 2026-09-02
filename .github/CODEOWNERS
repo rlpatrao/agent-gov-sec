@@ -74,6 +74,11 @@
 # one — a control surface, so the governing team approves changes to it.
 /galaxy_agentkit/                       @org/agent-governance
 
+# The framework axis: the middleware/wrapper glue that binds each agent framework
+# to the GuardPipeline. It executes the controls inside the agent process, so a
+# weakened adapter is a weakened control — the governing team approves changes.
+/framework_adapters/                    @org/agent-governance
+
 # This file and the authority documentation are themselves governance-owned,
 # so the ownership boundary cannot be quietly removed in a developer PR.
 /.github/CODEOWNERS                     @org/agent-governance

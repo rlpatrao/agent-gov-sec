@@ -1,5 +1,5 @@
 """
-payload_agents.raw._runner — the provider-native (no-framework) binding.
+framework_adapters.raw.runner — the provider-native (no-framework) binding.
 
 The "control" arm of the framework axis: a hand-rolled tool loop that calls a
 ``ChatModelClient`` directly and runs the **same shared `GuardPipeline`** around
@@ -17,7 +17,7 @@ LangGraph middleware or a Pydantic AI model wrapper.
           pipeline.before_tool(name, args)   (C1/H1/C2 — raises to block)
           run the tool fn, feed the result back into messages
 
-``build_agent`` mirrors ``payload_agents.pydantic._runner.build_agent``: it resolves the
+``build_agent`` mirrors ``framework_adapters.pydantic.runner.build_agent``: it resolves the
 NHI, consults the egress chokepoint, and builds the guard pipeline from the
 per-agent YAML — only the execution engine differs. ``model`` here is a
 ``ChatModelClient`` (a ``ScriptedChatClient`` for ``--fake``; a best-effort live
@@ -30,7 +30,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from payload_agents._runtime.contract import (
+from framework_adapters.contract import (
     ChatModelClient,
     ModelResult,
     RunResult,
@@ -43,7 +43,7 @@ from core.nhi_registry import NHIRegistry
 from galaxy_gov.shared.enforcement.data_classification import DataClassificationCatalog
 from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
 from galaxy_gov.shared.enforcement.pipeline import GuardPipeline, build_guard_pipeline
-from payload_agents.config import load_agent_config_cached
+from galaxy_gov.agent_config import load_agent_config_cached
 
 logger = logging.getLogger(__name__)
 

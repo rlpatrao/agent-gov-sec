@@ -136,7 +136,7 @@ The platform wraps an agent so that **every** model and tool call passes through
 
 ### How an agent is built
 
-Each persona has a `build_<persona>_agent()` factory in its framework folder. On LangGraph these delegate to `build_langgraph_agent()` in [`payload_agents/langgraph/_runner.py`](../../payload_agents/langgraph/_runner.py); the Pydantic AI and raw runners expose an equivalent `build_agent()`.
+Each persona has a `build_<persona>_agent()` factory in its framework folder. On LangGraph these delegate to `build_langgraph_agent()` in [`framework_adapters/langgraph/runner.py`](../../framework_adapters/langgraph/runner.py); the Pydantic AI and raw runners expose an equivalent `build_agent()`.
 
 ```python
 from payload_agents.langgraph import make_model, build_finops_agent

@@ -79,7 +79,8 @@ the governing team owns and runs:
 | Centralized policy store | governance-owned S3 (versioned) | `galaxy_gov/shared/policy_registry.py` + `cloud_adapters/aws/infra/policy_store.tf` |
 | Centralized compliance tracker | hash-chained ledger; read via the dashboard | `core/trace_ledger.py` + `galaxy_gov/remote/dashboard.py` |
 | Governance dashboard | served by the enforcement service (`/dashboard`) | `galaxy_gov/remote/dashboard.py` |
-| Shared seam (both sides import) | wheel and image | `core/` (incl. `core/a2a/`), `cloud_adapters/` |
+| Framework bindings (LangGraph, Pydantic AI, raw, MAF) | in-process, inside the agent application | `framework_adapters/` |
+| Shared seam (both sides import) | wheel and image | `core/` (incl. `core/a2a/`), `framework_adapters/`, `cloud_adapters/` |
 | Applications (App1, App2, …) | separate repositories via `galaxy init` | demonstrated by `payload_agents/` |
 
 ## 2. Architecture principles
@@ -153,7 +154,7 @@ the AWS services behind each Protocol can change without touching governance cod
 [`galaxy_gov/shared/enforcement/pipeline.py`](../../galaxy_gov/shared/enforcement/pipeline.py) (`GuardPipeline`, with
 `before_model` / `after_model` / `before_tool` / `after_tool` hooks) and have
 each framework wrap it in a thin shim — for LangGraph, the `GalaxyGuardMiddleware`
-in [`payload_agents/langgraph/_guard.py`](../../payload_agents/langgraph/_guard.py)
+in [`framework_adapters/langgraph/guard.py`](../../framework_adapters/langgraph/guard.py)
 maps `wrap_model_call → before_model + after_model` and `wrap_tool_call →
 before_tool`. **Context.** Each framework exposes a different middleware surface.
 **Consequence.** Governance behavior is identical across frameworks and is

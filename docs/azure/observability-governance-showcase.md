@@ -82,7 +82,7 @@ with pipeline_span(run_id=run_id, module=module_name):
     resp = await handler.handle(request)  # agent.run() fires inside here
 ```
 
-`configure_tracing()` wires the exporter once. On Azure it resolves the `AzureTraceExporterFactory` ([`cloud_adapters/azure/tracing.py`](../../cloud_adapters/azure/tracing.py)), which builds an `AzureMonitorTraceExporter` when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set (direct export — no collector required, works from a laptop or Container Apps). It then lets the Microsoft Agent Framework own the `TracerProvider`: `MafRuntimeAdapter.configure_observability` ([`cloud_adapters/azure/maf/runtime.py`](../../cloud_adapters/azure/maf/runtime.py)) routes the exporter through `agent_framework.observability.configure_otel_providers`, so MAF's telemetry layers fire and emit the standard `gen_ai.*` semantic-convention spans. When `pipeline_span()` opens the root, the OpenTelemetry SDK generates a W3C Trace ID. Every child span created within the same process inherits this value automatically through OTel's context stack.
+`configure_tracing()` wires the exporter once. On Azure it resolves the `AzureTraceExporterFactory` ([`cloud_adapters/azure/tracing.py`](../../cloud_adapters/azure/tracing.py)), which builds an `AzureMonitorTraceExporter` when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set (direct export — no collector required, works from a laptop or Container Apps). It then lets the Microsoft Agent Framework own the `TracerProvider`: `MafRuntimeAdapter.configure_observability` ([`framework_adapters/maf/runtime.py`](../../framework_adapters/maf/runtime.py)) routes the exporter through `agent_framework.observability.configure_otel_providers`, so MAF's telemetry layers fire and emit the standard `gen_ai.*` semantic-convention spans. When `pipeline_span()` opens the root, the OpenTelemetry SDK generates a W3C Trace ID. Every child span created within the same process inherits this value automatically through OTel's context stack.
 
 ```
 trace_id = 152a581f33366b518fbdd1bec9dc36d2   (surfaces as operation_Id)
@@ -249,7 +249,7 @@ The source of truth is Entra. The `clientId` originates in the Entra User-Assign
 
 ### 3.4 How the Identity Is Stamped
 
-**Step 1 — Resolve identity at agent construction time** (`payload_agents/_base.py`)
+**Step 1 — Resolve identity at agent construction time** (`framework_adapters/maf/middleware.py`)
 
 ```python
 identity = NHIRegistry.get(cfg.agent_type)
@@ -352,7 +352,7 @@ No persona Managed Identity holds the Azure OpenAI key directly. The key is inje
 
 ### 4.1 The MAF Middleware Stack (Ordered, Fail-Fast)
 
-**File:** [`cloud_adapters/azure/maf/middleware.py`](../../cloud_adapters/azure/maf/middleware.py) — `build_governance_stack`
+**File:** [`framework_adapters/maf/middleware.py`](../../framework_adapters/maf/middleware.py) — `build_governance_stack`
 
 Every `agent.run()` traverses this exact stack, in this order. Guards 1–3 are this repository's MAF wrappers around `agent_os` primitives; guards 4–7 come from the `agent_os` MAF governance middleware factory (`create_governance_middleware`). The list is ordered to fail fast on cheap checks first:
 
@@ -392,7 +392,7 @@ The offline demo ([`scripts/demo_agents.py --fake`](../../scripts/demo_agents.py
 
 ### 4.2 Guard 1 — Prompt Injection (OWASP ASI-01)
 
-**File:** [`cloud_adapters/azure/maf/guards/prompt_injection.py`](../../cloud_adapters/azure/maf/guards/prompt_injection.py)
+**File:** [`framework_adapters/maf/guards/prompt_injection.py`](../../framework_adapters/maf/guards/prompt_injection.py)
 **Config file:** [`galaxy_gov/configs/prompt-injection.yaml`](../../galaxy_gov/configs/prompt-injection.yaml)
 
 The guard wraps `agent_os.prompt_injection.PromptInjectionDetector` and detects the following attack vector families using literal and heuristic matching, with no LLM call:
@@ -421,7 +421,7 @@ A block can be confirmed in Log Analytics with the §3.4 query, filtering on `go
 
 ### 4.3 Guard 2 — Credential Redactor
 
-**File:** [`cloud_adapters/azure/maf/guards/credential_redactor.py`](../../cloud_adapters/azure/maf/guards/credential_redactor.py)
+**File:** [`framework_adapters/maf/guards/credential_redactor.py`](../../framework_adapters/maf/guards/credential_redactor.py)
 
 The `CredentialRedactorGuardMiddleware` wraps `agent_os.credential_redactor.CredentialRedactor` and scans every message for patterns matching API keys, tokens, cloud access keys, GitHub tokens, and private-key PEM headers. The `FinOps` agent uses `credential_mode: redact` (the platform default) because its purpose is to analyze input that may contain leaked secrets. The redactor masks the literal values with `[REDACTED]` before the model processes them, which prevents exfiltration while still permitting the agent to reason about the pattern. A redact event is logged as `event_type="credential_check"`, `decision="audit"`, and names the credential *types* found — never the secrets themselves. A `deny` mode is available for agents that should hard-block instead.
 
@@ -429,7 +429,7 @@ The `CredentialRedactorGuardMiddleware` wraps `agent_os.credential_redactor.Cred
 
 ### 4.4 Guard 3 — Context Budget (OWASP LLM04)
 
-**File:** [`cloud_adapters/azure/maf/guards/context_budget.py`](../../cloud_adapters/azure/maf/guards/context_budget.py)
+**File:** [`framework_adapters/maf/guards/context_budget.py`](../../framework_adapters/maf/guards/context_budget.py)
 
 This guard wraps `agent_os.context_budget.ContextScheduler` and prevents runaway cost from unbounded context growth. It estimates the prompt token count (roughly one token per four characters) and calls `scheduler.allocate()`; if the prompt would exceed the budget, the guard raises `MiddlewareTermination` before the model call and logs the decision. The `FinOps` agent's budget accommodates the large source and cost listings it legitimately receives; the platform default (`context_budget_total_tokens`) is 8000.
 
@@ -473,7 +473,7 @@ Adding a new enterprise policy requires only a new YAML file in `galaxy_gov/poli
 
 ### 4.6 Guard 6 — Capability Guard (Tool Allow-List)
 
-**File:** [`payload_agents/_base.py`](../../payload_agents/_base.py)
+**File:** [`framework_adapters/maf/middleware.py`](../../framework_adapters/maf/middleware.py)
 
 Every tool callable is cross-checked at construction time against the YAML `allowed_tools` list. If a tool is wired in Python but not declared in YAML, the agent refuses to build. At runtime, `CapabilityGuardMiddleware` enforces the same list as a second layer, so an agent cannot invoke a tool it was not explicitly granted, even if the model produces a tool_call for it. The shipped `FinOps` agent is a reader with `allowed_tools: []`; the sandbox and capability-guard machinery is in place for tool agents.
 
@@ -654,7 +654,7 @@ MAF agent (galaxy_finops / galaxy_auditor / galaxy_rogue)
 ```
 
 - Authorization is the in-process MAF policy / capability / A2A middlewares; there is no managed policy engine.
-- Content controls are the MAF guard middlewares under `cloud_adapters/azure/maf/guards/` (prompt-injection, credential, context budget) plus the toolkit's policy / capability / rogue middlewares.
+- Content controls are the MAF guard middlewares under `framework_adapters/maf/guards/` (prompt-injection, credential, context budget) plus the toolkit's policy / capability / rogue middlewares.
 - Identity is the same per-persona Entra Managed Identity `galaxy-<persona>-mi`, bound to the MAF host.
 
 ### 7.2 Where the Spans Surface

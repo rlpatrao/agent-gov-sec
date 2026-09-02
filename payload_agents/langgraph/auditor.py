@@ -14,7 +14,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import tool
 
 from payload_agents._lib import personas
-from payload_agents.langgraph._runner import LangGraphAgentBundle, build_langgraph_agent
+from framework_adapters.langgraph.runner import LangGraphAgentBundle, build_langgraph_agent
 
 
 async def build_auditor_agent(

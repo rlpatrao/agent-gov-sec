@@ -3,7 +3,7 @@
 This demonstration shows the same governance platform applying end-to-end governance to **LangGraph**
 agents in a framework-agnostic manner. It runs offline by default and provides an opt-in `--live` path
 that drives a real LLM. The demonstration resides entirely in `payload_agents/langgraph/`, together
-with the shared `payload_agents/_lib/` and `payload_agents/_runtime/` directories and the
+with the shared `payload_agents/_lib/` and `framework_adapters/` directories and the
 `scripts/demo_agents.py` runner. It does not modify core-framework code. The demonstration registers
 its NHIs through the environment (`payload_agents/__init__.py` → `NHI_CLIENT_ID_*`, resolved by the
 env-extensible lookup in `core.nhi_registry`), and its dependencies are provided by the opt-in
@@ -83,8 +83,8 @@ The audit ledger entries and hashes also print in the **[H]** section regardless
 
 Each persona's domain logic, namely its FGAC tools, is defined once in a framework-neutral form in
 `payload_agents/_lib/personas.py`. The LangGraph builds are wired by
-`payload_agents/langgraph/_runner.build_langgraph_agent()` and wrapped by
-`payload_agents/langgraph/_guard.GalaxyGuardMiddleware`, which threads the same `galaxy_gov/`,
+`framework_adapters/langgraph/runner.build_langgraph_agent()` and wrapped by
+`framework_adapters/langgraph/guard.GalaxyGuardMiddleware`, which threads the same `galaxy_gov/`,
 `core/`, and `core/a2a/` primitives and WS7 extensions used for the other framework adapters into a LangChain
 `AgentMiddleware`. The same personas run on the Pydantic AI and raw frameworks via
 `payload_agents/pydantic/` and `payload_agents/raw/`.

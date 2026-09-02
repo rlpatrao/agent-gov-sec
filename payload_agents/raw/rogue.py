@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from payload_agents._lib import personas
-from payload_agents.raw._runner import RawAgentBundle, build_agent
+from framework_adapters.raw.runner import RawAgentBundle, build_agent
 
 
 async def build_rogue_agent(

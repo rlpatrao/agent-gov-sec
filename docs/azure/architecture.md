@@ -119,7 +119,7 @@ The diagram distinguishes three classes:
   path. These are net-new constructs.
 - **Wired and composed (light blue).** The Guard Library and Fleet Ops, which are upstream
   detectors that this repository wraps, configures, and composes — on Azure through the
-  MAF middleware stack (`cloud_adapters/azure/maf/`) — together with the FGAC enforcement
+  MAF middleware stack (`framework_adapters/maf/`) — together with the FGAC enforcement
   (masking and Azure SQL / Synapse pushdown). No detectors were reimplemented.
 
 The full module-by-module (a)/(b)/(c) classification resides in
@@ -329,7 +329,7 @@ The developer trust domain comprises the following components:
 - **`GuardPipeline`** (`galaxy_gov/shared/enforcement/pipeline.py`) — provides the four
   hooks (`before_model`, `after_model`, `before_tool`, `after_tool`) and the guard
   library.
-- **The MAF middleware stack** (`cloud_adapters/azure/maf/middleware.py`) — composes the
+- **The MAF middleware stack** (`framework_adapters/maf/middleware.py`) — composes the
   same guard primitives into a Microsoft Agent Framework middleware list (prompt-injection,
   credential redactor, context budget, plus the toolkit's policy / capability / rogue
   middlewares).
@@ -369,7 +369,7 @@ The platform runs on Azure in two ways. Both methods consume the same policy reg
 | ---------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | Path             | APIM `galaxy-<suffix>-apim` → Function `enforce_llm` → Azure OpenAI                    | MAF agent (governance middleware) hosted on Azure AI Foundry / Container Apps |
 | Authorization    | policy registry → `enforce.session_for()` (fail-closed 403) + APIM edge check          | in-process MAF policy / capability / rogue middlewares                        |
-| Content controls | `llm_proxy.enforce_llm` — input guards, tool-plan, output redaction                    | MAF guard middlewares (`cloud_adapters/azure/maf/guards/`)                    |
+| Content controls | `llm_proxy.enforce_llm` — input guards, tool-plan, output redaction                    | MAF guard middlewares (`framework_adapters/maf/guards/`)                    |
 | Identity         | `AzureIdentityProvider` → Entra Managed Identity `galaxy-<persona>-mi`                  | same Managed Identity, bound to the MAF host                                  |
 | Provisioning     | Bicep `cloud_adapters/azure/infra/main.bicep` (reference)                               | MAF host + `aca_jobs.bicep` (reference)                                       |
 | Status           | reference IaC                                                                           | in-process live; managed hosting reference                                   |
@@ -407,7 +407,7 @@ This method comprises the following resources:
 - Log Analytics `galaxy-<suffix>-law` + Application Insights `galaxy-<suffix>-ai`
 - Storage account (Functions backing store; Azure Files share for jobs)
 
-### 8.2 Method 2 — Microsoft Agent Framework (`cloud_adapters/azure/maf/`)
+### 8.2 Method 2 — Microsoft Agent Framework (`framework_adapters/maf/`)
 
 ![Method 2 MAF infrastructure](../diagrams/maf-infra-azure.svg)
 

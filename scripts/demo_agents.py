@@ -57,8 +57,8 @@ from core.a2a.dispatcher import a2a_call
 from core.a2a.envelope import A2ARequest, A2AResponse
 from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
 from galaxy_gov.shared.enforcement.pipeline import GovernanceViolation
-from payload_agents._runtime.contract import RunResult
-from payload_agents._runtime.models import build_chat_model, build_gemini_model, build_bedrock_model
+from framework_adapters.contract import RunResult
+from framework_adapters.langgraph.models import build_chat_model, build_gemini_model, build_bedrock_model
 from core.nhi_registry import NHIRegistry
 from galaxy_gov.shared.enforcement.data_drift import DataAccessDriftDetector, InMemoryBaselineStore, DriftConfig
 from galaxy_gov.shared.enforcement.reasoning_guard import ReasoningStep, ReasoningStepValidator

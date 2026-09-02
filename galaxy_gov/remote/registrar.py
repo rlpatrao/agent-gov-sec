@@ -57,7 +57,7 @@ from galaxy_gov.shared.policy_registry import policy_for
 
 logger = logging.getLogger(__name__)
 
-# Same shape the per-agent config enforces (payload_agents.config.AgentConfigModel).
+# Same shape the per-agent config enforces (galaxy_gov.agent_config.AgentConfigModel).
 _AGENT_TYPE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
 
 STATUS_READY = "ready"

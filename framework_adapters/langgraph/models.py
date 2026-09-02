@@ -1,5 +1,5 @@
 """
-payload_agents._runtime.models — chat-model factory for the LangGraph axis.
+framework_adapters.langgraph.models — chat-model factory for the LangGraph axis.
 
 Two model sources, mirroring the egress logic in ``payload_agents/_base.py``:
 
@@ -238,7 +238,7 @@ def build_bedrock_model(
         logger.info("langgraph.model.offline", extra={"reason": "no bedrock gateway creds; using FakeToolCallingModel"})
         return offline_fallback
 
-    from payload_agents._runtime.bedrock_gateway import BedrockGatewayChatModel
+    from framework_adapters.langgraph.bedrock_gateway import BedrockGatewayChatModel
 
     logger.info("langgraph.model.live_bedrock", extra={"endpoint": endpoint, "model": model_id})
     return BedrockGatewayChatModel(

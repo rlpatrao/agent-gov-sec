@@ -64,7 +64,7 @@ managed service.
 | Concern | MAF / Foundry | This platform | Assessment |
 |---|---|---|---|
 | Agent runtime + threads | MAF `Agent` · Foundry Agent Service | `payload_agents/*` on any framework | Complementary — the personas run as MAF agents inline in the host. |
-| Middleware / interception | Middleware pipeline (agent/chat/function hooks) | MAF guard middlewares (`cloud_adapters/azure/maf/`) | Direct analog. The governance stack is composed as MAF middlewares. |
+| Middleware / interception | Middleware pipeline (agent/chat/function hooks) | MAF guard middlewares (`framework_adapters/maf/`) | Direct analog. The governance stack is composed as MAF middlewares. |
 | Authorization (who calls what tool / which recipient) | not a managed service | `agent_os` policy/capability/rogue middlewares + A2A allow-list + APIM edge check | No Azure managed engine. Enforced in-process, re-checked at APIM. |
 | Content safety | Azure AI Content Safety | prompt-injection · credential/PII guards | Complementary, layered; the platform adds injection and credential/PII logic. |
 | Observability | `gen_ai.*` OTel → App Insights | OTel spans + hash-chained ledger | Overlap on tracing; the ledger adds tamper-evidence. |
@@ -153,7 +153,7 @@ The integration assigns responsibilities as follows:
 - Rich controls run as MAF guard middlewares in-process and are re-run at the
   boundary. `galaxy_gov/shared/enforcement` and `galaxy_gov/remote` supply the
   single `EnforcementSession`; the MAF guards
-  (`cloud_adapters/azure/maf/guards/`) wrap the same detectors for the in-process
+  (`framework_adapters/maf/guards/`) wrap the same detectors for the in-process
   path.
 - Data FGAC is expressed through the data proxy. `AzureSqlFgacEnforcer` rewrites
   reads as scoped Azure SQL / Synapse T-SQL (projecting allowed columns, masking
@@ -198,9 +198,9 @@ following table records each piece and its code location:
 
 | Piece | Code | Status |
 |---|---|---|
-| MAF governance middleware stack | `cloud_adapters/azure/maf/middleware.py` (`build_governance_stack`) | Live — composes agent_os detectors as MAF middlewares |
-| MAF guard middlewares | `cloud_adapters/azure/maf/guards/{prompt_injection,credential_redactor,context_budget}.py` | Live |
-| MAF runtime adapter | `cloud_adapters/azure/maf/runtime.py` (`MafRuntimeAdapter`) | Built — MAF owns the OTel provider |
+| MAF governance middleware stack | `framework_adapters/maf/middleware.py` (`build_governance_stack`) | Live — composes agent_os detectors as MAF middlewares |
+| MAF guard middlewares | `framework_adapters/maf/guards/{prompt_injection,credential_redactor,context_budget}.py` | Live |
+| MAF runtime adapter | `framework_adapters/maf/runtime.py` (`MafRuntimeAdapter`) | Built — MAF owns the OTel provider |
 | Hash-chain ledger | `cloud_adapters/azure/audit.py` (`PostgresHashChainBackend`) | Live — Postgres `trace_ledger`, SHA-256 |
 | Secrets | `cloud_adapters/azure/secrets.py` (`TokenProvider`) | Live — Key Vault via Managed Identity |
 | Identity | `cloud_adapters/azure/identity.py` (`AzureIdentityProvider`) | Live — Entra Managed Identity |

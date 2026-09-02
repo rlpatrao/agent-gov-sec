@@ -1,5 +1,5 @@
 """
-cloud_adapters.azure.maf.middleware — the MAF middleware-stack assembly.
+framework_adapters.maf.middleware — the MAF middleware-stack assembly.
 
 This is the framework-axis glue of the Azure bundle: it composes MSGK's
 ``agent_os`` governance primitives into a Microsoft Agent Framework middleware
@@ -26,9 +26,9 @@ from agent_os.prompt_injection import ThreatLevel
 
 from galaxy_gov.adapters.otel_audit_backend import OtelAuditBackend
 from cloud_adapters.azure.audit import PostgresHashChainBackend
-from cloud_adapters.azure.maf.guards.context_budget import ContextBudgetGuardMiddleware
-from cloud_adapters.azure.maf.guards.credential_redactor import CredentialRedactorGuardMiddleware
-from cloud_adapters.azure.maf.guards.prompt_injection import PromptInjectionGuardMiddleware
+from framework_adapters.maf.guards.context_budget import ContextBudgetGuardMiddleware
+from framework_adapters.maf.guards.credential_redactor import CredentialRedactorGuardMiddleware
+from framework_adapters.maf.guards.prompt_injection import PromptInjectionGuardMiddleware
 
 logger = logging.getLogger(__name__)
 

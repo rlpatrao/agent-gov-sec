@@ -142,7 +142,7 @@ two composition paths onto the same guard logic:
   own hooks onto the pipeline's `before_model` / `after_model` / `before_tool` /
   `after_tool` methods.
 - The MAF middleware stack
-  ([`cloud_adapters/azure/maf/middleware.py`](../../cloud_adapters/azure/maf/middleware.py)),
+  ([`framework_adapters/maf/middleware.py`](../../framework_adapters/maf/middleware.py)),
   which composes the same `agent_os` guard primitives into a Microsoft Agent
   Framework middleware list.
 
@@ -150,7 +150,7 @@ FinOps serves as the running example below.
 
 ### How an agent is built (MAF)
 
-The MAF factory is [`build_agent`](../../payload_agents/_base.py). It performs the
+The MAF factory is [`framework_adapters/maf/middleware.py`](../../framework_adapters/maf/middleware.py). It performs the
 following steps:
 
 1. Loads `payload_agents/config/<name>.yaml` (Pydantic, `extra="forbid"` — typos
@@ -171,14 +171,14 @@ following steps:
    and `egress`.
 
 The LangGraph factory
-([`build_langgraph_agent`](../../payload_agents/langgraph/_runner.py)) applies the
+([`build_langgraph_agent`](../../framework_adapters/langgraph/runner.py)) applies the
 same posture around a LangGraph `create_agent` and returns a
 `LangGraphAgentBundle` with a neutral `invoke(prompt) -> RunResult`.
 
 ### The MAF middleware stack (order)
 
 The middleware list is ordered to fail fast on inexpensive, no-LLM checks first
-([`build_governance_stack`](../../cloud_adapters/azure/maf/middleware.py)):
+([`build_governance_stack`](../../framework_adapters/maf/middleware.py)):
 
 1. `PromptInjectionGuardMiddleware` (B1) — literal-string and heuristic detection,
    no LLM. Blocks when the threat clears `prompt_injection_block_threshold`

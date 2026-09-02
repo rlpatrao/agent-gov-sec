@@ -1,5 +1,5 @@
 """
-payload_agents.langgraph._guard — the LangGraph framework binding for governance.
+framework_adapters.langgraph.guard — the LangGraph framework binding for governance.
 
 ``GalaxyGuardMiddleware`` is a **thin** LangChain ``AgentMiddleware`` shim: it maps
 LangChain's ``wrap_model_call`` / ``wrap_tool_call`` hooks onto the

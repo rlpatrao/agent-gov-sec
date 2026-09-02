@@ -31,13 +31,13 @@ The **`agent_os` + `agent_sre`** packages ship ~40 governance modules. This plat
 
 ## What's wired today (seven middleware)
 
-Stack ordering, fail-fast first. Built by [`cloud_adapters/azure/maf/middleware.py`](../../cloud_adapters/azure/maf/middleware.py) `build_governance_stack()`. Guards 1–3 are this repo's MAF wrappers around `agent_os` primitives and run before any `agent_os.integrations.maf_adapter` middleware; guards 4–7 come from `agent_os.integrations.maf_adapter.create_governance_middleware`. Every guard fires on every `agent.run()` — i.e. on **every governed agent invocation**.
+Stack ordering, fail-fast first. Built by [`framework_adapters/maf/middleware.py`](../../framework_adapters/maf/middleware.py) `build_governance_stack()`. Guards 1–3 are this repo's MAF wrappers around `agent_os` primitives and run before any `agent_os.integrations.maf_adapter` middleware; guards 4–7 come from `agent_os.integrations.maf_adapter.create_governance_middleware`. Every guard fires on every `agent.run()` — i.e. on **every governed agent invocation**.
 
 | # | Middleware | Upstream class | Source | OWASP | What it stops |
 |---|---|---|---|---|---|
-| 1 | `PromptInjectionGuardMiddleware` | wraps `agent_os.prompt_injection.PromptInjectionDetector` | [`cloud_adapters/azure/maf/guards/prompt_injection.py`](../../cloud_adapters/azure/maf/guards/prompt_injection.py) | ASI-01 / LLM01 | 7-vector taxonomy: direct override, delimiter attack, encoding attack, role play, context manipulation, canary leak, multi-turn escalation. Threat levels NONE / LOW / MEDIUM / HIGH / CRITICAL; blocks at `prompt_injection_block_threshold` (default `medium` in the stack; the Analyzer config sets `high`). |
-| 2 | `CredentialRedactorGuardMiddleware` | wraps `agent_os.credential_redactor.CredentialRedactor` | [`cloud_adapters/azure/maf/guards/credential_redactor.py`](../../cloud_adapters/azure/maf/guards/credential_redactor.py) | LLM06 | API keys, AWS access keys, GitHub tokens, generic secret patterns. Two modes: `redact` (mutate prompt to `[REDACTED]`, proceed — the Analyzer default) or `deny` (block call). |
-| 3 | `ContextBudgetGuardMiddleware` | wraps `agent_os.context_budget.ContextScheduler` | [`cloud_adapters/azure/maf/guards/context_budget.py`](../../cloud_adapters/azure/maf/guards/context_budget.py) | LLM04 | Token-budget allocator + post-call usage record. `context_budget_total_tokens` defaults to 8000 in the stack; the Analyzer config raises it to 40000. |
+| 1 | `PromptInjectionGuardMiddleware` | wraps `agent_os.prompt_injection.PromptInjectionDetector` | [`framework_adapters/maf/guards/prompt_injection.py`](../../framework_adapters/maf/guards/prompt_injection.py) | ASI-01 / LLM01 | 7-vector taxonomy: direct override, delimiter attack, encoding attack, role play, context manipulation, canary leak, multi-turn escalation. Threat levels NONE / LOW / MEDIUM / HIGH / CRITICAL; blocks at `prompt_injection_block_threshold` (default `medium` in the stack; the Analyzer config sets `high`). |
+| 2 | `CredentialRedactorGuardMiddleware` | wraps `agent_os.credential_redactor.CredentialRedactor` | [`framework_adapters/maf/guards/credential_redactor.py`](../../framework_adapters/maf/guards/credential_redactor.py) | LLM06 | API keys, AWS access keys, GitHub tokens, generic secret patterns. Two modes: `redact` (mutate prompt to `[REDACTED]`, proceed — the Analyzer default) or `deny` (block call). |
+| 3 | `ContextBudgetGuardMiddleware` | wraps `agent_os.context_budget.ContextScheduler` | [`framework_adapters/maf/guards/context_budget.py`](../../framework_adapters/maf/guards/context_budget.py) | LLM04 | Token-budget allocator + post-call usage record. `context_budget_total_tokens` defaults to 8000 in the stack; the Analyzer config raises it to 40000. |
 | 4 | `AuditTrailMiddleware` | from `agent_os.integrations.maf_adapter` | bundled | — | Hash-chain audit start/end pairs per agent invocation, with `entry_id` correlation. |
 | 5 | `GovernancePolicyMiddleware` | from `agent_os.integrations.maf_adapter` | bundled | — | YAML rule engine (`PolicyEvaluator`). Evaluates [`galaxy_gov/policies/*.yaml`](../../galaxy_gov/policies/) against the call context. |
 | 6 | `CapabilityGuardMiddleware` | from `agent_os.integrations.maf_adapter` (conditional) | bundled | LLM08 | Function-level tool allow/deny. Activates only when `allowed_tools` or `denied_tools` is passed to `build_governance_stack`. The read-only `Analyzer` declares `allowed_tools: []`, so it is effectively a no-op for the current payload. |
@@ -132,7 +132,7 @@ These fire on tool calls that carry the matching shape (code, diff, exec, memory
 
 ## Adapters and integrations available
 
-`agent_os/integrations/` ships ~30 framework-specific adapters. This platform uses one (`maf_adapter`); the others exist for wiring a non-MAF agent into the same governance pipeline. (Under the refactor, the MAF binding moves behind `cloud_adapters/azure/maf/`; the AWS/GCP framework axes — e.g. LangGraph/Bedrock, Google ADK — map onto these same adapters. See WS5.8 / WS6.8 in the plan.)
+`agent_os/integrations/` ships ~30 framework-specific adapters. This platform uses one (`maf_adapter`); the others exist for wiring a non-MAF agent into the same governance pipeline. (Under the refactor, the MAF binding moves behind `framework_adapters/maf/`; the AWS/GCP framework axes — e.g. LangGraph/Bedrock, Google ADK — map onto these same adapters. See WS5.8 / WS6.8 in the plan.)
 
 | Adapter | What it bridges |
 |---|---|
@@ -230,7 +230,7 @@ async def test_my_guard_blocks_X():
         await guard.process(_Ctx(messages=[_Msg(text="...trigger...")]), _called)
 ```
 
-> Under the cloud-/framework-agnostic refactor (WS1), new MAF-coupled guards live under `cloud_adapters/azure/maf/guards/`; framework-neutral guard logic stays in `galaxy_gov/`. The MAF-free guards `escalation.py` and `egress.py` already qualify as agnostic.
+> Under the cloud-/framework-agnostic refactor (WS1), new MAF-coupled guards live under `framework_adapters/maf/guards/`; framework-neutral guard logic stays in `galaxy_gov/`. The MAF-free guards `escalation.py` and `egress.py` already qualify as agnostic.
 
 ---
 
@@ -240,9 +240,9 @@ These are bugs in the `agent_os` loaders worked around in the wrappers. If a fut
 
 | Where | Quirk | Workaround |
 |---|---|---|
-| `agent_os.prompt_injection.load_prompt_injection_config` | Returns a `PromptInjectionConfig` missing `allowlist`, `blocklist`, `custom_patterns`, `sensitivity` — but `_detect_impl` reads them. Without backfill the detector fails-closed on every call (returns CRITICAL threat with `unknown` type). | [`cloud_adapters/azure/maf/guards/prompt_injection.py`](../../cloud_adapters/azure/maf/guards/prompt_injection.py) (`__init__`) — `setattr(cfg, attr, [])` for the missing list fields, `cfg.sensitivity = "balanced"`. |
+| `agent_os.prompt_injection.load_prompt_injection_config` | Returns a `PromptInjectionConfig` missing `allowlist`, `blocklist`, `custom_patterns`, `sensitivity` — but `_detect_impl` reads them. Without backfill the detector fails-closed on every call (returns CRITICAL threat with `unknown` type). | [`framework_adapters/maf/guards/prompt_injection.py`](../../framework_adapters/maf/guards/prompt_injection.py) (`__init__`) — `setattr(cfg, attr, [])` for the missing list fields, `cfg.sensitivity = "balanced"`. |
 | `agent_os.egress_policy.EgressPolicy.load_from_yaml` | Hand-rolled stdlib parser only accepts `protocol: tcp \| udp` (not `https`); rejects unknown top-level keys silently. | YAML uses `protocol: tcp` with `ports: [443]`. See [`cloud_adapters/azure/egress.yaml`](../../cloud_adapters/azure/egress.yaml). |
-| `agent_os.audit_logger.GovernanceAuditLogger.log` | `maf_adapter` (agent-os-kernel 3.2.2) calls it with legacy kwargs `(event_type=..., agent_did=..., action=..., data=..., outcome=..., policy_decision=...)` and expects an `AuditEntry` return; the current `log(self, entry: AuditEntry) -> None` doesn't match. | [`cloud_adapters/azure/maf/middleware.py`](../../cloud_adapters/azure/maf/middleware.py) — `_CompatAuditLogger` bridges both signatures and backfills `entry_id`. |
+| `agent_os.audit_logger.GovernanceAuditLogger.log` | `maf_adapter` (agent-os-kernel 3.2.2) calls it with legacy kwargs `(event_type=..., agent_did=..., action=..., data=..., outcome=..., policy_decision=...)` and expects an `AuditEntry` return; the current `log(self, entry: AuditEntry) -> None` doesn't match. | [`framework_adapters/maf/middleware.py`](../../framework_adapters/maf/middleware.py) — `_CompatAuditLogger` bridges both signatures and backfills `entry_id`. |
 
 ---
 

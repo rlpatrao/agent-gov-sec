@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from payload_agents._lib import personas
-from payload_agents.pydantic._runner import PydanticAgentBundle, build_agent
+from framework_adapters.pydantic.runner import PydanticAgentBundle, build_agent
 
 
 async def build_rogue_agent(

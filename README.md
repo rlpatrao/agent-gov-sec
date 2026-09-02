@@ -8,7 +8,7 @@ AWS is the cloud with a live persona deployment. It runs two ways — **Bedrock*
 
 ## What this platform does
 
-**Governance platform** (`core/`, `galaxy_gov/`): per-agent Non-Human Identity (AWS IAM), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → X-Ray tracing, a hash-chained DynamoDB audit ledger, and API Gateway as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
+**Governance platform** (`core/`, `galaxy_gov/`, `framework_adapters/`): per-agent Non-Human Identity (AWS IAM), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → X-Ray tracing, a hash-chained DynamoDB audit ledger, and API Gateway as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
 
 **Demonstration payload** (`payload_agents/`): three governed agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). Each persona is defined once, framework-neutrally, in `payload_agents/_lib/personas.py` and built on any of three frameworks (`--framework {langgraph,raw,pydantic}`, default LangGraph). They demonstrate that the governance stack is framework-agnostic: the same `galaxy_gov/` + `core/` primitives (including `core/a2a/`) and WS7 extensions wrap each framework — LangGraph's `create_agent` via a LangChain `AgentMiddleware` shim (`payload_agents/langgraph/`), Pydantic AI via a model wrapper (`payload_agents/pydantic/`), and a provider-native tool loop that does not import a framework (`payload_agents/raw/`).
 
@@ -181,12 +181,16 @@ agent-gov-sec/
 │  SHARED SEAM — imported by both sides
 ├── core/                           Agnostic core — Protocols, factories, NHI registry, tracing, ledger schema
 │   └── a2a/                        Agent-to-Agent protocol (envelope + audited dispatcher)
-├── cloud_adapters/                 Cloud bindings behind the core Protocols
+├── framework_adapters/             FRAMEWORK AXIS — binds the GuardPipeline to each agent framework
+│   ├── langgraph/ · pydantic/     LangChain GalaxyGuardMiddleware · Pydantic AI GovernedModel
+│   ├── raw/                        provider-native tool loop (the null adapter, no framework import)
+│   └── maf/                        Microsoft Agent Framework middleware stack
+├── cloud_adapters/                 CLOUD AXIS — cloud bindings behind the core Protocols
 │   ├── aws/                        AWS binding + infra/ (Terraform: chokepoints, ECR, Fargate service, policy store)
 │   ├── azure/ · gcp/ · local/      Azure + GCP bindings; cloud-neutral in-memory binding
 │
 │  DEMONSTRATION — stands in for real applications (which live in their own repos, via `galaxy init`)
-├── payload_agents/                 3 governed personas × 3 frameworks (LangGraph, Pydantic AI, raw)
+├── payload_agents/                 3 governed personas composing the framework adapters
 │
 │  REPO PLUMBING
 ├── scripts/                        demo_agents.py (conformance matrix) · deploy + publish + generator scripts

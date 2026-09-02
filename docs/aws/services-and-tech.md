@@ -21,7 +21,7 @@ This repository supports two AWS enforcement methods. Method 1 routes agents thr
 |---|---|---|---|---|
 | 1 | API Gateway (REST `galaxy-rp-bedrock-gw`, `POST /invoke`) | The single egress chokepoint in front of Bedrock. Validates the `x-api-key`; agents reach Bedrock only through this path and never hold Bedrock credentials. | Reference Terraform | [cloud_adapters/aws/gateway.py](../../cloud_adapters/aws/gateway.py); [cloud_adapters/aws/infra/lambda/bedrock_proxy.py](../../cloud_adapters/aws/infra/lambda/bedrock_proxy.py) |
 | 2 | Lambda (Bedrock proxy `galaxy-rp-bedrock-proxy`) | Invoked by API Gateway; container image, handler `bedrock_proxy.handler`. SigV4-signs and forwards the request to Bedrock Converse, stamping the attribution headers. Model `us.anthropic.claude-sonnet-4-6` is injected server-side. | Reference Terraform | [cloud_adapters/aws/infra/lambda/bedrock_proxy.py](../../cloud_adapters/aws/infra/lambda/bedrock_proxy.py) |
-| 3 | Bedrock Converse | Hosts the model behind the gateway (`AWS_BEDROCK_MODEL_ID`, e.g. `us.anthropic.claude-sonnet-4-6`). | Reference Terraform | [payload_agents/_runtime/bedrock_gateway.py](../../payload_agents/_runtime/bedrock_gateway.py) — `BedrockGatewayChatModel` |
+| 3 | Bedrock Converse | Hosts the model behind the gateway (`AWS_BEDROCK_MODEL_ID`, e.g. `us.anthropic.claude-sonnet-4-6`). | Reference Terraform | [framework_adapters/langgraph/bedrock_gateway.py](../../framework_adapters/langgraph/bedrock_gateway.py) — `BedrockGatewayChatModel` |
 | 4 | IAM roles / STS | Per-agent identity. The agent assumes a scoped role; its principal id flows into the relevant `NHI_CLIENT_ID_*` env var. | Reference Terraform | [cloud_adapters/aws/identity.py](../../cloud_adapters/aws/identity.py); [core/nhi_registry.py](../../core/nhi_registry.py) reads `NHI_CLIENT_ID_*` from env |
 | 5 | Secrets Manager / SSM Parameter Store | Stores the Bedrock gateway key (`galaxy/bedrock-gateway-key`) and other secrets. | Reference Terraform | [cloud_adapters/aws/secrets.py](../../cloud_adapters/aws/secrets.py) — `SecretsManagerProvider` |
 | 6 | DynamoDB (`galaxy-trace-ledger`) | Persistent hash-chained `trace_ledger` archive — partition key `run_id`, sort key `entry_seq`. Survives restarts; queryable for compliance. When unreachable the chain is still built and verified in memory. | Reference Terraform | [cloud_adapters/aws/audit.py](../../cloud_adapters/aws/audit.py) — `DynamoDbHashChainBackend` |
@@ -129,7 +129,7 @@ These frameworks are installed via the framework extras in `pyproject.toml`. Eac
 
 ## 5. Governance policies (YAML on disk)
 
-The `*.yaml` policy packs are loaded by `agent_os.policies.PolicyEvaluator` at agent build time. All files in `galaxy_gov/policies/` are loaded automatically, and no manifest is required. The LangGraph guard ([payload_agents/langgraph/_guard.py](../../payload_agents/langgraph/_guard.py)) wires the evaluator into the shared `GuardPipeline`.
+The `*.yaml` policy packs are loaded by `agent_os.policies.PolicyEvaluator` at agent build time. All files in `galaxy_gov/policies/` are loaded automatically, and no manifest is required. The LangGraph guard ([framework_adapters/langgraph/guard.py](../../framework_adapters/langgraph/guard.py)) wires the evaluator into the shared `GuardPipeline`.
 
 | File | What it enforces |
 |---|---|
@@ -165,7 +165,7 @@ The offline demo (`scripts/demo_governance.py`) and the test suite require **non
 |---|---|---|---|
 | `AWS_BEDROCK_GATEWAY_ENDPOINT` | The API Gateway `/invoke` URL — when set, all agents route through the gateway chokepoint | Required for live `--aws` | [cloud_adapters/aws/gateway.py:37](../../cloud_adapters/aws/gateway.py#L37) |
 | `AWS_BEDROCK_GATEWAY_KEY` | Local fallback for the gateway `x-api-key` (Secrets Manager preferred when deployed) | Optional (Secrets Manager preferred) | [cloud_adapters/aws/gateway.py:43](../../cloud_adapters/aws/gateway.py#L43) via `SecretsManagerProvider(secret_name="galaxy/bedrock-gateway-key")` |
-| `AWS_BEDROCK_MODEL_ID` | Bedrock model id (e.g. `us.anthropic.claude-sonnet-4-6`) | Required for live `--aws` | [payload_agents/_runtime/bedrock_gateway.py](../../payload_agents/_runtime/bedrock_gateway.py) |
+| `AWS_BEDROCK_MODEL_ID` | Bedrock model id (e.g. `us.anthropic.claude-sonnet-4-6`) | Required for live `--aws` | [framework_adapters/langgraph/bedrock_gateway.py](../../framework_adapters/langgraph/bedrock_gateway.py) |
 | `AWS_PROFILE` | SSO/profile used to resolve AWS credentials (or `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`) | Required for live `--aws` | boto3 default credential chain |
 | `AWS_REGION` | Region for STS / Secrets Manager / DynamoDB / Bedrock | Optional (defaults to `us-east-1`) | [cloud_adapters/aws/secrets.py:49](../../cloud_adapters/aws/secrets.py#L49) and peers |
 | `GALAXY_LEDGER_TABLE` | DynamoDB ledger table name | Optional (defaults to `galaxy-trace-ledger`) | [cloud_adapters/aws/audit.py:50](../../cloud_adapters/aws/audit.py#L50) |
@@ -206,7 +206,7 @@ This section describes the OTel span and event attributes that flow through the 
 | Concern | Configured in | Read by |
 |---|---|---|
 | Per-agent runtime tunables | [payload_agents/config/*.yaml](../../payload_agents/config/) | [payload_agents/config.py](../../payload_agents/config.py) |
-| Runtime governance rules | [galaxy_gov/policies/*.yaml](../../galaxy_gov/policies/) | `agent_os.policies.PolicyEvaluator` via the LangGraph guard ([payload_agents/langgraph/_guard.py](../../payload_agents/langgraph/_guard.py)) |
+| Runtime governance rules | [galaxy_gov/policies/*.yaml](../../galaxy_gov/policies/) | `agent_os.policies.PolicyEvaluator` via the LangGraph guard ([framework_adapters/langgraph/guard.py](../../framework_adapters/langgraph/guard.py)) |
 | Pre-middleware guard configs | [galaxy_gov/configs/*.yaml](../../galaxy_gov/configs/) | the prompt-injection / egress guards |
 | NHI registry | [core/nhi_registry.py](../../core/nhi_registry.py) | `NHIRegistry.get(agent_type)` |
 | LLM model + gateway key + egress | `.env` (local) / Secrets Manager (deployed) | [cloud_adapters/aws/gateway.py](../../cloud_adapters/aws/gateway.py), [cloud_adapters/aws/secrets.py](../../cloud_adapters/aws/secrets.py) |

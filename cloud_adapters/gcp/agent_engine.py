@@ -73,7 +73,7 @@ class GalaxyAgentEngineApp:
         if self._location:
             os.environ.setdefault("VERTEX_AI_LOCATION", self._location)
 
-        from payload_agents._runtime.models import build_gemini_model, scripted_model
+        from framework_adapters.langgraph.models import build_gemini_model, scripted_model
         from langchain_core.messages import AIMessage
 
         # Offline fallback: a single plain turn. before_model/after_model guards

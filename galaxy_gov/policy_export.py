@@ -96,7 +96,7 @@ def resolve_policy(agent_type: str) -> ControlPolicy:
     """Build the resolved (floored) control posture for ``agent_type`` from its
     per-agent config. Raises if the agent has no config — unknown agents have no
     posture and must be denied, never defaulted to permissive."""
-    from payload_agents.config import load_agent_config
+    from galaxy_gov.agent_config import load_agent_config
 
     cfg = load_agent_config(agent_type)          # floor already applied inside
     g = cfg.governance

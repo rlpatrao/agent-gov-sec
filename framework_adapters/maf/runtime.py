@@ -1,5 +1,5 @@
 """
-cloud_adapters.azure.maf.runtime — the MAF AgentRuntimeAdapter.
+framework_adapters.maf.runtime — the MAF AgentRuntimeAdapter.
 
 Microsoft Agent Framework owns the OTel provider setup so its
 ChatTelemetryLayer / AgentTelemetryLayer fire and emit the standard

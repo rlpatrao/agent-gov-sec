@@ -92,6 +92,23 @@ type, no NHI. The model is pinned server-side, the credentials never reach the
 agent process, and the identity comes from the deployment's environment. An
 agent cannot assert who it is.
 
+## Using an agent framework
+
+The wheel ships the framework bindings under `framework_adapters/` — the same code
+the demo personas run on. Install the matching extra and wrap your agent:
+
+```python
+# pip install "galaxy-agentkit[langgraph]"
+from framework_adapters.langgraph import GalaxyGuardMiddleware   # LangChain create_agent middleware
+from framework_adapters.pydantic import GovernedModel            # pip install "galaxy-agentkit[pydantic]"
+```
+
+`framework_adapters.raw` is the null adapter — a provider-native tool loop running
+the same `GuardPipeline` with no framework import — and `framework_adapters.maf`
+carries the Microsoft Agent Framework stack (`[azure]` extra). These bindings are
+defence in depth like the rest of `GALAXY_MODE=inprocess`; the enforcement
+service remains the authority either way.
+
 ## Configuration
 
 All of it is environment-resolved, because the deployment decides which authority

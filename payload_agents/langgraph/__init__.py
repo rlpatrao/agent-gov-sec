@@ -8,7 +8,7 @@ three build_* coroutines. Selected by --framework langgraph / GALAXY_FRAMEWORK.
 
 from __future__ import annotations
 
-from payload_agents._runtime.models import scripted_model
+from framework_adapters.langgraph.models import scripted_model
 from payload_agents.langgraph.auditor import build_auditor_agent
 from payload_agents.langgraph.finops import build_finops_agent
 from payload_agents.langgraph.rogue import build_rogue_agent

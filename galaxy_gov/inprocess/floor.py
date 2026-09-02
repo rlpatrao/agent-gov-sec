@@ -27,8 +27,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:  # avoid a circular import with payload_agents.config
-    from payload_agents.config import GovernanceConfig
+if TYPE_CHECKING:  # avoid a circular import with galaxy_gov.agent_config
+    from galaxy_gov.agent_config import GovernanceConfig
 
 
 # ── Ordered scales (index = how permissive; higher = looser) ──────────────────

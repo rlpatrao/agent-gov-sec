@@ -38,9 +38,9 @@ Live IDs and endpoints are scrubbed and kept out of the repository. Populate the
 
 | # | Resource | What it does | Status | Where it touches code |
 |---|---|---|---|---|
-| 1 | MAF governance middleware stack (`build_governance_stack`) | Composes the `agent_os` governance primitives into a Microsoft Agent Framework middleware list, ordered to fail fast on cheap checks first: prompt-injection → credential redactor → context budget → audit → policy → capability → rogue detection. Passed to `Agent(middleware=...)`. | Live (in-process) | [cloud_adapters/azure/maf/middleware.py](../../cloud_adapters/azure/maf/middleware.py) |
-| 2 | MAF guard middlewares | The Azure wrappers around the shared guard primitives — prompt-injection, credential redactor, context budget. | Live (in-process) | [cloud_adapters/azure/maf/guards/](../../cloud_adapters/azure/maf/guards/) |
-| 3 | MAF runtime adapter (`MafRuntimeAdapter`) | Lets MAF own the OTel `TracerProvider` (via `configure_otel_providers`) so its `gen_ai.*` spans reach the Azure "Agents (preview)" dashboard. Falls back to the agnostic provider when MAF is not installed. | Live (in-process) | [cloud_adapters/azure/maf/runtime.py](../../cloud_adapters/azure/maf/runtime.py) |
+| 1 | MAF governance middleware stack (`build_governance_stack`) | Composes the `agent_os` governance primitives into a Microsoft Agent Framework middleware list, ordered to fail fast on cheap checks first: prompt-injection → credential redactor → context budget → audit → policy → capability → rogue detection. Passed to `Agent(middleware=...)`. | Live (in-process) | [framework_adapters/maf/middleware.py](../../framework_adapters/maf/middleware.py) |
+| 2 | MAF guard middlewares | The Azure wrappers around the shared guard primitives — prompt-injection, credential redactor, context budget. | Live (in-process) | [framework_adapters/maf/guards/](../../framework_adapters/maf/guards/) |
+| 3 | MAF runtime adapter (`MafRuntimeAdapter`) | Lets MAF own the OTel `TracerProvider` (via `configure_otel_providers`) so its `gen_ai.*` spans reach the Azure "Agents (preview)" dashboard. Falls back to the agnostic provider when MAF is not installed. | Live (in-process) | [framework_adapters/maf/runtime.py](../../framework_adapters/maf/runtime.py) |
 | 4 | Container Apps Jobs (`galaxy-<persona>-job`) | One manual-trigger job per persona, each under its own User-Assigned Managed Identity (the persona's NHI), for the fan-out shape. Artifacts flow through the Azure Files share mounted at `/data`. Started by `submit_agent_job`. | Reference Bicep | [cloud_adapters/azure/orchestrator.py](../../cloud_adapters/azure/orchestrator.py) — `submit_agent_job`; [cloud_adapters/azure/infra/aca_jobs.bicep](../../cloud_adapters/azure/infra/aca_jobs.bicep) |
 | 5 | Postgres hash-chain ledger + Application Insights | Shared with Method 1 — the same `PostgresHashChainBackend` and Azure Monitor span sink. | Reference Bicep / live | [cloud_adapters/azure/audit.py](../../cloud_adapters/azure/audit.py), [cloud_adapters/azure/tracing.py](../../cloud_adapters/azure/tracing.py) |
 
@@ -136,7 +136,7 @@ These frameworks are installed via the framework extras in `pyproject.toml`. Eac
 
 ## 5. Governance policies (YAML on disk)
 
-The `*.yaml` policy packs are loaded by `agent_os.policies.PolicyEvaluator` (or, on Azure, by `create_governance_middleware`) at agent build time. All files in `galaxy_gov/policies/` are loaded automatically, and no manifest is required. The MAF middleware stack ([cloud_adapters/azure/maf/middleware.py](../../cloud_adapters/azure/maf/middleware.py)) wires the policy directory into the toolkit middleware.
+The `*.yaml` policy packs are loaded by `agent_os.policies.PolicyEvaluator` (or, on Azure, by `create_governance_middleware`) at agent build time. All files in `galaxy_gov/policies/` are loaded automatically, and no manifest is required. The MAF middleware stack ([framework_adapters/maf/middleware.py](../../framework_adapters/maf/middleware.py)) wires the policy directory into the toolkit middleware.
 
 | File | What it enforces |
 |---|---|
@@ -248,7 +248,7 @@ The ledger can also be queried directly with SQL against `trace_ledger` (see [le
 | Concern | Configured in | Read by |
 |---|---|---|
 | Per-agent runtime tunables | [payload_agents/config/*.yaml](../../payload_agents/config/) | [payload_agents/config.py](../../payload_agents/config.py) |
-| Runtime governance rules | [galaxy_gov/policies/*.yaml](../../galaxy_gov/policies/) | `create_governance_middleware` via the MAF stack ([cloud_adapters/azure/maf/middleware.py](../../cloud_adapters/azure/maf/middleware.py)) |
+| Runtime governance rules | [galaxy_gov/policies/*.yaml](../../galaxy_gov/policies/) | `create_governance_middleware` via the MAF stack ([framework_adapters/maf/middleware.py](../../framework_adapters/maf/middleware.py)) |
 | Pre-middleware guard configs | [galaxy_gov/configs/*.yaml](../../galaxy_gov/configs/) | the prompt-injection / egress guards |
 | NHI registry | [core/nhi_registry.py](../../core/nhi_registry.py) | `NHIRegistry.get(agent_type)` |
 | LLM deployment + APIM key + egress | `.env` (local) / Key Vault (deployed) | [cloud_adapters/azure/gateway.py](../../cloud_adapters/azure/gateway.py), [cloud_adapters/azure/secrets.py](../../cloud_adapters/azure/secrets.py) |

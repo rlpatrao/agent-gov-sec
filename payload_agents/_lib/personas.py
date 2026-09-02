@@ -24,7 +24,7 @@ from galaxy_gov.shared.enforcement.data_classification import DataClassification
 from galaxy_gov.shared.enforcement.data_drift import DataAccessDriftDetector, JsonFileBaselineStore
 from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
 from payload_agents._lib import demo_data
-from payload_agents._runtime.contract import ToolSpec
+from framework_adapters.contract import ToolSpec
 
 # ── catalog + mediator (shared by every persona/framework) ─────────────────────
 CATALOG_PATH = (

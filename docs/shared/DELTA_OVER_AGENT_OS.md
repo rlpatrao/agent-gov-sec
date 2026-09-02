@@ -59,7 +59,7 @@ Legend: **(a)** pure `agent_os` pass-through · **(b)** `agent_os` / `agent_sre`
 | `cloud_adapters/azure/secrets.py` | 124 | Azure binding — Key Vault + Workload Identity (`TokenProvider`). |
 | `cloud_adapters/azure/tracing.py` | 34 | Azure binding — `AzureMonitorTraceExporter`. |
 | `cloud_adapters/azure/gateway.py` | 66 | Azure binding — APIM → AOAI egress chokepoint (`AzureLLMGateway`). |
-| `cloud_adapters/azure/maf/runtime.py` | 40 | MAF OTel wiring behind `AgentRuntimeAdapter` (`MafRuntimeAdapter`). |
+| `framework_adapters/maf/runtime.py` | 40 | MAF OTel wiring behind `AgentRuntimeAdapter` (`MafRuntimeAdapter`). |
 | `cloud_adapters/azure/infra/` | — | `aca_jobs.bicep`, `ledger_schema.sql` (Azure IaC). |
 | `cloud_adapters/{aws,gcp}/__init__.py` | 57+57 | WS5/WS6 skeletons (every accessor raises `NotImplementedError`). |
 | `core/discovery_artifacts.py` | 126 | Pydantic models kept for the demo payload. |
@@ -68,15 +68,15 @@ Legend: **(a)** pure `agent_os` pass-through · **(b)** `agent_os` / `agent_sre`
 
 | Module | LOC | Upstream primitive wrapped/used | Our part |
 |---|---|---|---|
-| `cloud_adapters/azure/maf/guards/prompt_injection.py` | 125 | `agent_os.prompt_injection.PromptInjectionDetector` | MAF `AgentMiddleware` wrapper + audit emission + **config backfill shim** (`agent_os` config misses `allowlist`/`blocklist`/`custom_patterns`/`sensitivity`) |
-| `cloud_adapters/azure/maf/guards/credential_redactor.py` | 98 | `agent_os.credential_redactor.CredentialRedactor` | MAF middleware wrapper, redact/deny modes, audit |
-| `cloud_adapters/azure/maf/guards/context_budget.py` | 139 | `agent_os.context_budget.ContextScheduler` | MAF middleware wrapper, pre-call budget + post-call usage record |
-| `cloud_adapters/azure/maf/middleware.py` | 172 | `agent_os.integrations.maf_adapter.create_governance_middleware` + `ContextScheduler` + `ThreatLevel` | `build_governance_stack()` assembly (guards 1–3 ours, 4–7 from `agent_os`) + **`_CompatAuditLogger` shim** bridging the kernel-3.x `log()` signature mismatch |
+| `framework_adapters/maf/guards/prompt_injection.py` | 125 | `agent_os.prompt_injection.PromptInjectionDetector` | MAF `AgentMiddleware` wrapper + audit emission + **config backfill shim** (`agent_os` config misses `allowlist`/`blocklist`/`custom_patterns`/`sensitivity`) |
+| `framework_adapters/maf/guards/credential_redactor.py` | 98 | `agent_os.credential_redactor.CredentialRedactor` | MAF middleware wrapper, redact/deny modes, audit |
+| `framework_adapters/maf/guards/context_budget.py` | 139 | `agent_os.context_budget.ContextScheduler` | MAF middleware wrapper, pre-call budget + post-call usage record |
+| `framework_adapters/maf/middleware.py` | 172 | `agent_os.integrations.maf_adapter.create_governance_middleware` + `ContextScheduler` + `ThreatLevel` | `build_governance_stack()` assembly (guards 1–3 ours, 4–7 from `agent_os`) + **`_CompatAuditLogger` shim** bridging the kernel-3.x `log()` signature mismatch |
 | `galaxy_gov/shared/enforcement/egress_guard.py` | 55 | `agent_os.egress_policy.EgressPolicy` | guard wrapper + allow-list path via the provider factory + **`protocol: tcp` parser workaround** |
 | `galaxy_gov/shared/enforcement/escalation_guard.py` | 88 | `agent_os.escalation.*` | guard wrapper + audit |
 | `galaxy_gov/adapters/otel_audit_backend.py` | 67 | implements `agent_os.audit_logger.AuditBackend` | OTel span-event backend (`governance.<event_type>`). ⚠️ see reconciliation |
 | `cloud_adapters/azure/audit.py` | 182 | implements `agent_os.audit_logger.AuditBackend` | `PostgresHashChainBackend` — SHA-256 hash-chain persistence |
-| `payload_agents/_base.py` | — | `agent_framework.Agent`, `OpenAIChatClient`, `GovernanceAuditLogger` | `build_agent()` factory wiring the stack (payload, not platform) |
+| `framework_adapters/maf/runtime.py` | — | `agent_framework.Agent`, `OpenAIChatClient`, `GovernanceAuditLogger` | `build_agent()` factory wiring the stack (payload, not platform) |
 | `galaxy_gov/policies/galaxy-*.yaml`, `configs/prompt-injection.yaml`, `cloud_adapters/azure/egress.yaml` | — | drive `agent_os`'s `PolicyEvaluator` / `PromptInjectionDetector` / `EgressPolicy` | **our rules**, their engines |
 
 ---

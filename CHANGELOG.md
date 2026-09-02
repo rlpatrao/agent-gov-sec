@@ -154,6 +154,24 @@ versioning of the platform wheel (`galaxy-agentkit`).
   in `docs/archive/README.md`; the reference checker exempts the directory.
 
 ### Changed
+- **The framework axis is now a shipped package: `framework_adapters/`.** The
+  glue binding each agent framework to the `GuardPipeline` — the LangChain
+  `GalaxyGuardMiddleware` + `build_langgraph_agent` (with the gateway-backed and
+  scripted chat models), the Pydantic AI `GovernedModel`, the provider-native raw
+  loop, and the MAF middleware stack (moved out of `cloud_adapters/azure/`, which
+  had a framework filed under a cloud) — moves out of the demo package into a
+  top-level `framework_adapters/`, the counterpart of `cloud_adapters/`. It ships
+  in the wheel, so `pip install "galaxy-agentkit[langgraph]"` now delivers the
+  middleware rather than only its dependencies. `payload_agents/` keeps only the
+  demo personas, which compose the adapters. Governance-owned via CODEOWNERS.
+- **Agent-config schema moved to the platform: `galaxy_gov/agent_config.py`.**
+  `AgentConfigModel`, `GovernanceConfig`, and the floor-clamped loaders lived in
+  `payload_agents/config.py` — platform mechanism in demo code, and a
+  platform-to-demo import from `galaxy_gov` (floor, policy_export, registrar,
+  scaffold). The YAML documents stay with the agents; the default directory
+  resolves via `GALAXY_AGENT_CONFIG_DIR`, falling back to the in-tree
+  `payload_agents/config/`. The MAF-era `payload_agents/_base.py` factory,
+  imported by nothing since the reorg, is removed (git history retains it).
 - **`a2a/` folded into `core/a2a/`.** The agent-to-agent protocol (envelope + audited
   dispatcher) is seam code used by both sides, so it now lives inside the agnostic core
   rather than as a top-level package. Imports move from `a2a.…` to `core.a2a.…`; the
