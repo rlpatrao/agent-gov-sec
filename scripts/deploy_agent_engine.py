@@ -67,7 +67,8 @@ def run_local(args) -> int:
 
     from cloud_adapters.gcp.agent_engine import GalaxyAgentEngineApp
 
-    app = GalaxyAgentEngineApp(agent=args.agent, cloud_provider="local")
+    app = GalaxyAgentEngineApp(agent=args.agent, cloud_provider="local",
+                               agent_package="payload_agents.langgraph")
     app.set_up()
     print(f"# local smoke test — agent={args.agent}  cloud=local  (offline model)\n", file=sys.stderr)
     result = app.query(prompt=args.prompt)
@@ -97,7 +98,8 @@ def deploy(args) -> int:
         **_forwarded_env(),
     }
     app = GalaxyAgentEngineApp(
-        agent=args.agent, project=args.project, location=args.location,
+        agent=args.agent,
+        agent_package="payload_agents.langgraph", project=args.project, location=args.location,
         model_name=args.model, cloud_provider="gcp",
     )
     print(f"# deploying governed '{args.agent}' agent to Agent Engine in {args.location} …", file=sys.stderr)

@@ -833,7 +833,9 @@ async def main(log_level: int = logging.CRITICAL, cloud: str = "azure", narrate:
     # matrix is exercised on langgraph, raw, and pydantic.
     os.environ["GALAXY_FRAMEWORK"] = framework
     _FRAMEWORK = framework
-    _FW = get_framework(framework)
+    # The demo's persona builders live in payload_agents/<framework>; the
+    # factory's default would resolve the bare platform adapters instead.
+    _FW = get_framework(framework, package=f"payload_agents.{framework}")
     # Select the cloud adapter set BEFORE any agent is built (the factory caches).
     os.environ["CLOUD_PROVIDER"] = cloud
     from core.provider_factory import get_provider

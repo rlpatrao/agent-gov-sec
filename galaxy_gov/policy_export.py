@@ -2,7 +2,7 @@
 galaxy_gov.policy_export — build the policy registry from per-agent config.
 
 The *producer* side of the policy registry (the consumer side is
-``galaxy_gov.shared.policy_registry``). This module imports ``payload_agents``
+``galaxy_gov.shared.policy_registry``). This module reads the application's
 to resolve each agent's floored posture, so it is build-time / in-process only —
 it is deliberately NOT under ``galaxy_gov/shared`` so the consumer half stays
 free of any agent-codebase dependency and remains vendorable into a Lambda.
@@ -26,9 +26,11 @@ from galaxy_gov.shared.policy_registry import ControlPolicy, authorize_recipient
 logger = logging.getLogger(__name__)
 
 # Default location of the per-agent configs, relative to the repo root. Override
-# with GOV_AGENT_CONFIG_DIR when the agent codebase lives outside this tree (the
+# with GALAXY_AGENT_CONFIG_DIR when the agent codebase lives outside this tree (the
 # platform wheel does not ship payload_agents).
-_DEFAULT_CONFIG_DIR = Path(__file__).resolve().parent.parent / "payload_agents" / "config"
+# Resolved lazily via galaxy_gov.agent_config.default_config_dir() —
+# GALAXY_AGENT_CONFIG_DIR, registered by the application (the demo's
+# payload_agents/__init__ sets it on import). No application path is named here.
 
 
 def discover_agent_types(config_dir: Path | str | None = None) -> tuple[str, ...]:
@@ -43,11 +45,11 @@ def discover_agent_types(config_dir: Path | str | None = None) -> tuple[str, ...
 
     Resolution order:
       1. ``config_dir`` argument, if given.
-      2. ``GOV_AGENT_CONFIG_DIR`` env — for deployments where the agent codebase
-         is a separate package.
+      2. ``GALAXY_AGENT_CONFIG_DIR`` env — registered by the application
+         package on import (the demo's ``payload_agents/__init__``), or set by a
+         deployment whose agent codebase is a separate package.
       3. ``GOV_AGENT_TYPES`` env (comma-separated) — the explicit escape hatch for
          a chokepoint that has no access to the agent configs at all.
-      4. The in-tree ``payload_agents/config/``.
 
     Returns an empty tuple when no source resolves. Callers that provision or
     export must treat empty as "nothing to do", never as "allow everything" —
@@ -55,10 +57,18 @@ def discover_agent_types(config_dir: Path | str | None = None) -> tuple[str, ...
     an unknown agent denied regardless.
     """
     explicit = os.environ.get("GOV_AGENT_TYPES")
-    if config_dir is None and not os.environ.get("GOV_AGENT_CONFIG_DIR") and explicit:
+    if config_dir is None and not os.environ.get("GALAXY_AGENT_CONFIG_DIR") and explicit:
         return tuple(sorted({t.strip() for t in explicit.split(",") if t.strip()}))
 
-    path = Path(config_dir or os.environ.get("GOV_AGENT_CONFIG_DIR") or _DEFAULT_CONFIG_DIR)
+    if config_dir is None:
+        from galaxy_gov.agent_config import ConfigError, default_config_dir
+        try:
+            path = default_config_dir()
+        except ConfigError as exc:
+            logger.warning("policy_export.config_dir_missing", extra={"reason": str(exc)})
+            return ()
+    else:
+        path = Path(config_dir)
     if not path.is_dir():
         logger.warning("policy_export.config_dir_missing", extra={"path": str(path)})
         return ()

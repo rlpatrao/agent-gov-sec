@@ -10,7 +10,7 @@ every enforcement tier uses to read the centralized policy store. Only the S3
 source imports boto3, and it does so lazily.
 
 The *producer* side — building the registry from the per-agent config (which
-imports ``payload_agents``) — lives in ``galaxy_gov.policy_export``, kept separate
+reads the application's config directory) — lives in ``galaxy_gov.policy_export``, kept separate
 precisely so this consumer half carries no agent-codebase dependency.
 
 Fail-closed: :func:`policy_for` returns ``None`` for an unknown identity; a

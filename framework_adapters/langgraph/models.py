@@ -1,7 +1,7 @@
 """
 framework_adapters.langgraph.models — chat-model factory for the LangGraph axis.
 
-Two model sources, mirroring the egress logic in ``payload_agents/_base.py``:
+Two model sources:
 
   - ``FakeToolCallingModel`` — an **offline, no-credentials** chat model that
     replays a scripted list of ``AIMessage`` turns (including ``tool_calls``).

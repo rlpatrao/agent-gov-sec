@@ -1,7 +1,7 @@
 """
 galaxy_gov.inprocess.floor — the non-overridable governance baseline (mechanism 2).
 
-Per-agent YAML (`payload_agents/config/*.yaml`) lets developers tune the
+Per-agent YAML (the application's agent-config directory) lets developers tune the
 governance stack. On its own that is a weakening surface: a config that sets
 ``enable_prompt_injection_guard: false`` would silently disable a control. The
 floor closes that gap. After a per-agent ``GovernanceConfig`` is validated, it

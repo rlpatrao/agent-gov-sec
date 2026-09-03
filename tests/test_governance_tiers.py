@@ -98,3 +98,28 @@ class TestStateBackend:
         s.put("drift", "FinOps", {"baseline": 3})
         assert s.get("drift", "FinOps") == {"baseline": 3}
         assert s.get("cost", "missing") is None
+
+class TestPlatformNeverImportsTheApplication:
+    """The dependency arrow points application -> platform, never back.
+
+    payload_agents (the demo application) composes core, galaxy_gov,
+    framework_adapters, and cloud_adapters. No platform package may import it:
+    the wheel does not ship it, so a platform import of payload_agents is a
+    latent ImportError in every customer install — and architecturally it would
+    couple the governing side to one governed workload.
+    """
+
+    def test_no_platform_package_imports_payload_agents(self):
+        offenders = []
+        for pkg in ("core", "galaxy_gov", "framework_adapters",
+                    "cloud_adapters", "galaxy_agentkit"):
+            offenders += [
+                (str(f.relative_to(_ROOT)), m)
+                for f, m in _imports(_ROOT / pkg)
+                if m == "payload_agents" or m.startswith("payload_agents.")
+            ]
+        assert offenders == [], (
+            "platform code imports the demo application: "
+            f"{offenders}. Inject the dependency instead (see GALAXY_AGENT_CONFIG_DIR, "
+            "GOV_DATA_SOURCE_MODULE, framework_factory package=, agent_package=)."
+        )

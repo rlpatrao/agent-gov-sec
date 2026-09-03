@@ -19,6 +19,16 @@ supply its own identity.
 """
 
 import os as _os
+from pathlib import Path as _Path
+
+# The application owns its agent configs and says so: the platform's
+# default_config_dir() resolves GALAXY_AGENT_CONFIG_DIR and names no application
+# path itself (the dependency arrow points application -> platform). setdefault,
+# so an explicitly configured environment always wins.
+_os.environ.setdefault("GALAXY_AGENT_CONFIG_DIR", str(_Path(__file__).parent / "config"))
+
+
+import os as _os
 
 
 def _register_local_nhi_defaults() -> None:

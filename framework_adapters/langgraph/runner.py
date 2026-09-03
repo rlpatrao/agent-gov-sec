@@ -2,7 +2,7 @@
 framework_adapters.langgraph.runner — the LangGraph agent factory.
 
 ``build_langgraph_agent`` is the LangGraph counterpart to
-``payload_agents/_base.build_agent`` (the MAF factory). It wires the same
+the retired MAF-era factory. It wires the same
 cross-cutting governance posture around a LangGraph ``create_agent``:
 
   - **Identity (A1):** resolves the agent's NHI via ``core.nhi_registry``.
@@ -17,7 +17,7 @@ cross-cutting governance posture around a LangGraph ``create_agent``:
     returned in the bundle for end-of-run flush + chain verification.
 
 YAML is authoritative: every governance toggle, the tool allow-list, and the
-A2A recipient list come from ``payload_agents/config/<name>.yaml`` via the
+A2A recipient list come from the application's ``config/<name>.yaml`` via the
 existing ``AgentConfigModel`` loader — no per-agent branching here.
 """
 

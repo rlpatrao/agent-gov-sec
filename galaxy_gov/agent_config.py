@@ -87,7 +87,7 @@ class GovernanceConfig(BaseModel):
     denied_tools: list[str] = Field(default_factory=list)
 
     # ── WS7 gap-module toggles (consumed by the LangGraph axis,
-    #    payload_agents/langgraph/_guard.build_langgraph_governance) ──────────
+    #    framework_adapters.langgraph.guard.build_langgraph_governance) ──────────
     blocked_patterns: list[str] = Field(
         default_factory=list,
         description="Substrings denied in tool arguments / model output "
@@ -171,16 +171,23 @@ class ConfigError(Exception):
 def default_config_dir() -> Path:
     """Where agent config YAMLs live when no directory is given.
 
-    Resolution: ``GALAXY_AGENT_CONFIG_DIR`` (a consuming repo's own config
-    directory) → the in-tree demo payload's ``payload_agents/config/``. The
-    schema lives in ``galaxy_gov`` (the governing team owns it via CODEOWNERS);
-    the YAML documents live with the agents it validates, so the default is a
-    lookup, not a path relative to this file.
+    Resolved from ``GALAXY_AGENT_CONFIG_DIR`` only. The schema lives in
+    ``galaxy_gov`` (the governing team owns it via CODEOWNERS), but the YAML
+    documents live with the application that defines the agents — the platform
+    does not know where that is and deliberately names no application path. An
+    application registers its own directory: the in-tree demo does so on import
+    (``payload_agents/__init__.py`` sets the variable to its ``config/``), and a
+    consuming repo sets the variable in its deployment environment.
     """
     env = os.environ.get("GALAXY_AGENT_CONFIG_DIR")
     if env:
         return Path(env)
-    return Path(__file__).resolve().parent.parent / "payload_agents" / "config"
+    raise ConfigError(
+        "no agent-config directory configured: set GALAXY_AGENT_CONFIG_DIR (or "
+        "pass config_dir=). Importing the application package that owns the "
+        "configs usually sets it — the in-tree demo registers "
+        "payload_agents/config/ on import."
+    )
 
 
 def load_agent_config(

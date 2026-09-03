@@ -7,7 +7,7 @@ packages your code + requirements, and runs it as a managed container.
 
 ``GalaxyAgentEngineApp`` is that object. It does **not** re-implement anything —
 inside the container it builds one of the existing governed LangGraph bundles
-(``payload_agents/*``), so the full GuardPipeline (prompt-injection, credential,
+(the injected agent package), so the full GuardPipeline (prompt-injection, credential,
 context-budget, capability, blocked-pattern, CoT/CoVe trace) and the cloud
 hash-chain ledger run exactly as they do locally. With ``CLOUD_PROVIDER=gcp`` the
 ledger is BigQuery, identity is the per-agent Service Account, and egress resolves
@@ -36,8 +36,7 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# The three demo personas → their governed-bundle builders. Resolved in set_up().
-_AGENTS = ("finops", "auditor", "rogue")
+# agent name -> governed-bundle builder, discovered from the injected package in set_up().
 
 
 class GalaxyAgentEngineApp:
@@ -51,10 +50,10 @@ class GalaxyAgentEngineApp:
         location: Optional[str] = None,
         model_name: Optional[str] = None,
         cloud_provider: str = "gcp",
+        agent_package: str | None = None,
     ) -> None:
-        if agent not in _AGENTS:
-            raise ValueError(f"agent must be one of {_AGENTS}, got {agent!r}")
         self._agent = agent
+        self._agent_package = agent_package
         self._project = project
         self._location = location
         self._model_name = model_name or "gemini-2.5-pro"
@@ -85,14 +84,31 @@ class GalaxyAgentEngineApp:
             offline_fallback=fallback,
         )
 
-        from payload_agents.langgraph import build_finops_agent
-        from payload_agents.langgraph import build_auditor_agent
-        from payload_agents.langgraph import build_rogue_agent
+        # The application's builder package is injected (constructor arg or
+        # GALAXY_AGENT_PACKAGE), never imported by name from platform code:
+        # every callable named build_<agent>_agent it exports becomes a
+        # deployable agent. The demo passes payload_agents.langgraph.
+        import importlib
+        import re as _re
+
+        pkg_name = self._agent_package or os.environ.get("GALAXY_AGENT_PACKAGE")
+        if not pkg_name:
+            raise RuntimeError(
+                "no agent package configured: pass agent_package= or set "
+                "GALAXY_AGENT_PACKAGE to the module exporting build_<name>_agent "
+                "coroutines (the demo uses payload_agents.langgraph)."
+            )
+        pkg = importlib.import_module(pkg_name)
         self._builders = {
-            "finops": build_finops_agent,
-            "auditor": build_auditor_agent,
-            "rogue": build_rogue_agent,
+            m.group(1): getattr(pkg, attr)
+            for attr in dir(pkg)
+            if (m := _re.fullmatch(r"build_(\w+)_agent", attr)) and callable(getattr(pkg, attr))
         }
+        if self._agent not in self._builders:
+            raise RuntimeError(
+                f"agent {self._agent!r} not found in {pkg_name}: "
+                f"available {sorted(self._builders)}"
+            )
         logger.info("agent_engine.set_up", extra={
             "agent": self._agent, "cloud": self._cloud_provider,
             "vertex": bool(self._project), "model": self._model_name,

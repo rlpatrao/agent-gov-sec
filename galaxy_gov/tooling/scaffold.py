@@ -265,11 +265,26 @@ def _export_registry_cmd(argv: list[str]) -> int:
                     help="Also upload the registry to the centralized policy store "
                          "(destination: --uri, else GOV_POLICY_REGISTRY_URI)")
     ap.add_argument("--uri", help="Policy store destination for --publish (s3://bucket/key)")
+    ap.add_argument("--config-dir",
+                    help="Agent-config directory (default: GALAXY_AGENT_CONFIG_DIR)")
     a = ap.parse_args(argv)
 
+    from galaxy_gov.agent_config import ConfigError, default_config_dir
     from galaxy_gov.policy_export import discover_agent_types, export_registry_json
 
-    types = discover_agent_types()
+    # Fail loudly rather than deriving an empty registry: the platform names no
+    # application path, so the directory must come from the flag or the env.
+    if a.config_dir:
+        os.environ["GALAXY_AGENT_CONFIG_DIR"] = a.config_dir
+    try:
+        config_dir = default_config_dir()
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        print("hint: pass --config-dir <dir> (in this repo: payload_agents/config)",
+              file=sys.stderr)
+        return 2
+
+    types = discover_agent_types(config_dir=config_dir)
     body = export_registry_json()
 
     if a.check:
@@ -281,7 +296,7 @@ def _export_registry_cmd(argv: list[str]) -> int:
             print(f"stale: {a.out} does not exist", file=sys.stderr)
             return 1
         if current.read_text(encoding="utf-8").strip() != body.strip():
-            print(f"stale: {a.out} does not match the configs in payload_agents/config/",
+            print(f"stale: {a.out} does not match the configs in {config_dir}",
                   file=sys.stderr)
             return 1
         print(f"up to date: {a.out} ({len(types)} agent types)")
@@ -342,7 +357,7 @@ def _verify(argv: list[str]) -> int:
     registry = export_registry()
     types = (a.type,) if a.type else discover_agent_types()
     if not types:
-        print("no agent configs discovered in payload_agents/config/", file=sys.stderr)
+        print(f"no agent configs discovered in {config_dir}", file=sys.stderr)
         return 1
 
     print(f"{'AGENT':<16} {'IDENTITY':<10} {'POLICY':<10} PRINCIPAL")

@@ -154,6 +154,22 @@ versioning of the platform wheel (`galaxy-agentkit`).
   in `docs/archive/README.md`; the reference checker exempts the directory.
 
 ### Changed
+- **Platform code no longer imports the demo application — the dependency arrow
+  is application → platform, enforced by test.** Remaining inversions:
+  `core.framework_factory` defaults to `framework_adapters.<name>` and takes the
+  application's builder package as an argument (`package=` /
+  `GALAXY_FRAMEWORK_PACKAGE_<NAME>`); the GCP Agent Engine app takes
+  `agent_package=` / `GALAXY_AGENT_PACKAGE` and discovers `build_<name>_agent`
+  callables instead of importing the three personas; both data-proxy chokepoints
+  take `GOV_DATA_SOURCE_MODULE` and answer `501 data_source_unconfigured` when
+  unset instead of importing the demo fixtures (which the enforcement container
+  never shipped); `default_config_dir()` resolves `GALAXY_AGENT_CONFIG_DIR` only,
+  and `payload_agents/__init__` registers its own config directory on import
+  (`GOV_AGENT_CONFIG_DIR` is folded into the one variable). `galaxy
+  export-registry` gains `--config-dir` and fails loudly instead of deriving an
+  empty registry. A boundary test asserts no platform package imports
+  `payload_agents`. Deliberate exception: `galaxy new-agent` still writes into
+  `payload_agents/` — it is the monorepo generator and that is its output path.
 - **The framework axis is now a shipped package: `framework_adapters/`.** The
   glue binding each agent framework to the `GuardPipeline` — the LangChain
   `GalaxyGuardMiddleware` + `build_langgraph_agent` (with the gateway-backed and

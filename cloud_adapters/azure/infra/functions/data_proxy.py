@@ -17,7 +17,7 @@ Fail-closed: an agent type with no ABAC policy in the classification catalog
 resolves to deny-all (the mediator's existing behaviour), and an identity absent
 from the policy registry is rejected before any read.
 
-The row source is pluggable (``_read_source``): the demo reads the bundled
+The row source is injected (``GOV_DATA_SOURCE_MODULE``): the demo reads the bundled
 fixtures; a real deployment reads Azure SQL / Synapse with the function's own
 Managed Identity (the agent has no direct access), optionally pushed down via
 ``cloud_adapters.azure.data_fgac.AzureSqlFgacEnforcer``.
@@ -71,11 +71,28 @@ def _registry():
 
 
 def _read_source(dataset, table):
-    """Read rows from the store the function owns. Demo: bundled fixtures. Real
-    deployment: replace with an Azure SQL / Synapse read under the function's own
-    Managed Identity (the agent has no direct access)."""
-    from payload_agents._lib import demo_data
-    return demo_data.rows_for(dataset, table)
+    """Read rows from the store the function owns.
+
+    The source is injected via ``GOV_DATA_SOURCE_MODULE`` — a module exposing
+    ``rows_for(dataset, table)``. The demo sets ``payload_agents._lib.demo_data``;
+    a real deployment points it at an Azure SQL / Synapse read under the
+    function's own Managed Identity (the agent has no direct access).
+    Unconfigured or unimportable is a LookupError, which the handler turns into
+    an explicit denial — the chokepoint never guesses a data source, and never
+    imports application code by name.
+    """
+    import importlib
+    module_name = os.environ.get("GOV_DATA_SOURCE_MODULE")
+    if not module_name:
+        raise LookupError(
+            "no data source configured: set GOV_DATA_SOURCE_MODULE to a module "
+            "exposing rows_for(dataset, table)"
+        )
+    try:
+        source = importlib.import_module(module_name)
+    except ImportError as exc:
+        raise LookupError(f"data source module {module_name!r} not importable: {exc}") from exc
+    return source.rows_for(dataset, table)
 
 
 def enforce_data(body: dict, headers: dict) -> tuple[int, dict]:
@@ -95,7 +112,11 @@ def enforce_data(body: dict, headers: dict) -> tuple[int, dict]:
         return 400, {"error": "missing agent_type/dataset/table"}
 
     mediator = _mediator_engine()
-    rows = _read_source(dataset, table)  # function reads; agent never supplies rows
+    try:
+        rows = _read_source(dataset, table)  # function reads; agent never supplies rows
+    except LookupError as exc:
+        _log("data_proxy.source_unconfigured", agent=agent_type, reason=str(exc))
+        return 501, {"error": "data_source_unconfigured", "reason": str(exc)}
     decision, enforced = mediator.read(
         agent_type=agent_type, dataset=dataset, table=table,
         columns=list(columns), rows=rows, nhi_id=nhi_id or agent_type,
