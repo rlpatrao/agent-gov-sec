@@ -154,6 +154,20 @@ versioning of the platform wheel (`galaxy-agentkit`).
   in `docs/archive/README.md`; the reference checker exempts the directory.
 
 ### Changed
+- **Documentation content pass after the reorg week.** The reference checker no
+  longer lets a `pkg/removed.py` reference pass when a `pkg/removed/` directory
+  exists (file-suffix references must resolve to files), which surfaced eight
+  stale `payload_agents/config.py` links — all repointed to
+  `galaxy_gov/agent_config.py`. Remaining old-name labels fixed in the deck/docx
+  generator strings, the mermaid diagram sources, and — as a text-level patch —
+  the four rendered/hand-authored SVGs (a puppeteer re-render of the two
+  generated ones is pending an environment where Chrome launches;
+  `scripts/render_diagrams.sh`). `agent-engine.md`, `agentkit.md`, and
+  `.env.example` document the injection variables (`GALAXY_AGENT_PACKAGE`,
+  `GALAXY_AGENT_CONFIG_DIR`, `GOV_DATA_SOURCE_MODULE`). Archive review: no
+  tracked document describes removed functionality, so `docs/archive/` stays
+  empty; `agent-registration-plan.md` remains the live tracker for the open
+  identity-control-plane gaps.
 - **Platform code no longer imports the demo application — the dependency arrow
   is application → platform, enforced by test.** Remaining inversions:
   `core.framework_factory` defaults to `framework_adapters.<name>` and takes the

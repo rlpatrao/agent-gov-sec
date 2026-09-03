@@ -122,6 +122,7 @@ an agent talks to and which identity it presents — not the code.
 | `GALAXY_MODE` | no | `remote` (default), `inprocess`, or `both` |
 | `GALAXY_TIMEOUT_SECONDS` | no | per-request timeout, default 30 |
 | `GALAXY_ENFORCEMENT_TOKEN` | no | bearer token when the authority sits behind a gateway |
+| `GALAXY_AGENT_CONFIG_DIR` | only for in-process guards | directory of your agent-config YAMLs; the platform names no application path |
 
 ### On `GALAXY_MODE`
 

@@ -205,7 +205,7 @@ This section describes the OTel span and event attributes that flow through the 
 
 | Concern | Configured in | Read by |
 |---|---|---|
-| Per-agent runtime tunables | [payload_agents/config/*.yaml](../../payload_agents/config/) | [payload_agents/config.py](../../payload_agents/config.py) |
+| Per-agent runtime tunables | [payload_agents/config/*.yaml](../../payload_agents/config/) | [galaxy_gov/agent_config.py](../../galaxy_gov/agent_config.py) |
 | Runtime governance rules | [galaxy_gov/policies/*.yaml](../../galaxy_gov/policies/) | `agent_os.policies.PolicyEvaluator` via the LangGraph guard ([framework_adapters/langgraph/guard.py](../../framework_adapters/langgraph/guard.py)) |
 | Pre-middleware guard configs | [galaxy_gov/configs/*.yaml](../../galaxy_gov/configs/) | the prompt-injection / egress guards |
 | NHI registry | [core/nhi_registry.py](../../core/nhi_registry.py) | `NHIRegistry.get(agent_type)` |

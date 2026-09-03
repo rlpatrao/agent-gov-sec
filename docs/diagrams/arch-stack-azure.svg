@@ -65,9 +65,9 @@
   <!-- Band 3: Agnostic core -->
   <rect class="band" x="40" y="300" width="920" height="220" rx="14"/>
   <text class="band-title" x="500" y="321" text-anchor="middle">Agent-Gov-Sec core — agnostic kit</text>
-  <text class="sub" x="500" y="337" text-anchor="middle">core/ and governance/ import no cloud SDK and no agent framework</text>
+  <text class="sub" x="500" y="337" text-anchor="middle">core/ and galaxy_gov/ import no cloud SDK and no agent framework</text>
   <rect class="pipe" x="60" y="348" width="880" height="40" rx="8"/>
-  <text class="pipe-t" x="500" y="367" text-anchor="middle">GuardPipeline  ·  governance/shared/enforcement/  ·  4 hooks</text>
+  <text class="pipe-t" x="500" y="367" text-anchor="middle">GuardPipeline  ·  galaxy_gov/shared/enforcement/  ·  4 hooks</text>
   <text class="pipe-s" x="500" y="382" text-anchor="middle">before_model → after_model → before_tool → after_tool   ·   raises GovernanceViolation</text>
 
   <rect class="box" x="60" y="402" width="277" height="106" rx="8"/>
@@ -78,14 +78,14 @@
   <text class="bullet" x="74" y="494">• run_tracer · trace_ledger</text>
 
   <rect class="box" x="361" y="402" width="277" height="106" rx="8"/>
-  <text class="mod-h" x="375" y="423">governance/</text>
+  <text class="mod-h" x="375" y="423">galaxy_gov/</text>
   <text class="bullet" x="375" y="443">• shared/enforcement/ · GuardPipeline · floor</text>
   <text class="bullet" x="375" y="460">• FGAC · drift · reasoning · CoT/CoVe</text>
   <text class="bullet" x="375" y="477">• MCP-sec · secure-exec · diff-policy</text>
   <text class="bullet" x="375" y="494">• ops/: SLO · eval · SBOM · red-team</text>
 
   <rect class="box" x="662" y="402" width="277" height="106" rx="8"/>
-  <text class="mod-h" x="676" y="423">a2a/</text>
+  <text class="mod-h" x="676" y="423">core/a2a/</text>
   <text class="bullet" x="676" y="443">• envelope.py — typed A2A messages</text>
   <text class="bullet" x="676" y="460">• dispatcher.py — audited dispatch</text>
   <text class="bullet" x="676" y="477">• recipient allow-list</text>
@@ -129,6 +129,6 @@
   <text class="leg" x="84"  y="800">Azure / Microsoft Agent Framework — focus path</text>
   <rect class="pipe" x="380" y="788" width="16" height="14" rx="3"/>
   <text class="leg" x="404" y="800">shared GuardPipeline (framework-neutral)</text>
-  <text class="leg" x="60" y="824">governance/ lists this repo's added guards (shared/enforcement/) + fleet ops (ops/) layered on the agent_os primitives — see the Platform delta diagram.</text>
+  <text class="leg" x="60" y="824">galaxy_gov/ lists this repo's added guards (shared/enforcement/) + fleet ops (ops/) layered on the agent_os primitives — see the Platform delta diagram.</text>
   <text x="60" y="848" font-size="9.5" fill="#546e7a">Two Azure methods — Method 1: APIM proxy (API Management → Function → Azure OpenAI); Method 2: Microsoft Agent Framework (in-process governance middleware) — see the two-option topology.</text>
 </svg>

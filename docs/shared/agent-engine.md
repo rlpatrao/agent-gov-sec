@@ -72,6 +72,12 @@ It calls `vertexai.agent_engines.create(...)` with `GalaxyAgentEngineApp`, the
 runtime `requirements`, the platform source as `extra_packages`, and the resolved
 `env_vars`. It prints the deployment `resource_name`.
 
+The app does not import any agent package by name: the builder package is
+injected (`agent_package=` or `GALAXY_AGENT_PACKAGE`), and every
+`build_<name>_agent` coroutine it exports becomes a deployable agent. The deploy
+script passes the demo's `payload_agents.langgraph`; a customer deployment
+passes its own package.
+
 ### Query the deployed agent
 
 ```python

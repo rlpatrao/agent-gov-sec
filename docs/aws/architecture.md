@@ -216,7 +216,7 @@ net-new constructs (see §2.1); all others wrap the named upstream primitive.
 | H1 | Reasoning-step validator | On | `reasoning_guard` *(ours)* |
 | H2 | CoT/CoVe trace + redaction | On | `reasoning_trace.py` *(ours)*; redaction via `agent_os.credential_redactor` |
 | **I — Inter-agent (A2A)** | | | |
-| I1 | Recipient allow-list | On | `a2a/dispatcher` *(ours)* |
+| I1 | Recipient allow-list | On | `core/a2a/dispatcher` *(ours)* |
 | I2 | Audited dispatch | On | `agent_os` `GovernanceAuditLogger` |
 | **J — Resilience & cost** | | | |
 | J1 | Circuit breaker | Flag | `agent_os.circuit_breaker` / `agent_sre.cascade` |
@@ -330,7 +330,7 @@ The developer trust domain comprises the following components:
 - **Core seam** (`core/interfaces.py`, `provider_factory.py`, `nhi_registry.py`,
   `run_tracer.py`, `trace_ledger.py`) — comprises the Protocols, provider selection, NHI
   binding, tracing, and the hash-chain schema.
-- **A2A** (`a2a/envelope.py`, `core/a2a/dispatcher.py`) — provides typed envelopes and audited
+- **A2A** (`core/a2a/envelope.py`, `core/a2a/dispatcher.py`) — provides typed envelopes and audited
   dispatch with a recipient allow-list.
 
 In-process guards are fast and inexpensive and catch most violations early, but they run

@@ -14,8 +14,8 @@ flowchart TB
     subgraph CORE["AGNOSTIC CORE — no cloud SDK, no framework"]
       direction LR
       C1["Platform core<br/>seam · factories · identity · tracer · ledger<br/>(core/)"]
-      C2["Guard library + Added Features<br/>FGAC · drift · reasoning · CoT/CoVe<br/>(governance/)"]
-      C3["Agent-to-agent protocol<br/>envelope + dispatcher<br/>(a2a/)"]
+      C2["Guard library + Added Features<br/>FGAC · drift · reasoning · CoT/CoVe<br/>(galaxy_gov/)"]
+      C3["Agent-to-agent protocol<br/>envelope + dispatcher<br/>(core/a2a/)"]
     end
 
     subgraph CL["CLOUD BINDING — selected by CLOUD_PROVIDER"]

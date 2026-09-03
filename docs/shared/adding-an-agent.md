@@ -65,7 +65,7 @@ the agent file.
 ### The config YAML
 
 The shape is validated by `AgentConfigModel` in
-[`payload_agents/config.py`](../../payload_agents/config.py) (`extra="forbid"` — a
+[`galaxy_gov/agent_config.py`](../../galaxy_gov/agent_config.py) (`extra="forbid"` — a
 typo is rejected, not silently ignored). Use a shipped config such as
 [`payload_agents/config/finops.yaml`](../../payload_agents/config/finops.yaml) as
 the template. The three blocks:

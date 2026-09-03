@@ -89,6 +89,11 @@ def path_exists(ref: str) -> bool:
     """
     ref = re.sub(r":\d+(-\d+)?$", "", ref.rstrip("/"))
     ref = re.sub(r"\(\)$", "", ref)
+    # A reference with a file suffix names a file: it must exist as that file.
+    # Member-stripping must not apply, or `pkg/removed.py` passes whenever a
+    # `pkg/removed/` directory happens to exist.
+    if re.search(r"\.(py|md|yaml|yml|json|toml|sh|tf|cedar|html|svg|png|txt|cfg)$", ref):
+        return (ROOT / ref).is_file()
     candidate = ROOT / ref
     if candidate.exists() or (ROOT / f"{ref}.py").exists():
         return True

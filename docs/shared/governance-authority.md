@@ -53,7 +53,7 @@ force.
 
 [`galaxy_gov/inprocess/floor.py`](../../galaxy_gov/inprocess/floor.py) defines a `GovernanceFloor`: the
 minimum governance posture. After a per-agent config is schema-validated,
-[`payload_agents/config.py`](../../payload_agents/config.py) passes it through
+[`galaxy_gov/agent_config.py`](../../galaxy_gov/agent_config.py) passes it through
 `apply_floor()`, which clamps every field in the restrictive direction:
 
 - Required guards (`enable_prompt_injection_guard`, `enable_credential_redactor`,
