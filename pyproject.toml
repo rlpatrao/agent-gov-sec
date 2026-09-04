@@ -93,6 +93,12 @@ agent-engine = [
     "cloudpickle>=3.0",
 ]
 
+# Test/dev tooling — what CI (and a contributor) needs beyond the runtime deps.
+dev = [
+    "pytest>=9.0",
+    "pytest-asyncio>=1.3",
+]
+
 # A single console script. `galaxy init <project>` scaffolds a standalone
 # governed agent project for an agent team; `new-agent`, `enroll`, `verify`, and
 # `export-registry` are the platform-side tooling.

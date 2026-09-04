@@ -28,13 +28,18 @@ documented::
     python scripts/gen_third_party_notices.py            # rewrite the file
     python scripts/gen_third_party_notices.py --check    # CI staleness gate
 
-`--check` regenerates in memory and exits non-zero if the file on disk differs,
-which is what keeps the notices honest as dependencies move.
+`--check` compares the *structure* — the set of (package, license, artifact
+membership) rows — rather than the rendered bytes: versions resolve differently
+in every fresh environment (CI resolves today's releases), so byte equality
+would fail on every dependency release without any attribution change. A
+package appearing, disappearing, or changing license fails the check; a version
+bump alone does not.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import tomllib
 from importlib import metadata
@@ -198,6 +203,21 @@ def license_text_of(dist: metadata.Distribution) -> str | None:
     return None
 
 
+def _summary_rows(document: str) -> set[tuple[str, str, str]]:
+    """(package, license, used-by) rows from a rendered document's summary table.
+
+    The version column is deliberately excluded: it records what the generating
+    environment resolved, and comparing it would fail the check on every
+    upstream release without any attribution change.
+    """
+    rows = set()
+    for line in document.splitlines():
+        m = re.match(r"^\| \[?([^\]|]+?)\]?(?:\([^)]*\))? \| \S+ \| (.+?) \| (.+?) \|$", line)
+        if m and m.group(1) not in ("Package", "---"):
+            rows.add((m.group(1).strip().lower(), m.group(2).strip(), m.group(3).strip()))
+    return rows
+
+
 def render(sets: dict[str, dict[str, metadata.Distribution]], missing: dict[str, list[str]]) -> str:
     everything: dict[str, metadata.Distribution] = {}
     for dists in sets.values():
@@ -294,15 +314,25 @@ def main() -> int:
     )
 
     if args.check:
-        current = OUTPUT.read_text() if OUTPUT.exists() else ""
-        if current != rendered:
-            print(
-                "THIRD_PARTY_NOTICES.md is out of date. "
-                "Run: python scripts/gen_third_party_notices.py",
-                file=sys.stderr,
-            )
+        if not OUTPUT.exists():
+            print("THIRD_PARTY_NOTICES.md does not exist. "
+                  "Run: python scripts/gen_third_party_notices.py", file=sys.stderr)
             return 1
-        print(f"THIRD_PARTY_NOTICES.md is current ({len(wheel_dists | service_dists)} packages).")
+        committed = _summary_rows(OUTPUT.read_text())
+        resolved = _summary_rows(rendered)
+        if committed != resolved:
+            missing = resolved - committed
+            stale = committed - resolved
+            print("THIRD_PARTY_NOTICES.md is out of date "
+                  "(package set or license labels changed). "
+                  "Run: python scripts/gen_third_party_notices.py", file=sys.stderr)
+            for row in sorted(missing):
+                print(f"  not in the committed file: {row}", file=sys.stderr)
+            for row in sorted(stale):
+                print(f"  committed but no longer resolved: {row}", file=sys.stderr)
+            return 1
+        print(f"THIRD_PARTY_NOTICES.md is current "
+              f"({len(resolved)} packages; versions not compared).")
         return 0
 
     OUTPUT.write_text(rendered)

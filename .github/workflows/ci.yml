@@ -22,7 +22,7 @@ jobs:
       - name: Install (platform + LangGraph framework axis)
         run: |
           python -m pip install --upgrade pip
-          pip install -e '.[langgraph]'
+          pip install -e '.[langgraph,dev]'
       - name: Tests
         run: python -m pytest -q
       - name: Offline conformance matrix
@@ -40,7 +40,7 @@ jobs:
           python -m pip install --upgrade pip build
           # [aws] as well as [langgraph]: the third-party notices are generated
           # from the resolved [aws] closure and cannot be checked without it.
-          pip install -e '.[aws,langgraph]'
+          pip install -e '.[aws,langgraph,dev]'
       - name: Full test suite
         run: python -m pytest -q
       - name: Build the platform wheel
