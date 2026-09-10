@@ -17,7 +17,7 @@ resolves to deny-all (the mediator's existing behaviour), and an identity absent
 from the policy registry is rejected before any read.
 
 Unlike the Bedrock proxy, this function legitimately carries the FGAC engine
-(``governance.extensions`` → ``agent_os``); enforcing data classification is its
+(``galaxy_gov.shared.enforcement`` → ``agent_os``); enforcing data classification is its
 entire purpose. The row source is pluggable (``_read_source``): the demo reads
 the bundled fixtures; a real deployment reads Athena / Lake Formation with the
 proxy's own credentials.
@@ -26,11 +26,10 @@ proxy's own credentials.
 import json
 import os
 
-from governance.policy_registry import load_registry, policy_for
+from galaxy_gov.shared.policy_registry import RegistryUnavailable, policy_for, resolve_registry
 
 _catalog = None
 _mediator = None
-_registry_cache = None
 
 
 def _log(event, **fields):
@@ -41,8 +40,8 @@ def _mediator_engine():
     """Build (once) the FGAC mediator that owns the classification catalog."""
     global _catalog, _mediator
     if _mediator is None:
-        from governance.extensions.data_classification import DataClassificationCatalog
-        from governance.extensions.data_fgac import DataAccessMediator
+        from galaxy_gov.shared.enforcement.data_classification import DataClassificationCatalog
+        from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
         path = os.environ.get("GOV_DATA_CLASSIFICATION_PATH") or _default_catalog_path()
         _catalog = DataClassificationCatalog.load(path)
         _mediator = DataAccessMediator(catalog=_catalog)
@@ -52,28 +51,41 @@ def _mediator_engine():
 def _default_catalog_path():
     from pathlib import Path
     return (Path(__file__).resolve().parents[4]
-            / "governance" / "extensions" / "configs" / "data-classification.example.yaml")
+            / "galaxy_gov" / "shared" / "enforcement" / "configs" / "data-classification.example.yaml")
 
 
 def _registry():
-    global _registry_cache
-    if _registry_cache is None:
-        raw = os.environ.get("GOV_POLICY_REGISTRY")
-        if not raw:
-            path = os.environ.get("GOV_POLICY_REGISTRY_PATH")
-            if path and os.path.exists(path):
-                with open(path, encoding="utf-8") as fh:
-                    raw = fh.read()
-        _registry_cache = load_registry(raw) if raw else {}
-    return _registry_cache
+    """Resolve the registry through the centralized-store contract (inline JSON >
+    GOV_POLICY_REGISTRY_URI > baked file, TTL-cached). An unresolvable registry
+    yields an empty document, which denies every request at policy_for."""
+    try:
+        return resolve_registry()
+    except RegistryUnavailable:
+        return {}
 
 
 def _read_source(dataset, table):
-    """Read rows from the store the proxy owns. Demo: bundled fixtures. Real
-    deployment: replace with an Athena / Lake Formation read under the proxy's
-    own role (the agent has no direct access)."""
-    from payload_agents._lib import demo_data
-    return demo_data.rows_for(dataset, table)
+    """Read rows from the store the proxy owns.
+
+    The source is injected via ``GOV_DATA_SOURCE_MODULE`` — a module exposing
+    ``rows_for(dataset, table)``. The demo sets ``payload_agents._lib.demo_data``;
+    a real deployment points it at an implementation reading under the proxy's
+    own role (the agent has no direct access). Unconfigured or unimportable is a
+    LookupError, which the handler turns into an explicit denial — the chokepoint
+    never guesses a data source, and never imports application code by name.
+    """
+    import importlib
+    module_name = os.environ.get("GOV_DATA_SOURCE_MODULE")
+    if not module_name:
+        raise LookupError(
+            "no data source configured: set GOV_DATA_SOURCE_MODULE to a module "
+            "exposing rows_for(dataset, table)"
+        )
+    try:
+        source = importlib.import_module(module_name)
+    except ImportError as exc:
+        raise LookupError(f"data source module {module_name!r} not importable: {exc}") from exc
+    return source.rows_for(dataset, table)
 
 
 def _resp(status, payload):
@@ -102,7 +114,11 @@ def handler(event, context):
         return _resp(400, {"error": "missing agent_type/dataset/table"})
 
     mediator = _mediator_engine()
-    rows = _read_source(dataset, table)  # proxy reads; agent never supplies rows
+    try:
+        rows = _read_source(dataset, table)  # proxy reads; agent never supplies rows
+    except LookupError as exc:
+        _log("data_proxy.source_unconfigured", agent=agent_type, reason=str(exc))
+        return _resp(501, {"error": "data_source_unconfigured", "reason": str(exc)})
     decision, enforced = mediator.read(
         agent_type=agent_type, dataset=dataset, table=table,
         columns=list(columns), rows=rows, nhi_id=nhi_id or agent_type,

@@ -1,0 +1,33 @@
+version: "1.0"
+name: galaxy-core
+description: >
+  Core runtime governance YAML for every Galaxy agent. Most of what this
+  pack used to enforce by regex now runs through proper toolkit guards
+  (see galaxy_gov/guards/):
+
+    Prompt injection (OWASP ASI-01)  -> PromptInjectionGuardMiddleware
+                                         (galaxy_gov/guards/prompt_injection.py)
+                                         driven by prompt-injection.yaml
+    Cost ceiling (ASI-04)            -> ContextBudgetGuardMiddleware
+                                         (galaxy_gov/guards/context_budget.py)
+
+  This file stays in the loader for forward-compat: any rule a future
+  agent type wants to express declaratively (e.g. "deny if metadata.repo
+  is on the embargo list") still goes here. Today it ships a single
+  defense-in-depth net for the prompt-injection guard.
+
+defaults:
+  action: allow
+
+rules:
+  - name: deny-injection-net-of-last-resort
+    priority: 50
+    message: >
+      Hard literal-string fallback for prompt injection — if
+      PromptInjectionGuardMiddleware ever gets disabled or misconfigured,
+      this catches the most obvious payload.
+    condition:
+      field: message
+      operator: matches
+      value: "(?i)ignore previous instructions|forget all previous instructions|override your instructions"
+    action: deny

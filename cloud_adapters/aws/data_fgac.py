@@ -1,7 +1,7 @@
 """
 cloud_adapters.aws.data_fgac — AWS cloud-native enforcement for Gap 1 (data-layer FGAC).
 
-The agnostic mediator (``governance.extensions.data_fgac.DataAccessMediator``)
+The agnostic mediator (``galaxy_gov.shared.enforcement.data_fgac.DataAccessMediator``)
 decides allow/mask/deny; its default ``InProcessEnforcer`` masks/filters rows
 *after* they're fetched. That's correct but reads the sensitive bytes first.
 This adapter pushes the decision **down to the store** so masked/denied data
@@ -29,9 +29,10 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Optional
 
-from governance.extensions.data_fgac import (
+from galaxy_gov.shared.enforcement.data_fgac import (
     DataAccessDecision,
     InProcessEnforcer,
     _MASK,
@@ -39,10 +40,31 @@ from governance.extensions.data_fgac import (
 
 logger = logging.getLogger(__name__)
 
+# Column / table / database names must be simple identifiers. Anything else is
+# rejected before it can reach the generated SQL — these names can originate from
+# agent-supplied request fields (e.g. the `columns` list), so they are untrusted.
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
 
 def _sql_str(value) -> str:
     """Single-quote a literal for Athena/Trino, escaping embedded quotes."""
     return "'" + str(value).replace("'", "''") + "'"
+
+
+def _check_ident(name) -> str:
+    """Validate a SQL identifier; raise on anything that isn't a simple name.
+
+    Returns the raw (unquoted) name — for APIs that take bare identifiers
+    (e.g. Lake Formation ``ColumnNames``)."""
+    s = str(name)
+    if not _IDENT_RE.match(s):
+        raise ValueError(f"invalid SQL identifier (rejected as injection risk): {name!r}")
+    return s
+
+
+def _sql_ident(name) -> str:
+    """Validate and double-quote a SQL identifier for Athena/Trino."""
+    return '"' + _check_ident(name).replace('"', '""') + '"'
 
 
 class AwsLakeFormationEnforcer:
@@ -70,18 +92,18 @@ class AwsLakeFormationEnforcer:
         if decision.denied:
             raise PermissionError(f"data access denied: {decision.reason}")
 
-        select_parts: list[str] = list(decision.allowed_columns)
-        select_parts += [f"{_sql_str(_MASK)} AS {col}" for col in decision.masked_columns]
+        select_parts: list[str] = [_sql_ident(col) for col in decision.allowed_columns]
+        select_parts += [f"{_sql_str(_MASK)} AS {_sql_ident(col)}" for col in decision.masked_columns]
         if not select_parts:
-            select_parts = [f"{_sql_str(_MASK)} AS redacted"]
+            select_parts = [f"{_sql_str(_MASK)} AS {_sql_ident('redacted')}"]
 
-        sql = f"SELECT {', '.join(select_parts)} FROM {database}.{table}"
+        sql = f"SELECT {', '.join(select_parts)} FROM {_sql_ident(database)}.{_sql_ident(table)}"
 
         where = []
         for col, allowed_values in (decision.row_filter or {}).items():
             if allowed_values:
                 vals = ", ".join(_sql_str(v) for v in allowed_values)
-                where.append(f"{col} IN ({vals})")
+                where.append(f"{_sql_ident(col)} IN ({vals})")
         if where:
             sql += " WHERE " + " AND ".join(where)
         return sql
@@ -107,12 +129,13 @@ class AwsLakeFormationEnforcer:
 
         lf = boto3.client("lakeformation", region_name=self._region)
         row_filter_expr = " AND ".join(
-            f"{col} IN ({', '.join(_sql_str(v) for v in vals)})"
+            f"{_sql_ident(col)} IN ({', '.join(_sql_str(v) for v in vals)})"
             for col, vals in (decision.row_filter or {}).items() if vals
         )
         # Masked columns are excluded from the column include-list so the catalog
         # never returns them; our scoped_query re-adds them as redaction literals.
-        column_names = list(decision.allowed_columns)
+        # ColumnNames is a bare-identifier API field — validate (reject injection).
+        column_names = [_check_ident(col) for col in decision.allowed_columns]
         table_data = {
             "TableCatalogId": catalog_id or os.environ.get("AWS_ACCOUNT_ID", ""),
             "DatabaseName": database,

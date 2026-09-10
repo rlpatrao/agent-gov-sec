@@ -11,10 +11,10 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from governance.extensions.mcp_tool_screen import McpToolScreen
-from governance.extensions.mcp_session_guard import McpSessionGuard
-from governance.extensions.mcp_message_signer_guard import McpMessageSignerGuard
-from governance.extensions.mcp_substrate import make_mcp_audit_sink
+from galaxy_gov.shared.enforcement.mcp_tool_screen import McpToolScreen
+from galaxy_gov.shared.enforcement.mcp_session_guard import McpSessionGuard
+from galaxy_gov.shared.enforcement.mcp_message_signer_guard import McpMessageSignerGuard
+from galaxy_gov.shared.enforcement.mcp_substrate import make_mcp_audit_sink
 
 
 # --- tool screen -----------------------------------------------------------

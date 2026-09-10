@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="640" viewBox="0 0 1240 640" font-family="Helvetica, Arial, sans-serif">
+  <style>
+    .title   { font-size:20px; font-weight:700; fill:#263238; }
+    .titsub  { font-size:11.5px; fill:#78909c; }
+    .opt     { fill:#f7fbfe; stroke:#0078d4; stroke-width:2; }
+    .opt-l   { font-size:15px; font-weight:700; fill:#005a9e; }
+    .opt-s   { font-size:11px; fill:#546e7a; }
+    .agent   { fill:#e3f2fd; stroke:#0078d4; stroke-width:2; }
+    .choke   { fill:#e5f4fb; stroke:#0078d4; stroke-width:2; }
+    .svc     { fill:#eceff4; stroke:#607d8b; stroke-width:1.5; }
+    .b-t     { font-size:12px; font-weight:700; fill:#1a2b3a; }
+    .b-t.ch  { fill:#005a9e; }
+    .b-s     { font-size:9.5px; fill:#546e7a; }
+    .flow    { font-size:9.5px; font-weight:600; fill:#37474f; }
+    .authz   { font-size:10px; fill:#37474f; }
+    .authz b { font-weight:700; }
+    .bus-l   { font-size:10.5px; font-weight:600; fill:#546e7a; }
+    .note    { font-size:10.5px; fill:#78909c; }
+  </style>
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto">
+      <path d="M0,0 L8,5 L0,10 Z" fill="#0078d4"/>
+    </marker>
+    <marker id="ag" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto">
+      <path d="M0,0 L8,5 L0,10 Z" fill="#90a4ae"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1240" height="640" fill="#ffffff"/>
+  <text class="title" x="40" y="32">Agent-Gov-Sec — Azure deployment options</text>
+  <text class="titsub" x="40" y="52">Two enforcement methods. Both consume the same policy registry and write the same hash-chained ledger. 47 controls · 84 checks.</text>
+
+  <!-- ── Option 1: APIM proxy ── -->
+  <rect class="opt" x="40" y="72" width="560" height="340" rx="14"/>
+  <text class="opt-l" x="60" y="100">Method 1 · APIM proxy</text>
+  <text class="opt-s" x="60" y="118">Governed Azure OpenAI egress through the API Management edge.</text>
+
+  <rect class="agent" x="60" y="134" width="150" height="66" rx="10"/>
+  <text class="b-t" x="72" y="156">Agent</text>
+  <text class="b-s" x="72" y="173">langgraph · pydantic · raw</text>
+  <text class="b-s" x="72" y="188">MI galaxy-&lt;persona&gt;-mi</text>
+
+  <rect class="choke" x="234" y="134" width="150" height="66" rx="10"/>
+  <text class="b-t ch" x="246" y="156">API Management</text>
+  <text class="b-s" x="246" y="173">subscription key + headers</text>
+  <text class="b-s" x="246" y="188">rate limit · injects AOAI key</text>
+
+  <rect class="choke" x="408" y="134" width="172" height="66" rx="10"/>
+  <text class="b-t ch" x="420" y="156">Function  llm_proxy</text>
+  <text class="b-s" x="420" y="173">enforce_llm re-runs session</text>
+  <text class="b-s" x="420" y="188">deployment pinned → AOAI</text>
+
+  <g stroke="#0078d4" stroke-width="2" marker-end="url(#a)">
+    <line x1="210" y1="167" x2="232" y2="167"/>
+    <line x1="384" y1="167" x2="406" y2="167"/>
+  </g>
+
+  <rect x="60" y="222" width="520" height="76" rx="10" fill="#eef6fc" stroke="#b7d9ef" stroke-width="1.5"/>
+  <text class="authz" x="74" y="243"><tspan font-weight="700">Authorization:</tspan> policy registry, fail-closed 403 + APIM edge (subscription key,</text>
+  <text class="authz" x="74" y="259">required headers, rate limit). No managed policy engine on Azure.</text>
+  <text class="authz" x="74" y="281"><tspan font-weight="700">Content controls:</tspan> enforce_llm re-runs the EnforcementSession in the Function —</text>
+  <text class="authz" x="74" y="297">input guards, tool-plan check, output redaction; deployment injected server-side.</text>
+
+  <text class="note" x="60" y="330">Sibling Function chokepoints: data_proxy (FGAC) and a2a_broker (audited dispatch)</text>
+  <text class="note" x="60" y="346">share the same edge → Function → resource pattern.</text>
+  <text class="note" x="60" y="380">Reference IaC. Function chokepoints are built but not deployed live on Azure.</text>
+
+  <!-- ── Option 2: Microsoft Agent Framework ── -->
+  <rect class="opt" x="640" y="72" width="560" height="340" rx="14"/>
+  <text class="opt-l" x="660" y="100">Method 2 · Microsoft Agent Framework</text>
+  <text class="opt-s" x="660" y="118">In-process governance middleware, no external egress chokepoint.</text>
+
+  <rect class="agent" x="660" y="134" width="196" height="66" rx="10"/>
+  <text class="b-t" x="672" y="156">MAF Agent (per persona)</text>
+  <text class="b-s" x="672" y="173">Foundry Agent Service /</text>
+  <text class="b-s" x="672" y="188">Container Apps · MI-scoped</text>
+
+  <rect class="choke" x="880" y="134" width="152" height="66" rx="10"/>
+  <text class="b-t ch" x="892" y="156">Governance middleware</text>
+  <text class="b-s" x="892" y="173">guard · policy · capability</text>
+  <text class="b-s" x="892" y="188">rogue · output redaction</text>
+
+  <rect class="choke" x="1056" y="134" width="124" height="66" rx="10"/>
+  <text class="b-t ch" x="1068" y="156">Model call</text>
+  <text class="b-s" x="1068" y="173">Azure OpenAI</text>
+  <text class="b-s" x="1068" y="188">gpt-4o</text>
+
+  <g stroke="#0078d4" stroke-width="2" marker-end="url(#a)">
+    <line x1="856" y1="167" x2="878" y2="167"/>
+    <line x1="1032" y1="167" x2="1054" y2="167"/>
+  </g>
+
+  <rect x="660" y="222" width="520" height="76" rx="10" fill="#eef6fc" stroke="#b7d9ef" stroke-width="1.5"/>
+  <text class="authz" x="674" y="243"><tspan font-weight="700">Authorization:</tspan> in-process MAF policy / capability / rogue middleware —</text>
+  <text class="authz" x="674" y="259">permit/forbid per agent × tool, fail-closed. No managed policy engine on Azure.</text>
+  <text class="authz" x="674" y="281"><tspan font-weight="700">Content controls:</tspan> guard middleware (injection, credential, context-budget)</text>
+  <text class="authz" x="674" y="297">runs before the model call; output redaction runs after. MAF owns the TracerProvider.</text>
+
+  <text class="note" x="660" y="330">Guards run inside the agent process; the same governance library as Method 1</text>
+  <text class="note" x="660" y="346">(trust-but-verify). No gateway or managed authorization service on this path.</text>
+  <text class="note" x="660" y="380">In-process governance is live (default cloud); persona deployment is not live on Azure.</text>
+
+  <!-- ── Shared services strip ── -->
+  <text class="bus-l" x="40" y="450">Shared Azure services — both methods consume the same identities, secrets, ledger, and observability</text>
+  <line x1="120" y1="422" x2="120" y2="466" stroke="#90a4ae" stroke-width="2"/>
+  <line x1="120" y1="466" x2="1120" y2="466" stroke="#90a4ae" stroke-width="2"/>
+  <g stroke="#90a4ae" stroke-width="2" marker-end="url(#ag)">
+    <line x1="120"  y1="466" x2="120"  y2="484"/>
+    <line x1="370"  y1="466" x2="370"  y2="484"/>
+    <line x1="620"  y1="466" x2="620"  y2="484"/>
+    <line x1="870"  y1="466" x2="870"  y2="484"/>
+    <line x1="1120" y1="466" x2="1120" y2="484"/>
+  </g>
+
+  <rect class="svc" x="40"   y="486" width="210" height="94" rx="10"/>
+  <text class="b-t" x="54" y="509">Azure OpenAI</text>
+  <text class="b-s" x="54" y="528">deployment gpt-4o</text>
+  <text class="b-s" x="54" y="545">reached via proxy or model call</text>
+  <text class="b-s" x="54" y="562">never directly from agent code</text>
+
+  <rect class="svc" x="270"  y="486" width="210" height="94" rx="10"/>
+  <text class="b-t" x="284" y="509">PostgreSQL</text>
+  <text class="b-s" x="284" y="528">trace_ledger</text>
+  <text class="b-s" x="284" y="545">SHA-256 hash chain</text>
+  <text class="b-s" x="284" y="562">append-only, both methods</text>
+
+  <rect class="svc" x="500"  y="486" width="210" height="94" rx="10"/>
+  <text class="b-t" x="514" y="509">Entra Managed Identities</text>
+  <text class="b-s" x="514" y="528">galaxy-&lt;persona&gt;-mi</text>
+  <text class="b-s" x="514" y="545">per-agent NHI</text>
+  <text class="b-s" x="514" y="562">least-privilege RBAC</text>
+
+  <rect class="svc" x="730"  y="486" width="210" height="94" rx="10"/>
+  <text class="b-t" x="744" y="509">Key Vault</text>
+  <text class="b-s" x="744" y="528">azure-openai-key</text>
+  <text class="b-s" x="744" y="545">apim-subscription-key</text>
+  <text class="b-s" x="744" y="562">short-TTL cache · env fallback</text>
+
+  <rect class="svc" x="960"  y="486" width="210" height="94" rx="10"/>
+  <text class="b-t" x="974" y="509">Application Insights</text>
+  <text class="b-s" x="974" y="528">OTel gen_ai.* spans</text>
+  <text class="b-s" x="974" y="545">→ Azure Monitor</text>
+  <text class="b-s" x="974" y="562">governance decisions as events</text>
+
+  <!-- footer -->
+  <text class="note" x="40" y="608">How to read this: both methods sit on the same cloud-agnostic core (GuardPipeline · policy registry · A2A/NHI registry · hash-chained ledger). Method 1 enforces at an edge</text>
+  <text class="note" x="40" y="624">chokepoint; Method 2 enforces in-process. Legend:  blue = governed path  ·  light-blue = agent (NHI)  ·  grey = shared Azure service.</text>
+</svg>

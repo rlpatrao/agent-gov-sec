@@ -1,0 +1,24 @@
+%%{init: {"flowchart": {"nodeSpacing": 30, "rankSpacing": 40}, "themeVariables": {"fontSize": "16px"}}}%%
+flowchart TD
+  In(["invoke(prompt)"]) --> BM
+
+  subgraph BMG["before_model — pre-LLM guards"]
+    BM["prompt-injection check<br/>credential redact / deny<br/>context-budget allocation"]
+  end
+  BM -->|"threat ≥ threshold<br/>· over budget · deny secret"| Block["audit_log.log(blocked)<br/>terminate run"]
+  BM -->|allow / redacted| LLM(["Bedrock via API Gateway<br/>(single egress path)"])
+
+  LLM --> AM["after_model<br/>output content-safety<br/>PII redaction"]
+  AM --> BT
+
+  subgraph BTG["before_tool — per tool call"]
+    BT["capability allow-list<br/>blocked-pattern scan<br/>FGAC DataAccessMediator<br/>(mask · row-filter · deny)"]
+  end
+  BT --> AT["after_tool<br/>data-access drift"]
+  AT --> A2A["A2A dispatch<br/>(allow-listed recipients only)"]
+  A2A --> Ledger["DynamoDB hash-chain entry<br/>+ X-Ray span event<br/>per decision"]
+
+  classDef block fill:#a00,color:#fff
+  classDef egress fill:#06f,color:#fff
+  class Block block
+  class LLM egress

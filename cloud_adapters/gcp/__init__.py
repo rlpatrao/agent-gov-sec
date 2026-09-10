@@ -16,7 +16,7 @@ lazy-imports its Google SDK, so importing this package (or the provider factory)
 needs no Google libraries. The framework axis (``runtime_adapter``) is
 intentionally ``None`` — GCP wires LangGraph / Google ADK, not MAF. The live
 Vertex/Gemini chat model is built by
-``payload_agents/_runtime/models.build_gemini_model``.
+``framework_adapters.langgraph.models.build_gemini_model``.
 
 See docs/REFACTOR_AND_GAPS_PLAN.md WS6.
 """

@@ -1,0 +1,33 @@
+%%{init: {"flowchart": {"nodeSpacing": 40, "rankSpacing": 55}, "themeVariables": {"fontSize": "16px"}}}%%
+flowchart TB
+    P["Demonstration Agents<br/>FinOpsAnalyst · Auditor · Rogue<br/>(framework-neutral personas: prompt + ToolSpecs + NHI)"]
+
+    subgraph FW["FRAMEWORK AXIS — selected by --framework"]
+      direction LR
+      LG["LangGraph<br/>create_agent + middleware<br/>(GalaxyGuardMiddleware)"]
+      RAW["Raw<br/>provider-native tool loop<br/>(no framework deps)"]
+      PYD["Pydantic AI<br/>model-wrapper governance<br/>(native models)"]
+    end
+
+    GP["Shared Guardrail Pipeline<br/>Runs on: in-process + out-of-process<br/>(GuardPipeline · before/after_model · before_tool)"]
+
+    subgraph CORE["AGNOSTIC CORE — no cloud SDK, no framework"]
+      direction LR
+      C1["Platform core<br/>seam · factories · identity · tracer · ledger<br/>(core/)"]
+      C2["Guard library + Added Features<br/>FGAC · drift · reasoning · CoT/CoVe<br/>(galaxy_gov/)"]
+      C3["Agent-to-agent protocol<br/>envelope + dispatcher<br/>(core/a2a/)"]
+    end
+
+    subgraph CL["CLOUD BINDING — selected by CLOUD_PROVIDER"]
+      direction LR
+      AW["AWS<br/>IAM · Bedrock gateway · DynamoDB"]
+      LO["Local<br/>env vars · in-memory<br/>(offline)"]
+    end
+
+    EXT["AWS Services<br/>IAM/STS · Secrets Manager · API Gateway → Bedrock · X-Ray · DynamoDB"]
+
+    P --> FW
+    FW -->|every adapter calls| GP
+    GP --> CORE
+    CORE -->|get_provider| CL
+    CL --> EXT

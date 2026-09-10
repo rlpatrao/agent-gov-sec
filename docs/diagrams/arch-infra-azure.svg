@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="560" viewBox="0 0 1240 560" font-family="Helvetica, Arial, sans-serif">
+  <style>
+    .title   { font-size:20px; font-weight:700; fill:#263238; }
+    .titsub  { font-size:11.5px; fill:#78909c; }
+    .acct    { fill:#fbfdff; stroke:#90a4ae; stroke-width:1.5; stroke-dasharray:7 5; }
+    .acct-l  { font-size:12px; font-weight:700; fill:#546e7a; }
+    .agent   { fill:#e3f2fd; stroke:#0078d4; stroke-width:2; }
+    .choke   { fill:#e5f4fb; stroke:#0078d4; stroke-width:2; }
+    .svc     { fill:#eceff4; stroke:#607d8b; stroke-width:1.5; }
+    .opt     { fill:#f7f9fa; stroke:#90a4ae; stroke-width:1.5; stroke-dasharray:5 4; }
+    .b-t     { font-size:13px; font-weight:700; fill:#1a2b3a; }
+    .b-t.ch  { fill:#005a9e; }
+    .b-s     { font-size:10px; fill:#546e7a; }
+    .flow    { font-size:10px; font-weight:600; fill:#37474f; }
+    .bus-l   { font-size:10.5px; font-weight:600; fill:#546e7a; }
+    .note    { font-size:10.5px; fill:#78909c; }
+  </style>
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto">
+      <path d="M0,0 L8,5 L0,10 Z" fill="#0078d4"/>
+    </marker>
+    <marker id="ag" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto">
+      <path d="M0,0 L8,5 L0,10 Z" fill="#90a4ae"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1240" height="560" fill="#ffffff"/>
+  <text class="title" x="40" y="32">Agent-Gov-Sec — Azure Infrastructure · Method 1: APIM proxy (governed Azure OpenAI egress)</text>
+  <text class="titsub" x="40" y="52">Reference topology — the agent reaches the model only through the governed API Management → Azure Function → Azure OpenAI path.</text>
+
+  <!-- Azure subscription boundary -->
+  <rect class="acct" x="22" y="68" width="1196" height="472" rx="16"/>
+  <text class="acct-l" x="42" y="90">Azure subscription &lt;SUBSCRIPTION_ID&gt; · resource group galaxy-rg · tag project = galaxy-rp</text>
+
+  <!-- ── Egress chokepoint lane ── -->
+  <rect class="agent" x="44" y="110" width="300" height="106" rx="10"/>
+  <text class="b-t" x="58" y="134">Agent runtime (Container Apps)</text>
+  <text class="b-s" x="58" y="154">framework: langgraph · pydantic · raw · maf</text>
+  <text class="b-s" x="58" y="171">+ GuardPipeline + shared/enforcement/ + ops/</text>
+  <text class="b-s" x="58" y="188">NHI = Managed Identity galaxy-&lt;persona&gt;-mi</text>
+  <text class="b-s" x="58" y="205">holds the APIM subscription key only</text>
+
+  <rect class="choke" x="448" y="124" width="196" height="84" rx="10"/>
+  <text class="b-t ch" x="462" y="147">API Management</text>
+  <text class="b-s" x="462" y="167">galaxy-&lt;suffix&gt;-apim</text>
+  <text class="b-s" x="462" y="183">subscription key + headers</text>
+  <text class="b-s" x="462" y="199">rate limit · injects AOAI key</text>
+
+  <rect class="choke" x="724" y="124" width="206" height="84" rx="10"/>
+  <text class="b-t ch" x="738" y="147">Azure Function  enforce_llm</text>
+  <text class="b-s" x="738" y="167">galaxy-&lt;suffix&gt;-func</text>
+  <text class="b-s" x="738" y="183">re-runs EnforcementSession</text>
+  <text class="b-s" x="738" y="199">deployment pinned server-side</text>
+
+  <rect class="choke" x="1010" y="124" width="190" height="84" rx="10"/>
+  <text class="b-t ch" x="1024" y="147">Azure OpenAI</text>
+  <text class="b-s" x="1024" y="167">deployment gpt-4o</text>
+  <text class="b-s" x="1024" y="183">creds = MI / KV key</text>
+  <text class="b-s" x="1024" y="199">never leave Azure</text>
+
+  <!-- egress arrows + labels -->
+  <g stroke="#0078d4" stroke-width="2" marker-end="url(#a)">
+    <line x1="344" y1="166" x2="446" y2="166"/>
+    <line x1="644" y1="166" x2="722" y2="166"/>
+    <line x1="930" y1="166" x2="1008" y2="166"/>
+  </g>
+  <text class="flow" x="395" y="156" text-anchor="middle">HTTPS POST</text>
+  <text class="flow" x="395" y="184" text-anchor="middle">Ocp-Apim-Subscription-Key</text>
+  <text class="flow" x="683" y="160" text-anchor="middle">enforce</text>
+  <text class="flow" x="969" y="160" text-anchor="middle">chat completions</text>
+
+  <text class="note" x="44" y="238">Every egress call carries the APIM subscription key (validated at the edge), x-agent-type, and x-nhi-id; APIM injects the Azure OpenAI key from a Key-Vault-backed named value.</text>
+
+  <!-- ── Service bus ── -->
+  <text class="bus-l" x="44" y="266">Agent ↔ Azure services (each call NHI-scoped via managed identity; egress bounded by cloud_adapters/azure/egress.yaml)</text>
+  <line x1="194" y1="216" x2="194" y2="282" stroke="#90a4ae" stroke-width="2"/>
+  <line x1="152" y1="282" x2="1092" y2="282" stroke="#90a4ae" stroke-width="2"/>
+  <g stroke="#90a4ae" stroke-width="2" marker-end="url(#ag)">
+    <line x1="152"  y1="282" x2="152"  y2="302"/>
+    <line x1="387"  y1="282" x2="387"  y2="302"/>
+    <line x1="622"  y1="282" x2="622"  y2="302"/>
+    <line x1="857"  y1="282" x2="857"  y2="302"/>
+    <line x1="1092" y1="282" x2="1092" y2="302"/>
+  </g>
+
+  <!-- Service boxes -->
+  <rect class="svc" x="44"    y="304" width="216" height="120" rx="10"/>
+  <text class="b-t" x="58" y="328">Entra Managed Identities</text>
+  <text class="b-s" x="58" y="349">galaxy-&lt;persona&gt;-mi</text>
+  <text class="b-s" x="58" y="366">least-privilege RBAC</text>
+  <text class="b-s" x="58" y="383">Entra token issuance</text>
+  <text class="b-s" x="58" y="400">→ short-lived credentials</text>
+
+  <rect class="svc" x="278.8" y="304" width="216" height="120" rx="10"/>
+  <text class="b-t" x="293" y="328">Key Vault</text>
+  <text class="b-s" x="293" y="349">azure-openai-key</text>
+  <text class="b-s" x="293" y="366">apim-subscription-key</text>
+  <text class="b-s" x="293" y="383">5-min TTL cache</text>
+  <text class="b-s" x="293" y="400">env fallback offline</text>
+
+  <rect class="svc" x="513.6" y="304" width="216" height="120" rx="10"/>
+  <text class="b-t" x="528" y="328">PostgreSQL</text>
+  <text class="b-s" x="528" y="349">trace_ledger</text>
+  <text class="b-s" x="528" y="366">PK run_id · SK entry_seq</text>
+  <text class="b-s" x="528" y="383">SHA-256 hash chain</text>
+  <text class="b-s" x="528" y="400">verify_chain() at end</text>
+
+  <rect class="opt" x="748.4" y="304" width="216" height="120" rx="10"/>
+  <text class="b-t" x="762" y="328">App Insights / Log Analytics</text>
+  <text class="b-s" x="762" y="349">OTel spans + events</text>
+  <text class="b-s" x="762" y="366">governance.agent_id</text>
+  <text class="b-s" x="762" y="383">reasoning.cot / cove</text>
+  <text class="b-s" x="762" y="400">optional — no-op if unset</text>
+
+  <rect class="svc" x="983.2" y="304" width="216" height="120" rx="10"/>
+  <text class="b-t" x="997" y="328">Function chokepoints</text>
+  <text class="b-s" x="997" y="349">enforce_llm (LLM egress)</text>
+  <text class="b-s" x="997" y="366">data_proxy (FGAC)</text>
+  <text class="b-s" x="997" y="383">a2a_broker (audited dispatch)</text>
+  <text class="b-s" x="997" y="400">galaxy-&lt;suffix&gt;-func</text>
+
+  <!-- Key Vault → egress key (dotted) -->
+  <line x1="387" y1="304" x2="390" y2="196" stroke="#0078d4" stroke-width="1.3" stroke-dasharray="3 3"/>
+
+  <!-- footer notes -->
+  <text class="note" x="44" y="450">Chokepoint: the deployment is pinned server-side (callers cannot choose a model); Azure OpenAI runs under the Function identity / Key-Vault key, so credentials</text>
+  <text class="note" x="44" y="466">never reach the agent; upstream errors are returned to the caller as HTTP 502 with an error body. The sibling chokepoints data_proxy and a2a_broker share the same pattern.</text>
+  <text class="note" x="44" y="488">Resilience: every adapter imports the Azure SDK lazily and guarded — with no SDK or credentials it degrades to env-var / in-memory mode.</text>
+  <text class="note" x="44" y="514">Legend:  blue = governed egress chokepoint  ·  light-blue = agent compute (NHI)  ·  grey = Azure service  ·  dashed = optional (tracing)  ·  dotted = Key Vault supplies the AOAI key.</text>
+  <text class="note" x="44" y="534">Scope: Method 1 (APIM proxy). Method 2 = Microsoft Agent Framework (in-process governance middleware) — see maf-infra-azure.svg.</text>
+</svg>

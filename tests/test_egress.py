@@ -1,7 +1,7 @@
 """
 tests/test_egress.py — egress allow-list (agnostic, always runs).
 
-The egress guard (governance/guards/egress.py) is MAF-free and resolves its
+The egress guard (galaxy_gov/guards/egress.py) is MAF-free and resolves its
 allow-list path from the provider factory. These tests load the Azure adapter's
 egress.yaml both explicitly and via the factory; no cloud SDK or MAF required.
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from governance.guards.egress import load_egress_policy
+from galaxy_gov.shared.enforcement.guards.egress import load_egress_policy
 
 _AZURE_EGRESS = Path(__file__).parent.parent / "cloud_adapters" / "azure" / "egress.yaml"
 

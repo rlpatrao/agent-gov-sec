@@ -9,7 +9,7 @@ OpenAI directly with the key as ``api-key``.
 
 This is the chokepoint that pairs with ``cloud_adapters/azure/egress.yaml`` — the
 allow-list declares the same APIM/AOAI hosts as the only permitted LLM
-destinations. The previous inline logic lived in ``payload_agents/_base._resolve_egress``.
+destinations. The previous inline logic lived in the retired MAF-era agent factory.
 """
 
 from __future__ import annotations

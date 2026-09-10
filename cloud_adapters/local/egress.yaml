@@ -1,4 +1,4 @@
-# Egress allow-list (local/offline) — loaded by governance.guards.egress.
+# Egress allow-list (local/offline) — loaded by galaxy_gov.guards.egress.
 # Cloud-neutral: only loopback is allowed (the offline demo makes no real egress).
 rules:
   - domain: localhost

@@ -41,7 +41,7 @@ class AzureProvider:
         return AzureLLMGateway()
 
     def runtime_adapter(self):
-        from cloud_adapters.azure.maf.runtime import MafRuntimeAdapter
+        from framework_adapters.maf.runtime import MafRuntimeAdapter
         return MafRuntimeAdapter()
 
     async def audit_backend(self, run_id: str):

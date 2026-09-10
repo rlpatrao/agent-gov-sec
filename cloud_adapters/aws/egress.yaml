@@ -1,4 +1,4 @@
-# Egress allow-list (AWS) — loaded by governance.guards.egress.load_egress_policy()
+# Egress allow-list (AWS) — loaded by galaxy_gov.guards.egress.load_egress_policy()
 # and passed into agent_os.egress_policy.EgressPolicy. Sibling of
 # adapters/azure/egress.yaml; selected when CLOUD_PROVIDER=aws.
 #

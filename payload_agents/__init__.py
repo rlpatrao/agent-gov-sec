@@ -6,15 +6,44 @@ so ``core/nhi_registry`` carries no payload-specific agent names. The registry's
 ``NHI_CLIENT_ID_<AGENT_TYPE>`` env fallback (see ``core.nhi_registry``) then
 resolves them. A real tenant overrides these with its own Entra App / IAM role /
 GCP SA ids by setting the same env vars before import.
+
+The agent list is **derived** from ``payload_agents/config/*.yaml`` rather than
+hardcoded, so an agent added with ``galaxy new-agent`` gets its local-dev default
+automatically. Previously this module held its own copy of the agent names, which
+meant a newly scaffolded agent had no default and the offline demo failed for it.
+
+These defaults are a local-development convenience only. They are ignored in any
+deployment that configures ``GOV_AUTHORITY_ENDPOINT``, where the identity binding
+is resolved from the Governance Authority instead — an agent must not be able to
+supply its own identity.
 """
 
 import os as _os
+from pathlib import Path as _Path
 
-# Demo NHIs — non-empty local-dev defaults so the offline demo runs with no env
-# config. `setdefault` means a real NHI_CLIENT_ID_* in the environment wins.
-for _agent, _local_default in (
-    ("FINOPS", "local-finops-nhi"),
-    ("AUDITOR", "local-auditor-nhi"),
-    ("ROGUE", "local-rogue-nhi"),
-):
-    _os.environ.setdefault(f"NHI_CLIENT_ID_{_agent}", _local_default)
+# The application owns its agent configs and says so: the platform's
+# default_config_dir() resolves GALAXY_AGENT_CONFIG_DIR and names no application
+# path itself (the dependency arrow points application -> platform). setdefault,
+# so an explicitly configured environment always wins.
+_os.environ.setdefault("GALAXY_AGENT_CONFIG_DIR", str(_Path(__file__).parent / "config"))
+
+
+import os as _os
+
+
+def _register_local_nhi_defaults() -> None:
+    """`setdefault` a placeholder NHI for every discovered agent type, so the
+    offline demo runs with no env configuration. A real ``NHI_CLIENT_ID_*`` in the
+    environment always wins."""
+    try:
+        from galaxy_gov.policy_export import discover_agent_types
+        agent_types = discover_agent_types()
+    except Exception:
+        # Never let identity convenience break importing the package.
+        return
+    for agent_type in agent_types:
+        _os.environ.setdefault(
+            f"NHI_CLIENT_ID_{agent_type.upper()}", f"local-{agent_type.lower()}-nhi")
+
+
+_register_local_nhi_defaults()

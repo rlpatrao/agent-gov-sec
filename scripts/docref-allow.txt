@@ -1,0 +1,10 @@
+# Deliberate forward references in documentation — files that do not exist in
+# the tree but that docs legitimately name (scaffold output, worked examples).
+# One reference per line; keep this list short. Checked by scripts/check_doc_refs.py.
+
+# `galaxy new-agent Payroll` / `galaxy init` worked examples (ONBOARDING, adding-an-agent)
+payload_agents/config/payroll.yaml
+payload_agents/prompts/payroll.md
+tests/test_payroll_agent.py
+payload_agents/config/myagent.yaml
+payload_agents/prompts/myagent.md

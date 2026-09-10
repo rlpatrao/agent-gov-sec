@@ -1,27 +1,55 @@
 # Galaxy Agentic Governance Platform
 
-A runtime governance and security platform for multi-agent systems, built on the `agent_os`, `agent_sre`, and `agentmesh` packages (the Microsoft Agent Governance Toolkit). Agents are governed through a framework-neutral [`GuardPipeline`](governance/pipeline.py) reached by a per-framework adapter; three adapters are implemented and run the demo matrix (`--framework {langgraph,raw,pydantic}`). The platform provides per-agent identity, a layered guard stack, agent-to-agent governance, OTel tracing, and a hash-chained audit ledger. The governance is independent of the agent framework and of the cloud (`CLOUD_PROVIDER`).
+A runtime governance and security platform for multi-agent systems, built on the `agent_os`, `agent_sre`, and `agentmesh` packages (the Microsoft Agent Governance Toolkit). Agents are governed through a framework-neutral [`GuardPipeline`](galaxy_gov/shared/enforcement/pipeline.py) reached by a per-framework adapter; three adapters are implemented and run the demo matrix (`--framework {langgraph,raw,pydantic}`). The platform provides per-agent identity, a layered guard stack, agent-to-agent governance, OTel tracing, and a hash-chained audit ledger. The governance is independent of the agent framework and of the cloud (`CLOUD_PROVIDER`).
 
-> **Repo focus.** This repository is the **governance platform**. The agents are a **minimal demonstration payload** (`payload_agents/`) — just enough to show the governance stack wrapping real agents end-to-end. The full multi-agent AWS→Azure migration product (migration / discovery / scanner pipelines, 18 agents, ACA deployment) has been moved to a local-only `archive/` and is not part of this repo. See [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) for the cloud-agnostic refactor roadmap.
+AWS is the cloud with a live persona deployment. It runs two ways — **Bedrock** (through an API Gateway chokepoint) and **AgentCore** — and both run the full guard matrix. Azure is the default cloud binding and is fully documented in [`docs/azure/`](docs/azure/): governance runs in-process (the default provider for the test suite), and the APIM proxy and Container Apps topologies are reference IaC. The GCP binding exists in code under `cloud_adapters/`; its documentation stack is a placeholder for now.
+
+> **Repo focus.** This repository is the **governance platform**. The agents are a **minimal demonstration payload** (`payload_agents/`) — just enough to show the governance stack wrapping real agents end-to-end. The full multi-agent migration product (migration / discovery / scanner pipelines, 18 agents) has been moved to a local-only `archive/` and is not part of this repo.
 
 ## What this platform does
 
-**Governance platform** (`core/`, `governance/`, `a2a/`): per-agent Non-Human Identity (Entra), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → Application Insights tracing, a hash-chained Postgres audit ledger, and APIM as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
+**Governance platform** (`core/`, `galaxy_gov/`, `framework_adapters/`): per-agent Non-Human Identity (AWS IAM), a layered middleware stack (prompt-injection guard, credential redactor, context budget, audit trail, policy enforcement, capability guard, rogue/behavioral-drift detection), OTel → X-Ray tracing, a hash-chained DynamoDB audit ledger, and API Gateway as the sole egress path to the LLM. Every guard logic primitive comes from `agent_os`; this repo's value is the **bindings** (cloud + framework) and **composition**.
 
-**Demonstration payload** (`payload_agents/`): three governed agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). Each persona is defined once, framework-neutrally, in `payload_agents/_lib/personas.py` and built on any of three frameworks (`--framework {langgraph,raw,pydantic}`, default LangGraph). They prove the governance stack is **framework-agnostic**: the same `governance/` + `core/` + `a2a/` primitives and WS7 extensions wrap each framework — LangGraph's `create_agent` via a thin LangChain `AgentMiddleware` shim (`payload_agents/langgraph/`), Pydantic AI via a model wrapper (`payload_agents/pydantic/`), and a provider-native tool loop with no framework import (`payload_agents/raw/`).
+**Demonstration payload** (`payload_agents/`): three governed agents — **FinOpsAnalyst** (scoped data reader), **Auditor** (privileged cross-dataset reader + A2A callee), and **Rogue** (untrusted agent that trips every guard). Each persona is defined once, framework-neutrally, in `payload_agents/_lib/personas.py` and built on any of three frameworks (`--framework {langgraph,raw,pydantic}`, default LangGraph). They demonstrate that the governance stack is framework-agnostic: the same `galaxy_gov/` + `core/` primitives (including `core/a2a/`) and WS7 extensions wrap each framework — LangGraph's `create_agent` via a LangChain `AgentMiddleware` shim (`payload_agents/langgraph/`), Pydantic AI via a model wrapper (`payload_agents/pydantic/`), and a provider-native tool loop that does not import a framework (`payload_agents/raw/`).
 
-**Governance demos** — run fully offline (deterministic fake model) *or* against a **real
-per-cloud LLM** (Azure OpenAI / Vertex·Gemini / Bedrock) when credentials resolve:
+**Governance demos** — run fully offline (deterministic fake model) or against live Bedrock when credentials resolve:
 - `scripts/demo_governance.py` — the minimal, framework-free guard/redaction/ledger walkthrough (no creds).
-- `scripts/demo_agents.py` — the **full feature × agent matrix** across the three agents: identity/egress, the per-call guard stack, A2A authz, data-layer FGAC (mask/row-filter/deny + AWS Lake Formation pushdown), data-access drift, reasoning-step guard + CoT/CoVe trace, and hash-chained audit + tamper detection — each exercised on both its success and failure path. All three clouds have been **live-verified** (azure → AOAI, gcp → Vertex, aws → Bedrock through an API Gateway chokepoint).
+- `scripts/demo_agents.py` — the full feature × agent matrix across the three agents: identity/egress, the per-call guard stack, A2A authz, data-layer FGAC (mask/row-filter/deny + AWS Lake Formation pushdown), data-access drift, reasoning-step guard + CoT/CoVe trace, and hash-chained audit + tamper detection — each exercised on both its success and failure path. The matrix is **47 platform controls · 84 checks** (and **49 · 90** with AgentCore deployed on AWS) and always runs in full.
 
 ---
 
-## Architecture
+## Documentation
 
-See [`docs/architecture.md`](docs/architecture.md) for the full system design — context and purpose, architecture principles and decisions, the logical (layered) and AWS infrastructure diagrams, the end-to-end execution flow, sample demo output, a glossary, and references.
+Teams building agents on the platform start with [`ONBOARDING.md`](ONBOARDING.md) (quick
+start); how the platform is packaged and delivered — the SDK wheel, the enforcement
+service, and the developer/governance boundary — is described in
+[`docs/shared/PACKAGING.md`](docs/shared/PACKAGING.md).
 
-The planned cloud-agnostic restructure (Azure bindings → `cloud_adapters/azure/`, plus AWS/GCP adapters) and the gap-closing modules are described in [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md).
+Documentation is organized as per-cloud stacks plus a cloud-neutral shared set.
+
+| Stack | Status | Contents |
+|---|---|---|
+| [`docs/aws/`](docs/aws/) | populated | Deck, narrative, AWS architecture, AgentCore comparison, user guide, services, observability walkthrough, conformance report |
+| [`docs/azure/`](docs/azure/) | populated | Deck, narrative, Azure architecture, MAF comparison, user guide, services, observability walkthrough, reference-architecture grid |
+| [`docs/gcp/`](docs/gcp/) | placeholder | To mirror the AWS stack once the GCP binding is documented |
+| [`docs/shared/`](docs/shared/) | populated | Cloud-neutral platform reference (below) |
+
+Cloud-neutral platform reference in [`docs/shared/`](docs/shared/):
+
+| Doc | What it covers |
+|---|---|
+| [`DELTA_OVER_AGENT_OS.md`](docs/shared/DELTA_OVER_AGENT_OS.md) | What this repo adds over stock `agent_os` / `agent_sre` / `agentmesh` — module-by-module (a)/(b)/(c) classification |
+| [`architecture.md`](docs/shared/architecture.md) | Full system design — governance platform + payload, Mermaid diagrams |
+| [`governance-authority.md`](docs/shared/governance-authority.md) | Who controls the controls — CODEOWNERS split, the non-overridable runtime floor, out-of-process enforcement |
+| [`guardrails-inventory.md`](docs/shared/guardrails-inventory.md) | Governance modules wired vs. available, with the OWASP mapping |
+| [`extended-guardrails.md`](docs/shared/extended-guardrails.md) | Full guardrail catalogue: the flag-gated controls, their hooks and `agent_os`/`agent_sre` primitives |
+| [`standards-crosswalk.md`](docs/shared/standards-crosswalk.md) | Control → OWASP / NIST AI RMF / ISO/IEC 42001 / EU AI Act / MITRE ATLAS crosswalk |
+| [`dashboard.md`](docs/shared/dashboard.md) | The Governance Dashboard at `GET /dashboard` — agent runs, guardrail decisions, the crosswalk, and how the live buffer differs from the ledger |
+| [`adding-an-agent.md`](docs/shared/adding-an-agent.md) | Developer guide for adding a governed agent |
+| [`BACKLOG.md`](docs/BACKLOG.md) | Tracked open work — one row per item, priorities, acceptance criteria |
+| [`agentkit.md`](docs/shared/agentkit.md) | `galaxy_agentkit` — the client-side package: install, scaffold, wire the wrapper into an agent, environment contract |
+
+The AWS architecture is in [`docs/aws/architecture.md`](docs/aws/architecture.md). Diagrams are a shared pool at [`docs/diagrams/`](docs/diagrams/), rendered from `docs/diagrams/src/*.mmd` via `scripts/render_diagrams.sh`.
 
 ---
 
@@ -29,24 +57,21 @@ The planned cloud-agnostic restructure (Azure bindings → `cloud_adapters/azure
 
 ### Prerequisites
 
-- Python 3.13 or 3.14
+- Python 3.14
 - `uv` (or `pip`)
-- Offline runs need nothing. For **live cloud runs**, the matching CLI logged in: `az`
-  (Azure), `gcloud` (GCP — `gcloud auth application-default login`), or `aws` (AWS — `aws sso
-  login` / `aws configure`).
+- Offline runs need nothing. For live AWS runs, the AWS CLI logged in (`aws sso login` / `aws configure`).
 
 ### Install
 
 ```bash
 git clone <repo>
-cd agentic-sdlc
+cd agent-gov-sec
 uv venv --python 3.14 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
 
-# The agent demo needs the LangGraph extra; add a cloud extra for live runs:
+# The agent demo needs the LangGraph extra; add the AWS extra for live runs:
 uv pip install --python .venv/bin/python -e '.[langgraph]'   # required for demo_agents.py
-uv pip install --python .venv/bin/python -e '.[gcp]'         # live --gcp (Vertex/Gemini)
-uv pip install --python .venv/bin/python -e '.[aws]'         # live --aws (boto3: Bedrock gateway key + DynamoDB ledger)
+uv pip install --python .venv/bin/python -e '.[aws]'         # live AWS (boto3: Bedrock gateway + DynamoDB ledger + AgentCore)
 ```
 
 ### Run the governance demos
@@ -54,92 +79,57 @@ uv pip install --python .venv/bin/python -e '.[aws]'         # live --aws (boto3
 > **Invocation:** call the project venv directly — `.venv/bin/python …`. Avoid `uv run` /
 > `uv run --active` here unless no other virtualenv is activated: `uv run` resyncs the env to
 > the base deps and an activated venv from another project shadows it, both of which drop the
-> `langchain` / cloud extras and cause `ModuleNotFoundError`. The `uv run python` forms below
-> work when `.venv` is the active/only environment.
+> `langchain` / cloud extras and cause `ModuleNotFoundError`.
 
-`scripts/demo_agents.py` is the consolidated runner. To run everything offline and
-deterministically:
+`scripts/demo_agents.py` is the consolidated runner. The full guard matrix —
+**47 controls · 84 checks**, each with a pass case and an intercept case — always runs
+(**49 · 90** with AgentCore deployed); there is no reduced or baseline mode.
 
 ```bash
-# Unified matrix — baseline 37 + sweep 47 = 84 checks · 49 controls, each with a
-# pass case and an intercept case. Off-by-default guards are enabled per scenario.
+# Deterministic, offline (this is what CI runs)
 .venv/bin/python scripts/demo_agents.py --fake --extended
 
-# Same run, written to a self-contained HTML report (open in any browser). Every
-# row carries the control description, the input to the guardrail, and its output —
-# nothing else to look up. --html implies --extended.
+# Self-contained HTML report (open in any browser); every row carries the control
+# description, the input to the guardrail, and its output. --html implies --extended.
 .venv/bin/python scripts/demo_agents.py --fake --html galaxy-guardrail-report.html
 ```
 
+AWS runs two ways. Both run the full matrix:
+
+```bash
+# Option 1 — Bedrock through the API Gateway chokepoint
+.venv/bin/python scripts/demo_agents.py --aws --extended
+
+# Option 2 — AgentCore runtimes (Cedar + content-control interceptors, us-east-2)
+.venv/bin/python scripts/demo_agents.py --agentcore --extended
+
+# Framework axis — governance is identical across all three
+.venv/bin/python scripts/demo_agents.py --aws --extended --framework {langgraph,raw,pydantic}
+
+# Minimal framework-free guard/redaction/ledger walkthrough (no creds)
+.venv/bin/python scripts/demo_governance.py
+```
+
 Each matrix row (CLI and HTML) is self-describing: control description · input ·
-output · verdict. The baseline matrix stays at 37/37 as the no-regression anchor;
-the sweep adds the ~28 controls from the full sweep (previously-unwired `agent_os` /
-`agent_sre` modules plus output content-safety and PII redaction), each flag-gated
-and off by default. See [`docs/extended-guardrails.md`](docs/extended-guardrails.md).
+output · verdict.
 
-Other invocations:
+- **Live mode** (`--aws` / `--agentcore` with creds): the matrix runs on the live model, so
+  outcomes are observed, not asserted — the `VERDICT` column reads `PASS` / `N/A` (a scenario
+  the real model did not attempt) / `FAIL` (a genuine control failure; exits non-zero).
+- **Deterministic mode** (`--fake`): the full 84-check assertion matrix (`PASS` / `FAIL`).
 
-```bash
-# Model selection is per-cloud: azure/gcp/aws call their REAL model when creds resolve, else fake.
-.venv/bin/python scripts/demo_governance.py        # minimal guard/redaction/ledger walkthrough (no creds)
-.venv/bin/python scripts/demo_agents.py            # azure → REAL Azure OpenAI (creds in .env, else fake)
-.venv/bin/python scripts/demo_agents.py --gcp      # gcp  → REAL Vertex/Gemini   (needs '.[gcp]' + creds)
-.venv/bin/python scripts/demo_agents.py --aws      # aws  → REAL Bedrock via API Gateway (needs infra + '.[aws]')
-.venv/bin/python scripts/demo_agents.py --fake     # the deterministic 37-check baseline matrix on any cloud
-.venv/bin/python scripts/demo_agents.py --local    # cloud-neutral, fake model, in-memory ledger
-.venv/bin/python scripts/demo_agents.py --framework raw      # swap the agent framework (langgraph | raw | pydantic)
-.venv/bin/python scripts/demo_agents.py --fake --verbose     # curated narrative: prompts, LLM/tool output, interceptions
-.venv/bin/python scripts/demo_agents.py --fake --logs        # raw logger stream (--log-level DEBUG for per-guard detail)
-.venv/bin/python scripts/demo_extended_guardrails.py         # the sweep walk on its own (28 controls)
-```
+### AWS setup
 
-`demo_agents.py` needs the LangGraph extra (`pip install '.[langgraph]'`); `--fake`,
-`--extended`, `--html`, and `--framework` compose with any cloud flag. The full
-matrix runs each control on both its success and failure path across the three agents.
+| Option | What to set |
+|---|---|
+| Bedrock (`--aws`) | `pip install '.[aws]'`; provision `cloud_adapters/aws/infra` (`terraform apply`, tagged `galaxy-rp`), then set `AWS_BEDROCK_GATEWAY_ENDPOINT` + `AWS_BEDROCK_GATEWAY_KEY` from `terraform output`. The agent reaches Bedrock only through the gateway (`x-api-key`) and never holds Bedrock creds. Tear down: `cd cloud_adapters/aws/infra && terraform destroy`. |
+| AgentCore (`--agentcore`) | `pip install '.[aws]'`; `scripts/build_interceptor_zip.sh` then `AWS_PROFILE=<profile> python scripts/deploy_agentcore.py --region us-east-2`. Idempotent; `--teardown` reverses it. |
 
-- **Real-model mode** (`--azure` / `--gcp` / `--aws` with creds): the whole matrix runs on the
-  live model, so outcomes are **observed, not asserted** — the `VERDICT` column reads
-  `PASS` / `N/A` (an adversarial scenario the real model didn't attempt) / `FAIL` (a genuine
-  control failure; exits non-zero).
-- **Deterministic mode** (`--fake` / `--local`, or any cloud without creds): the full **37-check
-  assertion matrix** (`PASS` / `FAIL`) — this is what CI runs.
+Creds are read from your shell or `.env` (loaded automatically). See [`.env.example`](.env.example) for every variable and [`docs/aws/user-guide.md`](docs/aws/user-guide.md) for the full walkthrough.
 
-**Per-cloud setup** (creds are read from your shell **or `.env`**, loaded automatically):
-
-| Cloud | Real model | What to set |
-|---|---|---|
-| `--azure` (default) | Azure OpenAI | `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_KEY` + `AZURE_OPENAI_DEPLOYMENT` (reasoning/codex deployments auto-route through the Responses API) |
-| `--gcp` | Vertex AI / Gemini | `pip install '.[gcp]'`; `GOOGLE_CLOUD_PROJECT` (+ `gcloud auth application-default login`), or `GOOGLE_API_KEY` |
-| `--aws` | Bedrock via API Gateway | `pip install '.[aws]'`; provision `cloud_adapters/aws/infra` (`terraform apply`, tagged `galaxy-rp`), then set `AWS_BEDROCK_GATEWAY_ENDPOINT` + `AWS_BEDROCK_GATEWAY_KEY` from `terraform output`. The agent reaches Bedrock only through the gateway (`x-api-key`) — it never holds Bedrock creds. **Tear down:** `cd cloud_adapters/aws/infra && terraform destroy`. |
-
-See [`.env.example`](.env.example) for every variable and [`docs/langgraph-demo.md`](docs/langgraph-demo.md) for the full walkthrough.
-
-### Run the tests
+### Configure `.env` (only needed for live runs)
 
 ```bash
-.venv/bin/python -m pytest tests/ -q
-```
-
-All tests run without cloud credentials (cloud/LangChain-dependent tests skip cleanly when
-the extra isn't installed).
-
-### Configure `.env` (only needed for live LLM / cloud runs)
-
-Copy `.env.example` to `.env` and fill in the block for the cloud you're running. The demo
-loads `.env` automatically. The essentials per cloud (full set + comments in
-[`.env.example`](.env.example)):
-
-```bash
-# Azure (default) — direct AOAI; reasoning/codex deployments auto-route through the Responses API.
-AZURE_OPENAI_ENDPOINT=https://<your-aoai>.openai.azure.com/
-AZURE_OPENAI_DEPLOYMENT=<deployment-name>
-AZURE_OPENAI_API_VERSION=2025-03-01-preview      # use a dated version, not "preview"
-AZURE_OPENAI_KEY=<your-aoai-key>
-
-# GCP — Vertex (ADC) or the Gemini Developer API.
-GOOGLE_CLOUD_PROJECT=<your-gcp-project>           # + `gcloud auth application-default login`
-VERTEX_AI_MODEL=gemini-2.5-pro
-
 # AWS — Bedrock through the API Gateway chokepoint (from `terraform output`).
 AWS_PROFILE=<your-sso-profile>                     # or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
 AWS_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-6
@@ -150,69 +140,66 @@ AWS_BEDROCK_GATEWAY_KEY=<gateway-x-api-key>
 NHI_CLIENT_ID_FINOPS=local-finops-nhi
 ```
 
+### Run the tests
+
+```bash
+.venv/bin/python -m pytest tests/ -q
+```
+
+All tests run without cloud credentials (cloud/LangChain-dependent tests skip cleanly when
+the extra isn't installed).
+
 ---
 
 ## Repository layout
 
+The tree is organized by the deployment architecture: what runs inside an agent
+application (in-process), what runs in the governance-owned environment
+(out-of-process), the shared seam both sides import, and the demonstration payload.
+
 ```
-agentic-sdlc/
+agent-gov-sec/
 │
-├── payload_agents/                 Demonstration payload — 3 governed personas on 3 frameworks
-│   ├── config.py                   Pydantic config loader (extra="forbid")
-│   ├── config/{finops,auditor,rogue}.yaml   Per-persona governance config
-│   ├── prompts/{finops,auditor,rogue}.md    System prompts
-│   ├── _lib/                       Framework-neutral shared logic
-│   │   ├── personas.py             The 3 personas' tool specs / FGAC tools (one definition, all frameworks)
-│   │   ├── scripting.py            Scripted-turn → neutral ScriptStep conversion (offline mode)
-│   │   └── demo_data.py            Sample rows
-│   ├── _runtime/                   Framework-neutral runtime
-│   │   ├── contract.py             Neutral agent contract — ToolSpec / RunResult / AgentBundle
-│   │   ├── models.py               FakeToolCallingModel (offline) + live model factory (Bedrock/Gemini)
-│   │   └── bedrock_gateway.py      BedrockGatewayChatModel
-│   ├── langgraph/                  FRAMEWORK AXIS — LangChain create_agent + GalaxyGuardMiddleware
-│   │   ├── _runner.py              build_langgraph_agent() factory (NHI + egress + governance)
-│   │   ├── _guard.py               GalaxyGuardMiddleware + build_langgraph_governance()
-│   │   └── {finops,auditor,rogue}.py   the 3 personas on LangGraph
-│   ├── pydantic/                   FRAMEWORK AXIS — Pydantic AI Agent (GovernedModel wrapper)
-│   │   ├── _runner.py              build_agent() + GovernedModel
-│   │   └── {finops,auditor,rogue}.py
-│   └── raw/                        FRAMEWORK AXIS — provider-native tool loop (no framework import)
-│       ├── _runner.py              build_agent() + ScriptedChatClient
-│       └── {finops,auditor,rogue}.py
+│  IN-PROCESS — ships to agent teams (the wheel)
+├── galaxy_agentkit/                What an application embeds: govern() → GovernedAgent
+│   ├── agent.py                    identity + authority client + in-process guards, one handle
+│   ├── client.py                   enforcement-service client (/llm · /data · /a2a · /health)
+│   ├── config.py                   verifies the governance config bundle; refuses to start without it
+│   └── settings.py                 environment contract (GALAXY_*), validated on load
+│       (the project generator is `galaxy init`, in galaxy_gov/tooling/)
 │
-├── core/                           Shared infrastructure  (Azure-coupled today; → cloud_adapters/ in WS1)
-│   ├── provider_factory.py         CLOUD AXIS dispatch — selects cloud_adapters/<cloud>/ (CLOUD_PROVIDER)
-│   ├── framework_factory.py        FRAMEWORK AXIS dispatch — selects payload_agents/<framework>/ (--framework)
-│   ├── nhi_registry.py             Non-Human Identity registry
-│   ├── run_tracer.py               OTel configure_tracing + pipeline_span
-│   ├── secrets.py                  Key Vault / env-var credential provider
-│   ├── trace_ledger.py             Hash-chained audit ledger schema
-│   └── discovery_artifacts.py      Pydantic models
-│
-├── governance/                     Security & compliance layer (framework- and cloud-neutral)
-│   ├── pipeline.py                 build_guard_pipeline() — the framework-neutral GuardPipeline
-│   ├── floor.py                    Non-negotiable governance floor (always-on controls)
-│   ├── guards/                     Guard implementations (wrap `agent_os` primitives)
-│   ├── extensions/                 WS7 gap modules (data FGAC, data drift, reasoning guard/trace)
-│   ├── adapters/                   Governance audit sink (OTel span-event backend)
+│  OUT-OF-PROCESS — the governance authority (the container)
+├── galaxy_gov/                     Enterprise governance: guards, policies, authority, dashboard
+│   ├── shared/enforcement/         GuardPipeline + guard library (FGAC, drift, reasoning, MCP, code, content/cost)
+│   ├── inprocess/floor.py          Non-overridable governance floor (config tightens, never weakens)
+│   ├── remote/                     The authority service: server, enforce, registrar, dashboard, decision log
+│   ├── policies/ · configs/        Declarative rules + guard configs (ship inside the wheel and image)
+│   ├── agentcore/                  AgentCore integration — Cedar export, interceptors, identity
 │   ├── ops/                        Operational controls (agent_sre)
-│   ├── policies/                   YAML declarative rules (galaxy-*.yaml)
-│   ├── configs/                    Guard configs (prompt-injection.yaml, egress.yaml)
-│   └── mappings/                   aws-azure-reference.yaml
+│   └── tooling/                    `galaxy` CLI — init · new-agent · enroll · verify · export-registry
+├── deploy/                         The Galaxy_gov container: Dockerfile.service, VERSION, compose
 │
-├── a2a/                            Agent-to-Agent protocol (envelope + audited dispatcher)
+│  SHARED SEAM — imported by both sides
+├── core/                           Agnostic core — Protocols, factories, NHI registry, tracing, ledger schema
+│   └── a2a/                        Agent-to-Agent protocol (envelope + audited dispatcher)
+├── framework_adapters/             FRAMEWORK AXIS — binds the GuardPipeline to each agent framework
+│   ├── langgraph/ · pydantic/     LangChain GalaxyGuardMiddleware · Pydantic AI GovernedModel
+│   ├── raw/                        provider-native tool loop (the null adapter, no framework import)
+│   └── maf/                        Microsoft Agent Framework middleware stack
+├── cloud_adapters/                 CLOUD AXIS — cloud bindings behind the core Protocols
+│   ├── aws/                        AWS binding + infra/ (Terraform: chokepoints, ECR, Fargate service, policy store)
+│   ├── azure/ · gcp/ · local/      Azure + GCP bindings; cloud-neutral in-memory binding
 │
-├── scripts/
-│   ├── demo_governance.py          Minimal offline governance demo (no Azure required)
-│   ├── demo_agents.py              Full feature × agent matrix over the 3 agents (any --framework)
-│   ├── demo_extended_guardrails.py The off-by-default sweep walk on its own (28 controls)
-│   └── deploy_agent_engine.py      Deploy a persona to Vertex AI Agent Engine (GCP)
+│  DEMONSTRATION — stands in for real applications (which live in their own repos, via `galaxy init`)
+├── payload_agents/                 3 governed personas composing the framework adapters
 │
-├── tests/                          Test suite (runs without Azure credentials)
-├── docs/                           Architecture, user guide, guardrails inventory, refactor plan
+│  REPO PLUMBING
+├── scripts/                        demo_agents.py (conformance matrix) · deploy + publish + generator scripts
+├── tests/                          Test suite (runs without cloud credentials)
+├── docs/                           Per-cloud doc stacks (aws/azure/gcp) + shared/ + diagrams/
 └── .env.example                    Environment variable template
 
-(archive/ — local-only, gitignored: the full migration payload, pipeline scripts, legacy samples, and historical docs.)
+(archive/ — local-only, gitignored: the pre-reorg migration payload and historical docs.)
 ```
 
 ---
@@ -221,58 +208,52 @@ agentic-sdlc/
 
 | Concern | Implementation |
 |---|---|
-| Per-agent identity | `NHIRegistry` — each agent has its own Entra App Registration |
-| No static secrets | `TokenProvider` via `ManagedIdentityCredential` + Key Vault; env-var fallback for local dev only |
-| Single LLM-egress path | APIM Consumption — real AOAI key never in agent code |
+| Per-agent identity | `NHIRegistry` — each agent maps to its own AWS IAM role |
+| No static secrets | Secrets Manager / SSM via the provider factory; env-var fallback for local dev only |
+| Single LLM-egress path | API Gateway → Lambda → Bedrock — the real Bedrock access never sits in agent code |
 | Prompt injection | `PromptInjectionGuardMiddleware` — blocks before the LLM call |
 | Credential leak | `CredentialRedactorGuardMiddleware` — regex scan, redacts before the model sees content |
 | Token cost control | `ContextBudgetGuardMiddleware` — pre-call token allocation with hard cap |
 | Declarative policy | `GovernancePolicyMiddleware` — YAML rules, no-code governance updates |
 | Tool containment | `CapabilityGuardMiddleware` + closure-bound sandboxed tools |
 | Behavioral drift | `RogueDetectionMiddleware` — anomaly detection on tool-use patterns |
-| Immutable audit | Hash-chained `trace_ledger` (SHA-256 chain; stdout mode until Postgres is provisioned) |
-| Traceability | OTel root span → all agent spans → App Insights |
+| Immutable audit | Hash-chained `trace_ledger` (SHA-256 chain) persisted to DynamoDB |
+| Traceability | OTel root span → all agent spans → X-Ray |
 
 ---
 
 ## Adding an agent to the payload
 
-1. Define the persona's tools once, framework-neutrally, in `payload_agents/_lib/personas.py` (`<name>_specs(...)` returning `ToolSpec`s and/or `<name>_callables(...)`).
-2. Add a `build_<name>_agent(run_id, model, ...) → AgentBundle` coroutine in each framework folder you support (`payload_agents/langgraph/<name>.py`, `pydantic/<name>.py`, `raw/<name>.py`) that wraps the shared specs via that framework's `_runner`, and export it from the framework package `__init__.py`.
-3. Register the NHI: add a `NHI_CLIENT_ID_<NAME>` default in `payload_agents/__init__.py` and the same key to `.env.example` (the registry resolves it from env — see `core/nhi_registry.py`).
-4. Create `payload_agents/config/<name>.yaml` + `payload_agents/prompts/<name>.md` (the Pydantic schema enforces `extra="forbid"` — typos raise at load time).
+1. Define the persona's tools once, framework-neutrally, in `payload_agents/_lib/personas.py`.
+2. Add a `build_<name>_agent(run_id, model, ...) → AgentBundle` coroutine in each framework folder you support, and export it from the framework package `__init__.py`.
+3. Create `payload_agents/config/<name>.yaml` + `payload_agents/prompts/<name>.md` (the Pydantic schema enforces `extra="forbid"`). `galaxy new-agent <Type>` scaffolds both plus a test. The config directory is the source of truth for which agents exist — the policy registry, the Terraform `agent_types` variable, and AgentCore provisioning are all derived from it.
+4. Register the identity: `galaxy enroll <Type>` under an AWS SSO login, or set `NHI_CLIENT_ID_<NAME>` for local development.
 5. Add tests to `tests/test_<framework>_*.py`.
 
-See [`docs/adding-an-agent.md`](docs/adding-an-agent.md) for the developer/governing-team
-split and [`docs/user-guide.md`](docs/user-guide.md) for the full walkthrough.
+An agent transacts only when both keys are turned — identity enrolled *and* control
+policy approved. `galaxy verify` reports which of the two is missing; an agent missing
+either is denied at the chokepoint with `403 no_governance_policy`.
 
----
-
-## Database (compliance archive)
-
-Apply the Postgres schema before pointing `POSTGRES_DSN` at a live server:
-
-```bash
-psql $POSTGRES_DSN -f infra/ledger_schema.sql
-```
-
-Without `POSTGRES_DSN`, the hash chain runs in stdout mode — full chain logic active, no persistence.
-
----
-
-## Key documents
-
-| Doc | What it covers |
+| Command | Purpose |
 |---|---|
-| [`docs/REFACTOR_AND_GAPS_PLAN.md`](docs/REFACTOR_AND_GAPS_PLAN.md) | Cloud-agnostic refactor, `agent_os` re-baseline, AWS/GCP adapters, and gap-closing modules |
-| [`docs/DELTA_OVER_AGENT_OS.md`](docs/DELTA_OVER_AGENT_OS.md) | What this repo adds over the stock `agent_os` / `agent_sre` / `agentmesh` packages — module-by-module (a)/(b)/(c) classification |
-| [`docs/architecture.md`](docs/architecture.md) | Full system design — governance platform + payload, Mermaid diagrams |
-| [`docs/governance-authority.md`](docs/governance-authority.md) | Who controls the controls — CODEOWNERS ownership split, the non-overridable runtime floor, and out-of-process enforcement in the egress proxy |
-| [`docs/adding-an-agent.md`](docs/adding-an-agent.md) | Developer guide for adding a governed agent — files to create, the governance-review request template, and the per-agent oversight artifacts |
-| [`docs/architecture-framework-aws.md`](docs/architecture-framework-aws.md) | Framework core + AWS binding — the two-axis (framework × cloud) design, the shared `GuardPipeline`, Mermaid component + request-flow diagrams |
-| [`docs/user-guide.md`](docs/user-guide.md) | How-to guide — running the platform, adding agents, debugging |
-| [`docs/services-and-tech.md`](docs/services-and-tech.md) | Azure resource inventory, package versions, env var reference |
-| [`docs/guardrails-inventory.md`](docs/guardrails-inventory.md) | What governance modules are wired vs. available, with the OWASP mapping |
-| [`docs/extended-guardrails.md`](docs/extended-guardrails.md) | Full-sweep guardrail catalogue: ~28 flag-gated controls, their hooks and `agent_os`/`agent_sre` primitives |
-| [`docs/standards-crosswalk.md`](docs/standards-crosswalk.md) | Control → OWASP / NIST AI RMF / ISO/IEC 42001 / EU AI Act / MITRE ATLAS crosswalk |
-| [`docs/observability-governance-showcase.md`](docs/observability-governance-showcase.md) | KQL queries, App Insights diagnostics, traceability walkthrough |
+| `galaxy new-agent <Type>` | scaffold config · prompt · test inside this repository |
+| `galaxy init <project>` | generate a standalone governed-agent project against the published wheel |
+| `galaxy enroll <Type>` | bind the agent type to a cloud principal (needs AWS SSO) |
+| `galaxy export-registry` | emit the policy registry and derived provisioning inputs |
+| `galaxy verify [<Type>]` | check identity + policy readiness (usable as a CI gate) |
+
+See [`docs/shared/adding-an-agent.md`](docs/shared/adding-an-agent.md) for the developer/governing-team split, [`docs/shared/governance-authority.md`](docs/shared/governance-authority.md) for the five authority mechanisms, and [`docs/aws/user-guide.md`](docs/aws/user-guide.md) for the full walkthrough.
+
+---
+
+## License
+
+Apache-2.0 — see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+
+The platform is built on the MIT-licensed `agent-os-kernel`, `agent-sre`, and
+`agentmesh-platform` packages (Copyright Microsoft Corporation). Dependency
+attributions for both artifacts — the wheel and the enforcement service image — are in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), generated by
+`scripts/gen_third_party_notices.py` and checked for staleness in CI. See
+[`docs/shared/PACKAGING.md`](docs/shared/PACKAGING.md) for the licensing and attribution
+model.

@@ -46,6 +46,12 @@ variable "project_tag" {
   default = "galaxy-rp"
 }
 
+variable "proxy_image_uri" {
+  type        = string
+  description = "ECR image URI for the governance chokepoint Lambda (built from lambda/Dockerfile)."
+  default     = ""
+}
+
 provider "aws" {
   region = var.region
   default_tags {
@@ -73,6 +79,8 @@ resource "aws_iam_role" "agent" {
       Effect    = "Allow"
       Principal = { Service = "ecs-tasks.amazonaws.com" }
       Action    = "sts:AssumeRole"
+      # Confused-deputy guard: only this account's tasks may assume the role.
+      Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }
     }]
   })
 }
@@ -86,7 +94,12 @@ resource "aws_iam_role_policy" "agent" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      { Effect = "Allow", Action = ["bedrock:InvokeModel"], Resource = "*" },
+      # Scoped to the configured model: the cross-region inference profile plus
+      # the Anthropic foundation models it fans out to — not Resource "*".
+      { Effect = "Allow", Action = ["bedrock:InvokeModel"], Resource = [
+        "arn:aws:bedrock:*::foundation-model/anthropic.*",
+        "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/${var.bedrock_model_id}",
+      ] },
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
@@ -151,6 +164,8 @@ resource "aws_iam_role" "proxy" {
       Effect    = "Allow"
       Principal = { Service = "lambda.amazonaws.com" }
       Action    = "sts:AssumeRole"
+      # Confused-deputy guard: only this account's Lambda service may assume it.
+      Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }
     }]
   })
 }
@@ -161,7 +176,11 @@ resource "aws_iam_role_policy" "proxy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      { Effect = "Allow", Action = ["bedrock:InvokeModel"], Resource = "*" },
+      # Scoped to the configured model (see the per-agent role) — not Resource "*".
+      { Effect = "Allow", Action = ["bedrock:InvokeModel"], Resource = [
+        "arn:aws:bedrock:*::foundation-model/anthropic.*",
+        "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/${var.bedrock_model_id}",
+      ] },
       {
         Effect   = "Allow"
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
@@ -171,26 +190,83 @@ resource "aws_iam_role_policy" "proxy" {
   })
 }
 
-data "archive_file" "proxy" {
-  type        = "zip"
-  source_file = "${path.module}/lambda/bedrock_proxy.py"
-  output_path = "${path.module}/.build/bedrock_proxy.zip"
+# The chokepoint Lambda is now a container image: the handler imports the shared
+# enforcement library (galaxy_gov/shared + galaxy_gov/remote) and the
+# agent_os/agent_sre/agentmesh toolkit, which exceed a single-file zip. Build and
+# push the image (see lambda/Dockerfile) and pass its URI as var.proxy_image_uri.
+resource "aws_ecr_repository" "proxy" {
+  name                 = "${var.project_tag}-gov-proxy"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+}
+
+# ── ECR: the enforcement service image (mechanism 4) ─────────────────────────
+# The long-running counterpart to the proxy Lambda: the same chokepoint handlers
+# as a container the governing team deploys under its own identity.
+#
+# Tags are IMMUTABLE here, unlike the proxy repository above. This is the
+# authority that enforces the controls, so a released version must not be
+# repointable at different bytes — that is what makes "1.0.0 is enforcing" a
+# claim an auditor can check. Builds are pushed by
+# scripts/publish_service_image.py, which reads deploy/VERSION.
+resource "aws_ecr_repository" "enforcement" {
+  name                 = "${var.project_tag}-gov-enforcement"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = true
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+}
+
+# Untagged images accumulate from every rebuild of an existing tag; released and
+# per-commit tags are never touched by this rule.
+#
+# This rule is only safe because scripts/publish_service_image.py builds with
+# --provenance=false --sbom=false, so a push produces one manifest rather than an
+# index. If attestations are ever enabled, the index's children appear untagged and
+# this rule would delete manifests the released tag still references — remove the
+# rule before making that change.
+resource "aws_ecr_lifecycle_policy" "enforcement" {
+  repository = aws_ecr_repository.enforcement.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Expire untagged images after 14 days"
+      selection = {
+        tagStatus   = "untagged"
+        countType   = "sinceImagePushed"
+        countUnit   = "days"
+        countNumber = 14
+      }
+      action = { type = "expire" }
+    }]
+  })
 }
 
 resource "aws_lambda_function" "proxy" {
-  function_name    = "${var.project_tag}-bedrock-proxy"
-  role             = aws_iam_role.proxy.arn
-  runtime          = "python3.12"
-  handler          = "bedrock_proxy.handler"
-  filename         = data.archive_file.proxy.output_path
-  source_code_hash = data.archive_file.proxy.output_base64sha256
-  timeout          = 60
-  memory_size      = 256
+  function_name = "${var.project_tag}-bedrock-proxy"
+  role          = aws_iam_role.proxy.arn
+  package_type  = "Image"
+  image_uri     = var.proxy_image_uri # ${aws_ecr_repository.proxy.repository_url}:<tag>
+  timeout       = 60
+  memory_size   = 512 # toolkit + numpy: give the image headroom
+
+  image_config {
+    command = ["bedrock_proxy.handler"]
+  }
 
   environment {
     variables = {
       BEDROCK_MODEL_ID = var.bedrock_model_id
       BEDROCK_REGION   = var.region
+      # Policy registry baked into the image at build time (agent-controls.json).
+      GOV_POLICY_REGISTRY_PATH = "/var/task/agent-controls.json"
     }
   }
 }
@@ -290,6 +366,11 @@ output "bedrock_gateway_url" {
 output "gateway_key_secret" {
   description = "Secrets Manager secret holding the x-api-key (galaxy/bedrock-gateway-key)"
   value       = aws_secretsmanager_secret.gateway_key.name
+}
+
+output "enforcement_image_repo" {
+  description = "ECR repository for the enforcement service image; push with scripts/publish_service_image.py"
+  value       = aws_ecr_repository.enforcement.repository_url
 }
 
 output "bedrock_model_id" {

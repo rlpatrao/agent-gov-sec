@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference Architecture on AWS — Galaxy mapping</title>
+<style>
+  :root{
+    --ink:#1b2030; --sub:#454c5a; --muted:#7b8390; --line:#d2d6e2;
+    --galaxy:#6c47d6; --os:#1f8f7a; --aws:#e08a1e;
+    --live:#2e9c5a; --ref:#e0a020; --na:#aeb4c0;
+    --band:#1b2236; --bandink:#dde2ee;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:#fff;margin:0;padding:40px 34px 44px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1760px;margin:0 auto;}
+  h1{font-size:40px;margin:0 0 22px;font-weight:800;}
+  h1 .accent{color:var(--galaxy);}
+
+  .band{background:var(--band);color:var(--bandink);border-radius:13px;padding:15px 18px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
+  .band .lbl{font-size:17px;font-weight:800;letter-spacing:.6px;color:#9aa2bb;margin-right:6px;}
+  .band .cell{display:flex;gap:9px;align-items:center;background:#222a42;border:1px solid #34406a;border-radius:9px;padding:8px 13px;font-size:18px;}
+
+  .grid{display:grid;grid-template-columns:175px 1fr 290px;gap:16px;}
+  .col-h{font-size:16px;font-weight:800;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;margin:2px 0 9px;}
+  .consumers .card,.observe .card{margin-bottom:11px;}
+  .layer{border:1.75px solid var(--line);border-radius:13px;padding:14px 15px;margin-bottom:15px;}
+  .layer .lh{font-size:18px;font-weight:800;color:var(--galaxy);letter-spacing:.3px;margin-bottom:11px;}
+  .layer .lh small{display:block;color:var(--muted);font-weight:600;font-size:15px;letter-spacing:.2px;margin-top:2px;}
+  .row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  .row.r3{grid-template-columns:repeat(3,1fr);}
+  .grp{border:1px solid #e4e7f0;border-radius:10px;padding:11px 13px;background:#fafbfe;}
+  .grp .gt{font-size:18px;font-weight:700;color:var(--ink);margin-bottom:9px;}
+  .card{display:flex;gap:10px;align-items:flex-start;font-size:19px;line-height:1.4;padding:4px 0;}
+  .dot{flex:0 0 auto;width:14px;height:14px;border-radius:50%;margin-top:5px;}
+  .dot.live{background:var(--live);} .dot.ref{background:var(--ref);} .dot.na{background:var(--na);}
+  .tag{font-size:15px;font-weight:800;letter-spacing:.2px;border-radius:5px;padding:2px 7px;margin-right:7px;vertical-align:middle;white-space:nowrap;}
+  .t-galaxy{color:#fff;background:var(--galaxy);}
+  .t-os{color:#fff;background:var(--os);}
+  .t-aws{color:#fff;background:var(--aws);}
+  .nm{color:var(--sub);}
+  .nm b{color:var(--ink);font-weight:600;}
+
+  .stack{display:flex;flex-direction:column;}
+  .obox{border:1px solid #e4e7f0;border-radius:10px;padding:11px 13px;background:#fafbfe;margin-bottom:11px;}
+  .obox .gt{font-size:18px;font-weight:700;margin-bottom:7px;}
+
+  .legend{margin-top:20px;border-top:1px solid #e7e9f2;padding-top:17px;display:flex;gap:26px;flex-wrap:wrap;font-size:18px;color:var(--sub);}
+  .legend .k{display:flex;gap:9px;align-items:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Reference Architecture on AWS — <span class="accent">Galaxy</span> mapping</h1>
+
+  <!-- GOVERNANCE -->
+  <div class="band">
+    <span class="lbl">GOVERNANCE</span>
+    <span class="cell"><span class="dot live"></span><span class="tag t-os">agent_sre</span>Risk classification · red-team eval (flag-gated)</span>
+    <span class="cell"><span class="dot live"></span><span class="tag t-galaxy">Galaxy</span>Compliance — EU AI Act · ISO 42001 · NIST AI RMF</span>
+    <span class="cell"><span class="dot live"></span><span class="tag t-galaxy">Galaxy</span>Policy lifecycle — policy_export → Cedar (AgentCore policy engine)</span>
+    <span class="cell"><span class="dot live"></span><span class="tag t-os">agent_os</span>Exception gate — HITL escalation</span>
+  </div>
+
+  <div class="grid">
+    <!-- CONSUMERS -->
+    <div class="consumers">
+      <div class="col-h">Consumers</div>
+      <div class="layer"><div class="card"><span class="nm"><b>Human user</b><br>UI / API</span></div></div>
+      <div class="layer"><div class="card"><span class="nm"><b>Enterprise apps</b><br>API / webhook</span></div></div>
+      <div class="layer"><div class="card"><span class="nm"><b>Data teams</b><br>build &amp; deploy</span></div></div>
+    </div>
+
+    <!-- LAYERS -->
+    <div class="layers">
+      <div class="layer">
+        <div class="lh">LAYER 01 · Agent Application</div>
+        <div class="row r3">
+          <div class="grp"><div class="gt">Core platform agents</div>
+            <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>Bedrock Agents</span></div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>Payload personas — FinOps · Auditor · Rogue</span></div>
+          </div>
+          <div class="grp"><div class="gt">Custom &amp; team agents</div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>Framework adapters — LangGraph · raw · Pydantic</span></div>
+          </div>
+          <div class="grp"><div class="gt">Agent-to-agent</div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>A2A envelopes + audited dispatch</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer">
+        <div class="lh">LAYER 02 · Agent Services</div>
+        <div class="row">
+          <div class="grp"><div class="gt">Harness &amp; configurator</div>
+            <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>AgentCore Harness</span></div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>Per-persona config + floor</span></div>
+          </div>
+          <div class="grp"><div class="gt">Registries</div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>Policy registry · deny-unknown-default</span></div>
+            <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>ECR · Parameter Store</span></div>
+          </div>
+          <div class="grp"><div class="gt">Templates &amp; utilities</div>
+            <div class="card"><span class="dot ref"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>Terraform · deploy_agentcore.py</span></div>
+            <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>CloudFormation / CDK</span></div>
+          </div>
+          <div class="grp"><div class="gt">Memory management</div>
+            <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>AgentCore Memory</span></div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>memory-guard (flag-gated)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer" style="border-color:var(--galaxy);border-width:2.5px;">
+        <div class="lh">LAYER 03 · Security &amp; Control Plane <small>Galaxy's primary surface</small></div>
+        <div class="row">
+          <div class="grp"><div class="gt">Security gateway &amp; LLM router</div>
+            <div class="card"><span class="dot ref"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>API Gateway → bedrock_proxy (Method 1)</span></div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-aws">AWS</span>AgentCore Gateway (Method 2)</span></div>
+          </div>
+          <div class="grp"><div class="gt">Guardrails &amp; policy</div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>GuardPipeline — 49 controls</span></div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-os">agent_os</span>injection · credential · budget · policy</span></div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-aws">AWS</span>Cedar — AgentCore policy engine</span></div>
+          </div>
+          <div class="grp"><div class="gt">NHI &amp; identity</div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>NHI registry</span></div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-aws">AWS</span>AgentCore Identity · IAM galaxy-rp-* · STS</span></div>
+          </div>
+          <div class="grp"><div class="gt">Circuit breakers</div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-os">agent_sre</span>circuit-breaker · cost-guard (flag-gated)</span></div>
+            <div class="card"><span class="dot ref"></span><span class="nm"><span class="tag t-aws">AWS</span>API GW throttle · Lambda concurrency</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer">
+        <div class="lh">LAYER 04 · Runtime &amp; Platform</div>
+        <div class="row r3">
+          <div class="grp"><div class="gt">Agent runtime &amp; orchestration</div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-aws">AWS</span>AgentCore Runtime (per persona)</span></div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>Interceptor Lambdas — request / response</span></div>
+            <div class="card"><span class="dot ref"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>data_proxy (FGAC, built · not deployed)</span></div>
+          </div>
+          <div class="grp"><div class="gt">Deployment pipeline</div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>deploy_agentcore.py (idempotent)</span></div>
+            <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>CodePipeline · ECR signing</span></div>
+          </div>
+          <div class="grp"><div class="gt">AI-SBOM &amp; provenance</div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-os">agent_sre</span>SBOM · artifact-signing (flag-gated)</span></div>
+            <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>CloudTrail · Config</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer">
+        <div class="lh">LAYER 05 · Infrastructure</div>
+        <div class="row">
+          <div class="grp"><div class="gt">Cloud &amp; compute</div>
+            <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>VPC · PrivateLink · ECS / Fargate</span></div>
+          </div>
+          <div class="grp"><div class="gt">Model access</div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-aws">AWS</span>Bedrock — claude-sonnet-4-6</span></div>
+          </div>
+          <div class="grp"><div class="gt">Storage &amp; persistence</div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-aws">AWS</span>DynamoDB — galaxy-trace-ledger</span></div>
+            <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>S3 · OpenSearch</span></div>
+          </div>
+          <div class="grp"><div class="gt">Secret &amp; key management</div>
+            <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-aws">AWS</span>Secrets Manager · STS</span></div>
+            <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>KMS · CloudHSM</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OBSERVE -->
+    <div class="observe stack">
+      <div class="col-h">Observe (cross-cutting)</div>
+      <div class="obox"><div class="gt">Audit &amp; SIEM</div>
+        <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>hash-chain ledger (DynamoDB)</span></div>
+        <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>CloudTrail · S3 Object Lock</span></div>
+      </div>
+      <div class="obox"><div class="gt">Behavioral monitoring</div>
+        <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-os">agent_sre</span>anomaly / drift (flag-gated)</span></div>
+        <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>GuardDuty</span></div>
+      </div>
+      <div class="obox"><div class="gt">Policy compliance</div>
+        <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>standards-crosswalk · control verification</span></div>
+        <div class="card"><span class="dot na"></span><span class="nm"><span class="tag t-aws">AWS</span>Audit Manager · Security Hub</span></div>
+      </div>
+      <div class="obox"><div class="gt">Telemetry</div>
+        <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-galaxy">Galaxy</span>OTel → ADOT → X-Ray</span></div>
+        <div class="card"><span class="dot live"></span><span class="nm"><span class="tag t-aws">AWS</span>AgentCore Observability · CloudWatch</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="k"><span class="dot live"></span> Live / deployed (AgentCore us-east-2; in-process guards)</span>
+    <span class="k"><span class="dot ref"></span> Reference IaC or built-not-deployed</span>
+    <span class="k"><span class="dot na"></span> AWS-native — outside Galaxy's scope</span>
+    <span class="k"><span class="tag t-galaxy">Galaxy</span> this repo</span>
+    <span class="k"><span class="tag t-os">agent_os / agent_sre</span> upstream toolkit</span>
+    <span class="k"><span class="tag t-aws">AWS</span> AWS service</span>
+  </div>
+</div>
+</body>
+</html>

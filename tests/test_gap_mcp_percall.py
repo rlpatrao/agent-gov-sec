@@ -11,9 +11,9 @@ window budget directly (3rd call), without waiting for the window to roll.
 
 from __future__ import annotations
 
-from governance.extensions.mcp_response_guard import McpResponseGuard
-from governance.extensions.mcp_gateway_guard import McpGatewayGuard
-from governance.extensions.mcp_rate_limit_guard import McpRateLimitGuard
+from galaxy_gov.shared.enforcement.mcp_response_guard import McpResponseGuard
+from galaxy_gov.shared.enforcement.mcp_gateway_guard import McpGatewayGuard
+from galaxy_gov.shared.enforcement.mcp_rate_limit_guard import McpRateLimitGuard
 
 
 # --------------------------------------------------------------------------- #

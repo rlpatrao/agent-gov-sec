@@ -1,0 +1,18 @@
+%%{init: {"flowchart": {"nodeSpacing": 55, "rankSpacing": 70}, "themeVariables": {"fontSize": "16px"}}}%%
+flowchart TB
+  GOV["Governance Authority<br/>Ownership: Governance Team (CODEOWNERS)<br/>Runs on: CI / merge-time review<br/>Features:<br/>• Control floor (inprocess/floor.py)<br/>• Egress allow-list (egress.yaml)<br/>• Policy registry (agent-controls.json)"]
+  APP["Agent Trust Domain<br/>Ownership: Developers<br/>Runs on: In-process (agent runtime)<br/>Features:<br/>• Guardrail pipeline (GuardPipeline)<br/>• Defense-in-depth, tamper-evident"]
+  ENF["Out-of-Process Enforcement<br/>Ownership: Governance Team<br/>Runs on: AWS Lambda (own IAM identity)<br/>Features:<br/>• LLM egress guard (bedrock_proxy)<br/>• Data access / FGAC (data_proxy)<br/>• Agent-to-agent authz (a2a_broker)<br/>• Managed option (AgentCore Gateway + Cedar)"]
+  AWS["Amazon Bedrock & Data Store<br/>Access: boundary IAM role only<br/>(no agent credentials)"]
+
+  GOV -. authors .-> APP
+  GOV -. "authors · registry" .-> ENF
+  APP ==>|"trust boundary · x-nhi-id"| ENF
+  ENF --> AWS
+
+  classDef gov fill:#063,color:#fff
+  classDef agent fill:#a33,color:#fff
+  classDef proxy fill:#06f,color:#fff
+  class GOV gov
+  class APP agent
+  class ENF proxy

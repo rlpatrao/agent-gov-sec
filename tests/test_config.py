@@ -9,7 +9,7 @@ import textwrap
 
 import pytest
 
-from payload_agents.config import (
+from galaxy_gov.agent_config import (
     AgentConfigModel,
     ConfigError,
     clear_config_cache,

@@ -1,0 +1,267 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="1222" viewBox="0 0 1480 1222" font-family="Helvetica, Arial, sans-serif">
+<rect x="0" y="0" width="1480" height="1222" fill="#ffffff"/>
+<text x="40.0" y="46.0" font-size="26" fill="#1b2030" font-weight="700" text-anchor="start">Reference Architecture on AWS — Galaxy mapping</text>
+<text x="560.0" y="46" font-size="26" fill="#6c47d6" font-weight="700"> </text>
+<rect x="40.0" y="66.0" width="1400.0" height="78.0" rx="12" fill="#1b2236"/>
+<text x="56.0" y="92.0" font-size="13" fill="#9aa2bb" font-weight="700" text-anchor="start">GOVERNANCE</text>
+<circle cx="184.0" cy="88.0" r="5.5" fill="#2e9c5a"/>
+<rect x="196.0" y="79.5" width="70.0" height="16.0" rx="4" fill="#1f8f7a"/>
+<text x="231.0" y="92.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">agent_sre</text>
+<text x="273.0" y="92.0" font-size="12.5" fill="#dde2ee" text-anchor="start">Risk classification · red-team eval (flag-gated)</text>
+<circle cx="877.0" cy="88.0" r="5.5" fill="#2e9c5a"/>
+<rect x="889.0" y="79.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="916.0" y="92.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="950.0" y="92.0" font-size="12.5" fill="#dde2ee" text-anchor="start">Compliance — EU AI Act · ISO 42001 · NIST AI RMF</text>
+<circle cx="184.0" cy="118.0" r="5.5" fill="#2e9c5a"/>
+<rect x="196.0" y="109.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="223.0" y="122.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="257.0" y="122.0" font-size="12.5" fill="#dde2ee" text-anchor="start">Policy lifecycle — policy_export → Cedar (AgentCore policy engine)</text>
+<circle cx="877.0" cy="118.0" r="5.5" fill="#2e9c5a"/>
+<rect x="889.0" y="109.5" width="66.0" height="16.0" rx="4" fill="#1f8f7a"/>
+<text x="922.0" y="122.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">agent_os</text>
+<text x="962.0" y="122.0" font-size="12.5" fill="#dde2ee" text-anchor="start">Exception gate — HITL escalation</text>
+<rect x="40.0" y="158.0" width="1400.0" height="34.0" rx="9" fill="#f4f6fb" stroke="#d2d6e2" stroke-width="1"/>
+<text x="54.0" y="180.0" font-size="12" fill="#7b8390" font-weight="700" text-anchor="start">CONSUMERS</text>
+<text x="160.0" y="180.0" font-size="13" fill="#454c5a" text-anchor="start">Human user (UI / API)    ·    Enterprise apps (API / webhook)    ·    Data teams (build &amp; deploy)</text>
+<rect x="40.0" y="208.0" width="1400.0" height="136.0" rx="12" fill="#ffffff" stroke="#c9cee0" stroke-width="1.6"/>
+<text x="56.0" y="234.0" font-size="15.5" fill="#6c47d6" font-weight="700" text-anchor="start">LAYER 01 · Agent Application</text>
+<rect x="54.0" y="246.0" width="448.0" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="67.0" y="267.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Core platform agents</text>
+<circle cx="73.0" cy="287.0" r="5.5" fill="#aeb4c0"/>
+<rect x="85.0" y="278.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="106.0" y="291.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="134.0" y="291.0" font-size="12.5" fill="#454c5a" text-anchor="start">Bedrock Agents</text>
+<circle cx="73.0" cy="310.0" r="5.5" fill="#2e9c5a"/>
+<rect x="85.0" y="301.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="112.0" y="314.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="146.0" y="314.0" font-size="12.5" fill="#454c5a" text-anchor="start">Payload personas — FinOps · Auditor · Rogue</text>
+<rect x="516.0" y="246.0" width="448.0" height="61.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="529.0" y="267.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Custom &amp; team agents</text>
+<circle cx="535.0" cy="287.0" r="5.5" fill="#2e9c5a"/>
+<rect x="547.0" y="278.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="574.0" y="291.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="608.0" y="291.0" font-size="12.5" fill="#454c5a" text-anchor="start">Framework adapters — LangGraph · raw · Pydantic</text>
+<rect x="978.0" y="246.0" width="448.0" height="61.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="991.0" y="267.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Agent-to-agent</text>
+<circle cx="997.0" cy="287.0" r="5.5" fill="#2e9c5a"/>
+<rect x="1009.0" y="278.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="1036.0" y="291.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="1070.0" y="291.0" font-size="12.5" fill="#454c5a" text-anchor="start">A2A envelopes + audited dispatch</text>
+<rect x="40.0" y="358.0" width="1400.0" height="136.0" rx="12" fill="#ffffff" stroke="#c9cee0" stroke-width="1.6"/>
+<text x="56.0" y="384.0" font-size="15.5" fill="#6c47d6" font-weight="700" text-anchor="start">LAYER 02 · Agent Services</text>
+<rect x="54.0" y="396.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="67.0" y="417.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Harness &amp; configurator</text>
+<circle cx="73.0" cy="437.0" r="5.5" fill="#aeb4c0"/>
+<rect x="85.0" y="428.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="106.0" y="441.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="134.0" y="441.0" font-size="12.5" fill="#454c5a" text-anchor="start">AgentCore Harness</text>
+<circle cx="73.0" cy="460.0" r="5.5" fill="#2e9c5a"/>
+<rect x="85.0" y="451.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="112.0" y="464.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="146.0" y="464.0" font-size="12.5" fill="#454c5a" text-anchor="start">Per-persona config + floor</text>
+<rect x="400.5" y="396.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="413.5" y="417.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Registries</text>
+<circle cx="419.5" cy="437.0" r="5.5" fill="#2e9c5a"/>
+<rect x="431.5" y="428.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="458.5" y="441.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="492.5" y="441.0" font-size="12.5" fill="#454c5a" text-anchor="start">Policy registry · deny-unknown</text>
+<circle cx="419.5" cy="460.0" r="5.5" fill="#aeb4c0"/>
+<rect x="431.5" y="451.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="452.5" y="464.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="480.5" y="464.0" font-size="12.5" fill="#454c5a" text-anchor="start">ECR · Parameter Store</text>
+<rect x="747.0" y="396.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="760.0" y="417.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Templates &amp; utilities</text>
+<circle cx="766.0" cy="437.0" r="5.5" fill="#e0a020"/>
+<rect x="778.0" y="428.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="805.0" y="441.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="839.0" y="441.0" font-size="12.5" fill="#454c5a" text-anchor="start">Terraform · deploy_agentcore.py</text>
+<circle cx="766.0" cy="460.0" r="5.5" fill="#aeb4c0"/>
+<rect x="778.0" y="451.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="799.0" y="464.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="827.0" y="464.0" font-size="12.5" fill="#454c5a" text-anchor="start">CloudFormation / CDK</text>
+<rect x="1093.5" y="396.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="1106.5" y="417.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Memory management</text>
+<circle cx="1112.5" cy="437.0" r="5.5" fill="#aeb4c0"/>
+<rect x="1124.5" y="428.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="1145.5" y="441.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="1173.5" y="441.0" font-size="12.5" fill="#454c5a" text-anchor="start">AgentCore Memory</text>
+<circle cx="1112.5" cy="460.0" r="5.5" fill="#2e9c5a"/>
+<rect x="1124.5" y="451.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="1151.5" y="464.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="1185.5" y="464.0" font-size="12.5" fill="#454c5a" text-anchor="start">memory-guard (flag-gated)</text>
+<rect x="40.0" y="508.0" width="1400.0" height="159.0" rx="12" fill="#ffffff" stroke="#6c47d6" stroke-width="2.6"/>
+<text x="56.0" y="534.0" font-size="15.5" fill="#6c47d6" font-weight="700" text-anchor="start">LAYER 03 · Security &amp; Control Plane</text>
+<text x="387.0" y="534.0" font-size="12.5" fill="#7b8390" text-anchor="start">Galaxy's primary surface</text>
+<rect x="54.0" y="546.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="67.0" y="567.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Security gateway &amp; LLM router</text>
+<circle cx="73.0" cy="587.0" r="5.5" fill="#e0a020"/>
+<rect x="85.0" y="578.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="112.0" y="591.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="146.0" y="591.0" font-size="12.5" fill="#454c5a" text-anchor="start">API Gateway → bedrock_proxy (M1)</text>
+<circle cx="73.0" cy="610.0" r="5.5" fill="#2e9c5a"/>
+<rect x="85.0" y="601.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="106.0" y="614.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="134.0" y="614.0" font-size="12.5" fill="#454c5a" text-anchor="start">AgentCore Gateway (M2)</text>
+<rect x="400.5" y="546.0" width="332.5" height="107.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="413.5" y="567.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Guardrails &amp; policy</text>
+<circle cx="419.5" cy="587.0" r="5.5" fill="#2e9c5a"/>
+<rect x="431.5" y="578.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="458.5" y="591.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="492.5" y="591.0" font-size="12.5" fill="#454c5a" text-anchor="start">GuardPipeline — 49 controls</text>
+<circle cx="419.5" cy="610.0" r="5.5" fill="#2e9c5a"/>
+<rect x="431.5" y="601.5" width="66.0" height="16.0" rx="4" fill="#1f8f7a"/>
+<text x="464.5" y="614.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">agent_os</text>
+<text x="504.5" y="614.0" font-size="12.5" fill="#454c5a" text-anchor="start">injection · credential · budget</text>
+<circle cx="419.5" cy="633.0" r="5.5" fill="#2e9c5a"/>
+<rect x="431.5" y="624.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="452.5" y="637.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="480.5" y="637.0" font-size="12.5" fill="#454c5a" text-anchor="start">Cedar — AgentCore policy engine</text>
+<rect x="747.0" y="546.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="760.0" y="567.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">NHI &amp; identity</text>
+<circle cx="766.0" cy="587.0" r="5.5" fill="#2e9c5a"/>
+<rect x="778.0" y="578.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="805.0" y="591.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="839.0" y="591.0" font-size="12.5" fill="#454c5a" text-anchor="start">NHI registry</text>
+<circle cx="766.0" cy="610.0" r="5.5" fill="#2e9c5a"/>
+<rect x="778.0" y="601.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="799.0" y="614.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="827.0" y="614.0" font-size="12.5" fill="#454c5a" text-anchor="start">AgentCore Identity · IAM galaxy-rp-*</text>
+<rect x="1093.5" y="546.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="1106.5" y="567.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Circuit breakers</text>
+<circle cx="1112.5" cy="587.0" r="5.5" fill="#2e9c5a"/>
+<rect x="1124.5" y="578.5" width="70.0" height="16.0" rx="4" fill="#1f8f7a"/>
+<text x="1159.5" y="591.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">agent_sre</text>
+<text x="1201.5" y="591.0" font-size="12.5" fill="#454c5a" text-anchor="start">circuit-breaker · cost (flag)</text>
+<circle cx="1112.5" cy="610.0" r="5.5" fill="#e0a020"/>
+<rect x="1124.5" y="601.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="1145.5" y="614.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="1173.5" y="614.0" font-size="12.5" fill="#454c5a" text-anchor="start">API GW throttle · concurrency</text>
+<rect x="40.0" y="681.0" width="1400.0" height="159.0" rx="12" fill="#ffffff" stroke="#c9cee0" stroke-width="1.6"/>
+<text x="56.0" y="707.0" font-size="15.5" fill="#6c47d6" font-weight="700" text-anchor="start">LAYER 04 · Runtime &amp; Platform</text>
+<rect x="54.0" y="719.0" width="448.0" height="107.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="67.0" y="740.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Agent runtime &amp; orchestration</text>
+<circle cx="73.0" cy="760.0" r="5.5" fill="#2e9c5a"/>
+<rect x="85.0" y="751.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="106.0" y="764.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="134.0" y="764.0" font-size="12.5" fill="#454c5a" text-anchor="start">AgentCore Runtime (per persona)</text>
+<circle cx="73.0" cy="783.0" r="5.5" fill="#2e9c5a"/>
+<rect x="85.0" y="774.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="112.0" y="787.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="146.0" y="787.0" font-size="12.5" fill="#454c5a" text-anchor="start">Interceptor Lambdas — req / resp</text>
+<circle cx="73.0" cy="806.0" r="5.5" fill="#e0a020"/>
+<rect x="85.0" y="797.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="112.0" y="810.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="146.0" y="810.0" font-size="12.5" fill="#454c5a" text-anchor="start">data_proxy (FGAC · not deployed)</text>
+<rect x="516.0" y="719.0" width="448.0" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="529.0" y="740.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Deployment pipeline</text>
+<circle cx="535.0" cy="760.0" r="5.5" fill="#2e9c5a"/>
+<rect x="547.0" y="751.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="574.0" y="764.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="608.0" y="764.0" font-size="12.5" fill="#454c5a" text-anchor="start">deploy_agentcore.py (idempotent)</text>
+<circle cx="535.0" cy="783.0" r="5.5" fill="#aeb4c0"/>
+<rect x="547.0" y="774.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="568.0" y="787.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="596.0" y="787.0" font-size="12.5" fill="#454c5a" text-anchor="start">CodePipeline · ECR signing</text>
+<rect x="978.0" y="719.0" width="448.0" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="991.0" y="740.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">AI-SBOM &amp; provenance</text>
+<circle cx="997.0" cy="760.0" r="5.5" fill="#2e9c5a"/>
+<rect x="1009.0" y="751.5" width="70.0" height="16.0" rx="4" fill="#1f8f7a"/>
+<text x="1044.0" y="764.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">agent_sre</text>
+<text x="1086.0" y="764.0" font-size="12.5" fill="#454c5a" text-anchor="start">SBOM · artifact-signing (flag)</text>
+<circle cx="997.0" cy="783.0" r="5.5" fill="#aeb4c0"/>
+<rect x="1009.0" y="774.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="1030.0" y="787.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="1058.0" y="787.0" font-size="12.5" fill="#454c5a" text-anchor="start">CloudTrail · Config</text>
+<rect x="40.0" y="854.0" width="1400.0" height="136.0" rx="12" fill="#ffffff" stroke="#c9cee0" stroke-width="1.6"/>
+<text x="56.0" y="880.0" font-size="15.5" fill="#6c47d6" font-weight="700" text-anchor="start">LAYER 05 · Infrastructure</text>
+<rect x="54.0" y="892.0" width="332.5" height="61.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="67.0" y="913.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Cloud &amp; compute</text>
+<circle cx="73.0" cy="933.0" r="5.5" fill="#aeb4c0"/>
+<rect x="85.0" y="924.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="106.0" y="937.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="134.0" y="937.0" font-size="12.5" fill="#454c5a" text-anchor="start">VPC · PrivateLink · ECS / Fargate</text>
+<rect x="400.5" y="892.0" width="332.5" height="61.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="413.5" y="913.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Model access</text>
+<circle cx="419.5" cy="933.0" r="5.5" fill="#2e9c5a"/>
+<rect x="431.5" y="924.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="452.5" y="937.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="480.5" y="937.0" font-size="12.5" fill="#454c5a" text-anchor="start">Bedrock — claude-sonnet-4-6</text>
+<rect x="747.0" y="892.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="760.0" y="913.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Storage &amp; persistence</text>
+<circle cx="766.0" cy="933.0" r="5.5" fill="#2e9c5a"/>
+<rect x="778.0" y="924.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="799.0" y="937.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="827.0" y="937.0" font-size="12.5" fill="#454c5a" text-anchor="start">DynamoDB — galaxy-trace-ledger</text>
+<circle cx="766.0" cy="956.0" r="5.5" fill="#aeb4c0"/>
+<rect x="778.0" y="947.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="799.0" y="960.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="827.0" y="960.0" font-size="12.5" fill="#454c5a" text-anchor="start">S3 · OpenSearch</text>
+<rect x="1093.5" y="892.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="1106.5" y="913.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Secret &amp; key management</text>
+<circle cx="1112.5" cy="933.0" r="5.5" fill="#2e9c5a"/>
+<rect x="1124.5" y="924.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="1145.5" y="937.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="1173.5" y="937.0" font-size="12.5" fill="#454c5a" text-anchor="start">Secrets Manager · STS</text>
+<circle cx="1112.5" cy="956.0" r="5.5" fill="#aeb4c0"/>
+<rect x="1124.5" y="947.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="1145.5" y="960.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="1173.5" y="960.0" font-size="12.5" fill="#454c5a" text-anchor="start">KMS · CloudHSM</text>
+<text x="40.0" y="1022.0" font-size="14" fill="#7b8390" font-weight="700" text-anchor="start">OBSERVE · cross-cutting</text>
+<rect x="40.0" y="1034.0" width="1400.0" height="112.0" rx="12" fill="#f7f8fc" stroke="#d2d6e2" stroke-width="1.5"/>
+<rect x="54.0" y="1048.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="67.0" y="1069.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Audit &amp; SIEM</text>
+<circle cx="73.0" cy="1089.0" r="5.5" fill="#2e9c5a"/>
+<rect x="85.0" y="1080.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="112.0" y="1093.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="146.0" y="1093.0" font-size="12.5" fill="#454c5a" text-anchor="start">hash-chain ledger (DynamoDB)</text>
+<circle cx="73.0" cy="1112.0" r="5.5" fill="#aeb4c0"/>
+<rect x="85.0" y="1103.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="106.0" y="1116.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="134.0" y="1116.0" font-size="12.5" fill="#454c5a" text-anchor="start">CloudTrail · S3 Object Lock</text>
+<rect x="400.5" y="1048.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="413.5" y="1069.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Behavioral monitoring</text>
+<circle cx="419.5" cy="1089.0" r="5.5" fill="#2e9c5a"/>
+<rect x="431.5" y="1080.5" width="70.0" height="16.0" rx="4" fill="#1f8f7a"/>
+<text x="466.5" y="1093.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">agent_sre</text>
+<text x="508.5" y="1093.0" font-size="12.5" fill="#454c5a" text-anchor="start">anomaly / drift (flag-gated)</text>
+<circle cx="419.5" cy="1112.0" r="5.5" fill="#aeb4c0"/>
+<rect x="431.5" y="1103.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="452.5" y="1116.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="480.5" y="1116.0" font-size="12.5" fill="#454c5a" text-anchor="start">GuardDuty</text>
+<rect x="747.0" y="1048.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="760.0" y="1069.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Policy compliance</text>
+<circle cx="766.0" cy="1089.0" r="5.5" fill="#2e9c5a"/>
+<rect x="778.0" y="1080.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="805.0" y="1093.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="839.0" y="1093.0" font-size="12.5" fill="#454c5a" text-anchor="start">standards-crosswalk · verification</text>
+<circle cx="766.0" cy="1112.0" r="5.5" fill="#aeb4c0"/>
+<rect x="778.0" y="1103.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="799.0" y="1116.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="827.0" y="1116.0" font-size="12.5" fill="#454c5a" text-anchor="start">Audit Manager · Security Hub</text>
+<rect x="1093.5" y="1048.0" width="332.5" height="84.0" rx="9" fill="#fafbfe" stroke="#e4e7f0" stroke-width="1"/>
+<text x="1106.5" y="1069.0" font-size="14" fill="#1b2030" font-weight="700" text-anchor="start">Telemetry</text>
+<circle cx="1112.5" cy="1089.0" r="5.5" fill="#2e9c5a"/>
+<rect x="1124.5" y="1080.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="1151.5" y="1093.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="1185.5" y="1093.0" font-size="12.5" fill="#454c5a" text-anchor="start">OTel → ADOT → X-Ray</text>
+<circle cx="1112.5" cy="1112.0" r="5.5" fill="#2e9c5a"/>
+<rect x="1124.5" y="1103.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="1145.5" y="1116.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="1173.5" y="1116.0" font-size="12.5" fill="#454c5a" text-anchor="start">AgentCore Observability · CW</text>
+<line x1="40.0" y1="1162.0" x2="1440.0" y2="1162.0" stroke="#e7e9f2" stroke-width="1"/>
+<circle cx="46.0" cy="1182.0" r="6" fill="#2e9c5a"/>
+<text x="58.0" y="1186.0" font-size="13" fill="#454c5a" text-anchor="start">Live / deployed (AgentCore us-east-2; in-process guards)</text>
+<circle cx="461.6" cy="1182.0" r="6" fill="#e0a020"/>
+<text x="473.6" y="1186.0" font-size="13" fill="#454c5a" text-anchor="start">Reference IaC or built-not-deployed</text>
+<circle cx="738.6" cy="1182.0" r="6" fill="#aeb4c0"/>
+<text x="750.6" y="1186.0" font-size="13" fill="#454c5a" text-anchor="start">AWS-native — outside Galaxy's scope</text>
+<rect x="1009.6" y="1173.5" width="54.0" height="16.0" rx="4" fill="#6c47d6"/>
+<text x="1036.6" y="1186.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">Galaxy</text>
+<text x="1070.6" y="1186.0" font-size="13" fill="#454c5a" text-anchor="start">this repo</text>
+<rect x="1154.0" y="1173.5" width="66.0" height="16.0" rx="4" fill="#1f8f7a"/>
+<text x="1187.0" y="1186.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">agent_os</text>
+<text x="1227.0" y="1186.0" font-size="13" fill="#454c5a" text-anchor="start">upstream (agent_os / agent_sre)</text>
+<rect x="1455.6" y="1173.5" width="42.0" height="16.0" rx="4" fill="#e08a1e"/>
+<text x="1476.6" y="1186.0" font-size="10.5" fill="#fff" font-weight="700" text-anchor="middle">AWS</text>
+<text x="1504.6" y="1186.0" font-size="13" fill="#454c5a" text-anchor="start">AWS service</text>
+</svg>

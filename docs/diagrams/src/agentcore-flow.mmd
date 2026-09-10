@@ -1,0 +1,34 @@
+sequenceDiagram
+    autonumber
+    participant RT as AgentCore Runtime<br/>galaxy_finops / _auditor / _rogue<br/>(role galaxy-rp-type)
+    participant GW as MCP Gateway<br/>galaxy-governance-gw (AWS_IAM)
+    participant RQ as Request interceptor<br/>galaxy-gov-request
+    participant CE as Cedar policy engine<br/>galaxy_governance (ENFORCE)
+    participant TL as Tool Lambda<br/>galaxy-tools
+    participant RP as Response interceptor<br/>galaxy-gov-response
+    participant L as Audit ledger<br/>(DynamoDB, hash-chained)
+
+    RT->>GW: SigV4 tools/call · galaxy-tools___query_billing
+
+    rect rgb(245,233,233)
+    note over GW,CE: Request enforcement - content controls then authorization
+    GW->>RQ: REQUEST interception
+    RQ->>RQ: prompt-injection · credential · blocked-pattern
+    RQ-->>GW: clean — or short-circuit block
+    GW->>CE: authorize(principal = assumed-role/galaxy-rp-type, action, resource)
+    CE->>CE: evaluate permit / forbid (per agent x tool)
+    Note right of CE: forbid -> MCP error<br/>(Rogue denied · Auditor scoped)
+    end
+
+    rect rgb(228,238,246)
+    note over GW,RP: Permitted path - tool call then response redaction
+    GW->>TL: invoke (Cedar permit)
+    TL-->>GW: tool result
+    GW->>RP: RESPONSE interception
+    RP->>RP: output PII redaction
+    RP-->>GW: redacted result
+    end
+
+    GW-->>RT: governed MCP response
+    GW->>L: hash-chain audit entry
+    note over RT,L: Runtime emits OTel spans -> CloudWatch GenAI Observability (X-Ray)

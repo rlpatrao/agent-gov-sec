@@ -1,0 +1,65 @@
+# deploy/Dockerfile.service — the Galaxy governance enforcement service (mechanism 4).
+#
+# Packages the out-of-process chokepoints (LLM / data / A2A) as a single
+# long-running container that the governance team owns and deploys in a separate
+# environment under a separate identity. It ships only the governance library,
+# the agnostic core, and the chokepoint handlers — never payload_agents, so the
+# agent codebase cannot influence the authority that governs it.
+#
+# The same image runs locally (deploy/docker-compose.yml) and in production, so a
+# developer tests against exactly what enforces in production.
+#
+#   docker build -f deploy/Dockerfile.service -t galaxy-enforcement:local .   # context = repo root
+#   docker run -p 8080:8080 galaxy-enforcement:local
+FROM python:3.14-slim
+
+# Supplied by scripts/publish_service_image.py from deploy/VERSION and git. The
+# defaults mark an unversioned local build so an unlabelled image is never
+# mistaken for a release.
+ARG SERVICE_VERSION=0.0.0-dev
+ARG SERVICE_REVISION=unknown
+ARG SERVICE_CREATED=unknown
+
+LABEL org.opencontainers.image.title="galaxy-enforcement" \
+      org.opencontainers.image.description="Galaxy governance enforcement service (LLM / data / A2A chokepoints)" \
+      org.opencontainers.image.version="${SERVICE_VERSION}" \
+      org.opencontainers.image.revision="${SERVICE_REVISION}" \
+      org.opencontainers.image.created="${SERVICE_CREATED}" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.vendor="Virtusa Corporation" \
+      org.opencontainers.image.source="https://github.com/virtusa/agent-gov-sec"
+
+WORKDIR /app
+
+# Chokepoint-only runtime deps (agent_os / agent_sre / agentmesh toolkit + OTel).
+COPY cloud_adapters/aws/infra/lambda/requirements-proxy.txt ./
+RUN --mount=type=secret,id=pip_ca \
+    if [ -s /run/secrets/pip_ca ]; then export PIP_CERT=/run/secrets/pip_ca; fi; \
+    pip install --no-cache-dir -r requirements-proxy.txt
+
+# The enforcement library, the agnostic core, and the chokepoint handlers.
+# NOTE: payload_agents is deliberately NOT copied — the chokepoints never import
+# the agent codebase (the Lambda image applies the same rule).
+COPY galaxy_gov/ ./galaxy_gov/
+COPY core/ ./core/
+COPY cloud_adapters/ ./cloud_adapters/
+
+# Attribution travels with the image: the container installs its dependencies, so
+# it redistributes them and must carry their license texts.
+COPY LICENSE NOTICE THIRD_PARTY_NOTICES.md ./
+
+ENV GALAXY_SERVICE_VERSION=${SERVICE_VERSION} \
+    GALAXY_SERVICE_REVISION=${SERVICE_REVISION} \
+    PYTHONPATH=/app \
+    GOV_ENFORCE_HOST=0.0.0.0 \
+    GOV_ENFORCE_PORT=8080 \
+    GOV_HANDLER_DIR=/app/cloud_adapters/aws/infra/lambda \
+    GOV_POLICY_REGISTRY_PATH=/app/cloud_adapters/aws/infra/lambda/agent-controls.json
+
+EXPOSE 8080
+
+# Liveness for orchestrators (ECS/K8s/Container Apps).
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=2).status==200 else 1)"
+
+CMD ["python", "-m", "galaxy_gov.remote.server"]

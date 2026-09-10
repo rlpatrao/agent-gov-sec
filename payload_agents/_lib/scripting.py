@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from payload_agents._runtime.contract import ScriptStep, ToolCall
+from framework_adapters.contract import ScriptStep, ToolCall
 
 
 def _text(content: Any) -> str:

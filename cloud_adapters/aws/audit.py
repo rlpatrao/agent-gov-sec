@@ -99,12 +99,17 @@ class DynamoDbHashChainBackend(AuditBackend):
         import asyncio
 
         def _write_all():
-            with self._table.batch_writer() as batch:
-                for entry, entry_hash, prev_hash in self._buffer:
-                    batch.put_item(
+            # Append-only: each (run_id, entry_seq) is written with a condition that
+            # no item already exists at that key, so an existing ledger entry can
+            # never be overwritten (tamper/replay resistance at write time). entry_seq
+            # is the stable enumerate index — not list.index(), which collided on
+            # duplicate entries and let two rows share a sequence number.
+            for seq, (entry, entry_hash, prev_hash) in enumerate(self._buffer):
+                try:
+                    self._table.put_item(
                         Item={
                             "run_id": self._run_id,
-                            "entry_seq": int(self._buffer.index((entry, entry_hash, prev_hash))),
+                            "entry_seq": int(seq),
                             "module_id": entry.metadata.get("module_id", "unknown"),
                             "agent_type": self._agent_type(entry),
                             "nhi_id": entry.metadata.get("nhi_id", entry.agent_id or "unknown"),
@@ -117,8 +122,19 @@ class DynamoDbHashChainBackend(AuditBackend):
                             "entry_hash": entry_hash,
                             "prev_hash": prev_hash,
                             "recorded_at": datetime.now(timezone.utc).isoformat(),
-                        }
+                        },
+                        ConditionExpression="attribute_not_exists(run_id) AND attribute_not_exists(entry_seq)",
                     )
+                except Exception as e:
+                    code = (getattr(e, "response", {}) or {}).get("Error", {}).get("Code", "")
+                    if code == "ConditionalCheckFailedException":
+                        # An entry already exists at this key — refuse to overwrite
+                        # (append-only). Surface it as an integrity event.
+                        logger.error("dynamodb_audit.append_only_violation",
+                                     extra={"run_id": self._run_id, "entry_seq": seq})
+                    else:
+                        logger.error("dynamodb_audit.write_failed",
+                                     extra={"run_id": self._run_id, "entry_seq": seq, "error": str(e)})
 
         await asyncio.to_thread(_write_all)
         self._buffer.clear()

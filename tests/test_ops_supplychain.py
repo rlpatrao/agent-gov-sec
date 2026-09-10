@@ -13,13 +13,13 @@ from __future__ import annotations
 
 from agent_sre.certification import CertificationTier
 
-from governance.ops.adversarial_harness import (
+from galaxy_gov.ops.adversarial_harness import (
     DefaultInterceptor,
     run_adversarial,
 )
-from governance.ops.certification_report import run_certification_demo
-from governance.ops.sbom_report import run_sbom_demo
-from governance.ops.signing_report import run_signing_demo
+from galaxy_gov.ops.certification_report import run_certification_demo
+from galaxy_gov.ops.sbom_report import run_sbom_demo
+from galaxy_gov.ops.signing_report import run_signing_demo
 
 
 # --------------------------------------------------------------------------- #

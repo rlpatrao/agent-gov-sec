@@ -16,8 +16,8 @@ import pytest
 
 from agent_os.audit_logger import AuditEntry, GovernanceAuditLogger, InMemoryBackend
 
-from a2a.dispatcher import a2a_call
-from a2a.envelope import A2AError, A2ARequest, A2AResponse, A2AStatus
+from core.a2a.dispatcher import a2a_call
+from core.a2a.envelope import A2AError, A2ARequest, A2AResponse, A2AStatus
 
 
 def _make_request(**overrides) -> A2ARequest:

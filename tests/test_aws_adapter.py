@@ -31,8 +31,11 @@ def test_factory_resolves_aws():
     assert p.identity_provider() is not None
     assert p.trace_exporter_factory() is not None
     assert p.llm_gateway() is not None
-    # AWS uses its own framework adapter (WS5.8), not MAF.
-    assert p.runtime_adapter() is None
+    # AWS now ships the AgentCore Runtime adapter (personas hosted as AgentCore
+    # Runtimes); it implements the AgentRuntimeAdapter protocol.
+    from core.interfaces import AgentRuntimeAdapter
+    rt = p.runtime_adapter()
+    assert rt is not None and isinstance(rt, AgentRuntimeAdapter)
     egress = p.egress_config_path()
     assert egress is not None and egress.name == "egress.yaml"
 
@@ -139,7 +142,7 @@ def test_aws_gateway_direct_bedrock_mode(monkeypatch):
 # ── Egress allow-list ─────────────────────────────────────────────────────────
 
 def test_aws_egress_loads_from_path():
-    from governance.guards.egress import load_egress_policy
+    from galaxy_gov.shared.enforcement.guards.egress import load_egress_policy
     policy = load_egress_policy(yaml_path=_AWS_EGRESS)
     assert policy.check_url("https://bedrock-runtime.us-east-1.amazonaws.com/model/invoke").allowed is True
     assert policy.check_url("https://secretsmanager.us-east-1.amazonaws.com/").allowed is True
@@ -148,7 +151,7 @@ def test_aws_egress_loads_from_path():
 
 def test_aws_egress_resolves_via_factory(monkeypatch):
     monkeypatch.setenv("CLOUD_PROVIDER", "aws")
-    from governance.guards.egress import load_egress_policy
+    from galaxy_gov.shared.enforcement.guards.egress import load_egress_policy
     policy = load_egress_policy()
     assert policy.check_url("https://bedrock-runtime.us-east-1.amazonaws.com/").allowed is True
     assert policy.check_url("https://evil.example.com/").allowed is False
@@ -181,12 +184,12 @@ def test_aws_audit_stdout_mode_without_sdk(monkeypatch):
 
 # ── Gap 1 cloud-native FGAC pushdown (Lake Formation / Athena) ────────────────
 
-_CATALOG = Path(__file__).parent.parent / "governance" / "extensions" / "configs" / "data-classification.example.yaml"
+_CATALOG = Path(__file__).parent.parent / "galaxy_gov" / "shared" / "enforcement" / "configs" / "data-classification.example.yaml"
 
 
 def _finops_decision():
-    from governance.extensions.data_classification import DataClassificationCatalog
-    from governance.extensions.data_fgac import DataAccessMediator
+    from galaxy_gov.shared.enforcement.data_classification import DataClassificationCatalog
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessMediator
     med = DataAccessMediator(catalog=DataClassificationCatalog.load(_CATALOG))
     return med.authorize(
         agent_type="FinOps", dataset="finops", table="billing",
@@ -197,18 +200,33 @@ def _finops_decision():
 def test_aws_fgac_scoped_query_projects_masks_and_filters():
     from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
     sql = AwsLakeFormationEnforcer().scoped_query(_finops_decision(), database="finops", table="billing")
-    # allowed columns projected
+    # allowed columns projected (identifiers are double-quoted for injection safety)
     assert "account_id" in sql and "cost_usd" in sql and "region" in sql
-    assert "FROM finops.billing" in sql
+    assert 'FROM "finops"."billing"' in sql
     # masked columns redacted at the store (the raw value is never selected)
-    assert "AS customer_email" in sql and "AS tax_id" in sql
+    assert 'AS "customer_email"' in sql and 'AS "tax_id"' in sql
     assert "'***REDACTED***'" in sql
     # row filter pushed down as WHERE ... IN (...)
-    assert "WHERE region IN ('us-east-1', 'us-west-2')" in sql
+    assert 'WHERE "region" IN (\'us-east-1\', \'us-west-2\')' in sql
+
+
+def test_aws_fgac_rejects_injection_in_identifiers():
+    """A malicious column/table name must be rejected, not interpolated into SQL."""
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessDecision
+    from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
+    enf = AwsLakeFormationEnforcer()
+    bad_col = DataAccessDecision(agent_type="FinOps", dataset="finops", table="billing",
+                                 allowed_columns=["cost_usd FROM x; DROP TABLE y --"])
+    with pytest.raises(ValueError, match="invalid SQL identifier"):
+        enf.scoped_query(bad_col, database="finops", table="billing")
+    ok_cols = DataAccessDecision(agent_type="FinOps", dataset="finops", table="billing",
+                                 allowed_columns=["cost_usd"])
+    with pytest.raises(ValueError, match="invalid SQL identifier"):
+        enf.scoped_query(ok_cols, database="finops; DROP TABLE x", table="billing")
 
 
 def test_aws_fgac_scoped_query_denied_raises():
-    from governance.extensions.data_fgac import DataAccessDecision
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessDecision
     from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
     denied = DataAccessDecision(agent_type="FinOps", dataset="hr", table="employees", denied=True, reason="out of scope")
     with pytest.raises(PermissionError, match="denied"):
@@ -234,6 +252,6 @@ def test_aws_fgac_register_filter_requires_boto3(monkeypatch):
 
 
 def test_aws_fgac_satisfies_enforcer_protocol():
-    from governance.extensions.data_fgac import DataAccessEnforcer
+    from galaxy_gov.shared.enforcement.data_fgac import DataAccessEnforcer
     from cloud_adapters.aws.data_fgac import AwsLakeFormationEnforcer
     assert isinstance(AwsLakeFormationEnforcer(), DataAccessEnforcer)

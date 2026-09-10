@@ -6,10 +6,10 @@ PASS window and an INTERCEPT/failure window; the assertions check both.
 
 from __future__ import annotations
 
-from governance.ops.accuracy_report import run_accuracy_demo
-from governance.ops.evals_report import run_evals_demo
-from governance.ops.replay_report import run_replay_demo
-from governance.ops.slo_report import run_slo_demo
+from galaxy_gov.ops.accuracy_report import run_accuracy_demo
+from galaxy_gov.ops.evals_report import run_evals_demo
+from galaxy_gov.ops.replay_report import run_replay_demo
+from galaxy_gov.ops.slo_report import run_slo_demo
 
 
 def test_slo_report_pass_and_burn() -> None:

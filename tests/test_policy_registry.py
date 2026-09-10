@@ -6,12 +6,15 @@ Resolution applies the floor, export round-trips, and lookups are fail-closed.
 
 from __future__ import annotations
 
-from governance.policy_registry import (
-    authorize_recipient,
+from galaxy_gov.policy_export import (
+    authorize_recipient_live,
     export_registry,
+    resolve_policy,
+)
+from galaxy_gov.shared.policy_registry import (
+    authorize_recipient,
     load_registry,
     policy_for,
-    resolve_policy,
 )
 
 
@@ -51,16 +54,17 @@ class TestExportAndLookup:
 
 class TestAuthorizeRecipient:
     def test_in_process_resolution(self):
-        ok, _ = authorize_recipient("FinOps", "Auditor-123")
+        ok, _ = authorize_recipient_live("FinOps", "Auditor-123")
         assert ok
-        ok2, reason = authorize_recipient("FinOps", "Rogue-123")
+        ok2, reason = authorize_recipient_live("FinOps", "Rogue-123")
         assert not ok2 and "may not dispatch" in reason
 
     def test_unknown_sender_denied(self):
-        ok, reason = authorize_recipient("Ghost", "Auditor")
+        ok, reason = authorize_recipient_live("Ghost", "Auditor")
         assert not ok and "no governance policy" in reason
 
     def test_registry_backed_resolution(self):
         reg = export_registry()
-        ok, _ = authorize_recipient("FinOps", "Auditor", reg)
+        ok, _ = authorize_recipient(  # dependency-free consumer form
+            "FinOps", "Auditor", reg)
         assert ok

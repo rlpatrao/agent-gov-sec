@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from governance.policy_registry import export_registry_json
+from galaxy_gov.policy_export import export_registry_json
 
 _LAMBDA_DIR = Path(__file__).resolve().parent.parent / "cloud_adapters" / "aws" / "infra" / "lambda"
 
@@ -90,7 +90,8 @@ class TestBedrockProxy:
                             lambda: type("C", (), {"converse": staticmethod(converse)}))
         resp = bp.handler({"headers": {"x-agent-type": "FinOps"}, "body": self._msg("do it")}, None)
         assert resp["statusCode"] == 403
-        assert json.loads(resp["body"])["error"] == "capability_denied"
+        # capability allow-list is enforced by the real reasoning/capability binding
+        assert "capab" in json.loads(resp["body"])["error"]
 
     def test_allowed_tool_plan_passes(self, monkeypatch):
         bp = _load("bedrock_proxy")

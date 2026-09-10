@@ -20,8 +20,8 @@ pytest.importorskip("langchain.agents", reason="LangGraph axis requires langchai
 
 from langchain_core.messages import AIMessage  # noqa: E402
 
-from governance.pipeline import GovernanceViolation  # noqa: E402
-from payload_agents._runtime.models import scripted_model  # noqa: E402
+from galaxy_gov.shared.enforcement.pipeline import GovernanceViolation  # noqa: E402
+from framework_adapters.langgraph.models import scripted_model  # noqa: E402
 from payload_agents.langgraph import build_auditor_agent  # noqa: E402
 from payload_agents.langgraph import build_finops_agent  # noqa: E402
 from payload_agents.langgraph import build_rogue_agent  # noqa: E402
@@ -159,7 +159,7 @@ async def test_aws_pushdown_scoped_sql_and_denied(tmp_path: Path):
     fin = b.mediator.authorize(agent_type="FinOps", dataset="finops", table="billing",
                                columns=["account_id", "cost_usd", "region", "customer_email", "tax_id"])
     sql = enf.scoped_query(fin, database="finops", table="billing")
-    assert "'***REDACTED***' AS customer_email" in sql and "WHERE region IN" in sql
+    assert '\'***REDACTED***\' AS "customer_email"' in sql and 'WHERE "region" IN' in sql
     rogue = b.mediator.authorize(agent_type="Rogue", dataset="finops", table="billing", columns=["cost_usd"])
     with pytest.raises(PermissionError):
         enf.scoped_query(rogue, database="finops", table="billing")
@@ -169,8 +169,8 @@ async def test_aws_pushdown_scoped_sql_and_denied(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_a2a_allow_and_deny(tmp_path: Path):
-    from a2a.dispatcher import a2a_call
-    from a2a.envelope import A2ARequest, A2AResponse
+    from core.a2a.dispatcher import a2a_call
+    from core.a2a.envelope import A2ARequest, A2AResponse
 
     fin = await build_finops_agent("t", scripted_model(AIMessage(content="x")), drift_baseline_path=tmp_path / "f.json")
     aud = await build_auditor_agent("t", scripted_model(AIMessage(content="audited")), drift_baseline_path=tmp_path / "a.json")

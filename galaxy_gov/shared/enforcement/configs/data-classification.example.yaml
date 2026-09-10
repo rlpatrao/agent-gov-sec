@@ -1,0 +1,53 @@
+# Schema classification catalog + per-agent ABAC policies (Gap 1).
+# Loaded by galaxy_gov.extensions.data_classification.DataClassificationCatalog,
+# which turns this into MSGK objects:
+#   classification → agent_os.policies.data_classification.DataLabel
+#   agent_policies → agent_os.policies.data_classification.ABACPolicy
+# The decision is MSGK's DataAccessEvaluator (most-restrictive-wins). Only the
+# `enforcement:` block is ours (how to mask/filter the rows that come back).
+#
+# Sensitivity ladder (ascending): PUBLIC < INTERNAL < CONFIDENTIAL < RESTRICTED < TOP_SECRET.
+# Unclassified columns fail CLOSED (RESTRICTED). Agents with no policy → deny-all.
+
+classification:
+  datasets:
+    finops:
+      tables:
+        billing:
+          columns:
+            account_id:     {classification: INTERNAL,     categories: [finops]}
+            cost_usd:       {classification: INTERNAL,     categories: [finops]}
+            region:         {classification: INTERNAL,     categories: [finops]}
+            customer_email: {classification: CONFIDENTIAL, categories: [PII, finops]}
+            tax_id:         {classification: RESTRICTED,   categories: [PII, finops]}
+    hr:
+      tables:
+        employees:
+          columns:
+            employee_id: {classification: INTERNAL,     categories: [HR]}
+            salary:      {classification: CONFIDENTIAL, categories: [HR]}
+            ssn:         {classification: RESTRICTED,   categories: [PII, HR]}
+
+agent_policies:
+  # FinOps: up to CONFIDENTIAL, finops + PII categories. tax_id (RESTRICTED) is
+  # above clearance → MSGK denies it → masked; customer_email is masked by the
+  # enforcement override below even though clearance allows it.
+  FinOps:
+    max_classification: CONFIDENTIAL
+    allowed_categories: [finops, PII]
+  # Analyzer (demo payload): INTERNAL only, finops category.
+  Analyzer:
+    max_classification: INTERNAL
+    allowed_categories: [finops]
+  # Auditor: read across finops + hr up to CONFIDENTIAL (RESTRICTED still denied).
+  Auditor:
+    max_classification: CONFIDENTIAL
+    allowed_categories: [finops, HR, PII]
+
+enforcement:
+  # Ours: always-mask overrides + row scoping (MSGK decides access; we decide how
+  # to enforce on the returned rows).
+  FinOps:
+    masked_columns: [customer_email]
+    row_filter:
+      region: [us-east-1, us-west-2]
