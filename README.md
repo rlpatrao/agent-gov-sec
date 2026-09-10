@@ -46,6 +46,7 @@ Cloud-neutral platform reference in [`docs/shared/`](docs/shared/):
 | [`standards-crosswalk.md`](docs/shared/standards-crosswalk.md) | Control → OWASP / NIST AI RMF / ISO/IEC 42001 / EU AI Act / MITRE ATLAS crosswalk |
 | [`dashboard.md`](docs/shared/dashboard.md) | The Governance Dashboard at `GET /dashboard` — agent runs, guardrail decisions, the crosswalk, and how the live buffer differs from the ledger |
 | [`adding-an-agent.md`](docs/shared/adding-an-agent.md) | Developer guide for adding a governed agent |
+| [`BACKLOG.md`](docs/BACKLOG.md) | Tracked open work — one row per item, priorities, acceptance criteria |
 | [`agentkit.md`](docs/shared/agentkit.md) | `galaxy_agentkit` — the client-side package: install, scaffold, wire the wrapper into an agent, environment contract |
 
 The AWS architecture is in [`docs/aws/architecture.md`](docs/aws/architecture.md). Diagrams are a shared pool at [`docs/diagrams/`](docs/diagrams/), rendered from `docs/diagrams/src/*.mmd` via `scripts/render_diagrams.sh`.

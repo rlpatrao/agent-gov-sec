@@ -7,6 +7,12 @@ versioning of the platform wheel (`galaxy-agentkit`).
 ## [Unreleased]
 
 ### Added
+- **`docs/BACKLOG.md`** — the tracked list of open work. Previously open items were
+  split across CHANGELOG known-gaps entries, `agent-registration-plan.md`, and
+  conversation history; this consolidates them (twelve items, prioritized, with
+  acceptance criteria). Includes the 2026-09-10 decision to persist the dashboard
+  decision log in SQLite (B-4), with the hash-chained ledger remaining the audit
+  record.
 - **The Governance Dashboard** — `GET /dashboard` on the enforcement service. A
   self-contained HTML page (inline CSS, no JavaScript, no external requests, 15-second
   meta refresh) with four sections: the service header (version, revision, uptime, the
